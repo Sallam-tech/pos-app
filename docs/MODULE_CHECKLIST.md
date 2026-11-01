@@ -1,8 +1,10 @@
 # POS Module Checklist
 
-Reconciled: 1 November 2026 (Asia/Karachi). **Phase 1 completed and accepted. Phases 2–9 planned; Phase 2 has not started.**
+Updated: 1 November 2026 (Asia/Karachi). **Phase 1 completed and accepted. Phase 2 implemented and verified; awaiting owner review. A01 Login UI implemented and verified; desktop visual layout approved, remaining manual review pending. Other Phase 3 screens and Phases 4–9 unstarted.**
 
-Use [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) as the master sequence and contract source. This checklist tracks execution/review of that sequence; old P00–P17 and UI-* labels are cross-references only. The current task reconciles documentation and does not authorize implementation, packages, application-code changes, commits or SRS edits.
+Use [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) as the master sequence and contract source. This checklist tracks execution/review of that sequence; old P00–P17 and UI-* labels are cross-references only. The prior [Phase 2 verification report](development/PHASE_2_UI_FOUNDATION.md) records the shared foundation. The subsequent ONE SCREEN AT A TIME instruction authorizes A01 /login UI only; see the [Login UI report](development/LOGIN_UI_REPORT.md). This screen is implemented/verified; desktop visual layout is approved and remaining manual review is pending. No overall phase acceptance, other screen or real business functionality is implied.
+
+Checkpoint review — 1 November 2026: the owner reviewed the latest Login screenshot, approved its desktop visual layout and explicitly authorized one local Git checkpoint of the verified Phase 2 foundation and Login prototype. This does not close manual screen-reader, native browser/OS zoom or device review, and does not authorize a push or another screen. Uncommitted/no-commit statements in earlier delivery reports and the implementation plan describe their pre-checkpoint publication state.
 
 ## Sources and current authority
 
@@ -13,7 +15,7 @@ Use [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) as the master sequence and 
 - [x] Preserve pre-reconciliation plans/guides as exact [historical copies](history/pre-master-sequence-2026-11-01/README.md).
 - [x] Owner accepts Phase 1 foundation for continued development.
 - [x] Record the owner's nine-phase master sequence, canonical routes, safe confirmation contract and pending decisions.
-- [ ] Obtain a separate bounded Phase 2 implementation instruction and review its module plan.
+- [x] Owner separately authorizes the bounded Phase 2 shared UI foundation and implementation plan; this delivery awaits review.
 
 The SRS remains business authority and is unchanged. The development guide's section/module numbers and UI workstream/screen IDs remain stable. The HTML remains an unchanged mocked visual reference, not a secure or complete working POS. Historical empty-source statements are superseded by the checks above.
 
@@ -22,8 +24,8 @@ The SRS remains business authority and is unchanged. The development guide's sec
 | Phase | Master title | Current status |
 | --- | --- | --- |
 | 1 | Project Foundation | Completed and accepted |
-| 2 | Shared UI Design System, Themes and Application Shells | Planned; not started |
-| 3 | Complete Mock UI Screens and Interactions | Planned; not started |
+| 2 | Shared UI Design System, Themes and Application Shells | Implemented and verified; awaiting owner review |
+| 3 | Complete Mock UI Screens and Interactions | A01 implemented/verified; desktop visual approved, manual review pending. Other screens unstarted |
 | 4 | Database and Authentication | Planned; not started |
 | 5 | Products and Inventory | Planned; not started |
 | 6 | Sales Processing and Profit | Planned; not started |
@@ -40,38 +42,46 @@ The SRS remains business authority and is unchanged. The development guide's sec
 - [x] Verify lint/type checking, two unit tests, production build and two desktop/mobile browser checks with public requests blocked.
 - [x] Verify local application startup; record native dependency/sandbox issues and repairs in [Phase 1 evidence](development/PHASE_1_FOUNDATION.md).
 - [x] Owner accepts Phase 1. No DB/authentication/business module is included in that acceptance.
-- [x] Record Git initialization as outside the narrowed Phase 1 scope; no claim of clean tracked/staged status.
+- [x] Record Git initialization as a separate post-Phase 1 task: verified checkpoint 8aebf2135572af36d43bfcd8ad93ef5ed29f59d5; Phase 2 started clean; its subsequently verified UI work is covered by the separately authorized local checkpoint recorded above.
 
 ### Phase 2 — Shared UI Design System, Themes and Application Shells
 
-UI workstream reference: UI-1. Legacy plan reference: P04, moved earlier. This is shared UI only; none of the boxes below claims implementation.
+UI workstream reference: UI-1. Legacy plan reference: P04, moved earlier. Shared UI is implemented and verified; owner acceptance is pending. Evidence: [Phase 2 report](development/PHASE_2_UI_FOUNDATION.md).
 
-- [ ] Approve a bounded module brief and token/theme -> reusable-component -> shell review checkpoints.
-- [ ] Implement shared semantic retail tokens for surfaces/text/green actions/muted/borders/focus/status, spacing/type/radius and numeric styles; consistently map to shadcn semantics.
-- [ ] Support Light, Dark and System; System responds to OS preference changes.
-- [ ] Persist explicit theme preference across navigation/reload; restore before first paint without flash/hydration mismatch; define/review safe fallback when storage is unavailable.
-- [ ] Provide accessible reusable buttons/inputs/selects/labels/errors/tables/cards/dialogs/alerts/status/loading/empty/error patterns, breadcrumbs and navigation.
-- [ ] Meet written 44x44px interactive target guidance and test actual contrast; document deviations rather than copying undersized prototype controls.
-- [ ] Verify logical keyboard navigation, visible focus, menu/drawer behavior, dialog focus trap, Escape close, opener focus restoration and announced status/errors.
-- [ ] Support reduced motion and 200% zoom without losing controls.
-- [ ] Build responsive Admin and Salesperson shells using the canonical routes. Use labeled safe fixtures; no private stock/cost/profit in Salesperson content or payloads.
-- [ ] Exercise Checking / Shop server connected / Cannot reach shop server using /api/health and safe failure previews. WAN loss alone must not disable local operation.
-- [ ] Keep connectivity advisory: it cannot establish a sale outcome; uncertain-sale guidance preserves the original requestKey.
-- [ ] Verify no real sales, database/Prisma/Compose, authentication, inventory mutation, financial processing or full business screens/POS flow in this phase.
-- [ ] Test/screenshot at 320, 375, 768, 1024 and 1440px in light/dark; test System mode and persistence, state previews, focus and no page overflow.
-- [ ] Bundle runtime assets/fonts/icons locally; public-request-blocked UI checks pass.
-- [ ] Run relevant component/browser tests, lint/type checking and production build; report changed files, accessibility limits and screenshot evidence.
+- [x] Owner authorizes the whole bounded Phase 2 delivery; tokens/themes, primitives and shells are internal work groups, with owner review before the next phase.
+- [x] Implement shared semantic retail tokens for surfaces/text/green actions/muted/borders/focus/status, spacing/type/radius and numeric styles; consistently map to shadcn semantics.
+- [x] Support Light, Dark and System; System responds to OS preference changes.
+- [x] Persist explicit theme preference across navigation/reload; restore before first paint without flash/hydration mismatch; implement safe storage fallback (owner review remains D12).
+- [x] Provide accessible reusable buttons/inputs/selects/labels/errors/tables/cards/dialogs/alerts/status/loading/empty/error patterns, breadcrumbs and navigation.
+- [x] Meet written 44x44px interactive target guidance and test actual contrast; document deviations rather than copying undersized prototype controls.
+- [x] Verify logical keyboard navigation, visible focus, menu/drawer behavior, dialog focus trap, Escape close, opener focus restoration and announced status/errors.
+- [x] Support reduced motion and 200% zoom without losing controls.
+- [x] Build responsive Admin and Salesperson shells using the canonical routes. Use labeled safe fixtures; no private stock/cost/profit in Salesperson content or payloads.
+- [x] Exercise Checking / Shop server connected / Cannot reach shop server using /api/health and safe failure previews. WAN loss alone must not disable local operation.
+- [x] Keep connectivity advisory: it cannot establish a sale outcome; uncertain-sale guidance preserves the original requestKey.
+- [x] Verify no real sales, database/Prisma/Compose, authentication, inventory mutation, financial processing or full business screens/POS flow in this phase.
+- [x] Test/screenshot at 320, 375, 768, 1024 and 1440px in light/dark; test System mode and persistence, state previews, focus and no page overflow.
+- [x] Bundle runtime assets/fonts/icons locally; public-request-blocked UI checks pass.
+- [x] Run relevant component/browser tests, lint/type checking and production build; report changed files, accessibility limits and screenshot evidence.
 - [ ] Owner reviews the approved current UI module before the next module or Phase 3. A17/A18 operational features are not approved merely by theme-control scope.
+
+- [ ] Complete manual screen-reader and native browser-zoom review; automated 200% CSS-scale/reflow and Chromium keyboard/contrast checks passed. This is not WCAG certification.
 
 ### Phase 3 — Complete Mock UI Screens and Interactions
 
-UI references: UI-2, UI-3, UI-4 and UI-5. Review each screen group independently.
+UI references: UI-2, UI-3, UI-4 and UI-5. The owner now requires **ONE SCREEN AT A TIME**, overriding the earlier grouped delivery order. Only A01 /login (UI-5) is authorized by the current task; all other screens wait for separate review/authorization.
+
+- [x] Owner explicitly authorizes the A01 Login UI brief only; preserve all existing Phase 2 changes.
+- [x] Verify final saved A01 code: lint/type checking/build, 36 unit/component tests and 98 desktop/mobile browser tests; inspect responsive, height/error and 200% CSS-reflow screenshots. See the [layout fix report](development/LOGIN_LAYOUT_FIX_REPORT.md).
+- [x] Owner reviewed the latest A01 Login screenshot and approved its desktop visual layout. Outstanding manual accessibility/device checks remain open; this is not overall Phase 2/3 acceptance.
+- [ ] Owner reviews and accepts A01 before work on any other screen.
 
 - [ ] Approve required screen list/interaction brief and label policy-dependent mock assumptions as illustrative.
 - [ ] Complete Salesperson P01/P02 mock flow and safe simulated confirmation, keyboard/numeric entry and empty/invalid/loading/error/unconfirmed states.
 - [ ] Complete products/inventory A03–A11 mock forms/detail/history, explicit receipt/reprice review, count deltas and low-stock states.
 - [ ] Complete dashboard/sales/correction/report A02/A12–A16 mock screens, working mock filters, original-versus-corrected previews and accessible chart summaries.
-- [ ] Complete login A01 mock; add A17/A18 operational mocks only if scope separately approved.
+- [x] Implement A01 Login UI preview only: branded centered card, Username/Password/Show-Hide, required-field errors/focus, labeled loading/unavailable feedback, compact status, persistent themes and exact browser title. No credential validation, request, persistence, role routing or successful login.
+- [ ] Add A17/A18 operational mocks only if scope separately approved.
 - [ ] Reuse Phase 2 shells/themes and canonical routes; no broken placeholder actions within approved screens.
 - [ ] Keep all mock success visibly simulated, with no real persisted sale/stock/audit/account effects and no claim of database commit.
 - [ ] Keep real private fields out of Salesperson mock DTOs/markup; no production authorization through role-preview toggles.
@@ -213,4 +223,4 @@ Other retained decisions:
 - [ ] Unresolved issues, rollback/operational limits and next step reported.
 - [ ] Owner reviews current module before the next; deployment/destructive/major architecture actions separately approved.
 
-Current reconciliation verification is documentation consistency and source preservation only. Prior Phase 1 passing checks remain historical evidence; no app test/build/install or Phase 2 implementation is performed during this task.
+Historical reconciliation covered document consistency/source preservation. The separately authorized Phase 2 implementation now passes lint/type checking, 27 unit/component tests, production build and 40 desktop/mobile browser tests. That Phase 2 evidence remains a historical delivery record. The subsequently authorized A01-only Login UI passes lint/type/build, 36 unit/component tests and 74 browser tests; its screen-specific evidence is in the [Login UI report](development/LOGIN_UI_REPORT.md). Original sources, Admin/POS pages, baseline tests and dependencies remain preserved. The shared-shell browser test's skip-link expectation now reaches the new Username field before its retained Admin-navigation check. No commit, overall phase acceptance or other screen implementation has occurred.

@@ -1,8 +1,8 @@
 # POS Implementation Plan
 
-Reconciled: 1 November 2026 (Asia/Karachi). **Phase 1 is completed and accepted. The owner-defined master sequence is Phases 1–9. Phase 2 has not started.**
+Updated: 1 November 2026 (Asia/Karachi). **Phase 1 is completed and accepted. Phase 2 is implemented and verified, awaiting owner review. A01 Login UI is implemented and verified, awaiting owner review; other Phase 3 screens and Phases 4–9 have not started. The owner-defined master sequence remains Phases 1–9.**
 
-Current authorization is documentation reconciliation only. It does not authorize UI implementation, application logic, dependency installation, database work, commits or changes to the original SRS. Complete one separately approved module at a time and obtain its review before the next module.
+The previous bounded Phase 2 shared UI foundation is recorded in [PHASE_2_UI_FOUNDATION.md](development/PHASE_2_UI_FOUNDATION.md); its owner acceptance remains pending. The owner's subsequent ONE SCREEN AT A TIME instruction explicitly authorizes only A01 Login UI at /login. That screen is implemented and verified, awaiting owner review; see [LOGIN_UI_REPORT.md](development/LOGIN_UI_REPORT.md). No other mock screen, real authentication/database/business functionality, deployment or Git commit is authorized. The original SRS remains unchanged.
 
 ## 1. Source availability, authority and history
 
@@ -22,7 +22,7 @@ The root POS_Complete_Development_Guide.md is a synchronized convenience copy of
 
 Evidence: S = actual SRS (section references below); A = AGENTS.md; G = engineering guide; U = UI specification or explicit owner instruction; P = proposed engineering/business choice. F/N/D IDs are project planning IDs, not SRS clause numbers.
 
-Git remains uninitialized as observed in verification; tracked/staged cleanliness cannot yet be checked. Git setup, secret exclusions and all application changes remain outside this documentation task.
+Git was subsequently initialized at D:\pos with accepted foundation checkpoint 8aebf2135572af36d43bfcd8ad93ef5ed29f59d5. Phase 2 began from a clean working tree and passing desktop/mobile Playwright baseline. Its reviewed-scope changes remain uncommitted for owner review. Original guide/specification publication-time phase statements are retained; this plan, the checklist and the Phase 2 report track current execution status.
 
 ## 2. Functional requirement inventory
 
@@ -178,7 +178,7 @@ If operations later touch multiple products, lock them in deterministic order. K
 
 ## 6. Canonical routes, roles and sale confirmation contract
 
-These are the current documentation conventions, not implemented routes. All application files belong under web/src/app. Admin screens use /admin; Salesperson screens use /pos; /login is shared. Route-group folder names are implementation details and do not appear in URLs or confer authorization.
+These remain the canonical route conventions. Phase 2 implements only /login, /admin/dashboard and /pos as public mock shells, alongside the existing /api/health liveness endpoint. Other screen routes below are planned, with unavailable navigation shown as noninteractive placeholders. All role restrictions in the table describe future server-enforced permissions, not protection provided by these previews. Application files belong under web/src/app; route-group folder names do not appear in URLs or confer authorization.
 
 | Screen / purpose | Canonical route | Access and scope |
 | --- | --- | --- |
@@ -270,7 +270,7 @@ In Phase 3 a mock confirmation must visibly say it is a simulation, return no cl
 
 ## 7. Light, dark and system UI implementation plan
 
-The UI specification and HTML prototype are readable. Use their flat retail layout, green action accent, semantic surfaces and system-font guidance as the design baseline. The foundation's neutral styles are scaffolding, not accepted final UI. Phase 2 criteria in section 10 govern shared tokens, persistent Light/Dark/System preference, first paint, reusable components, keyboard/focus, responsive shells and advisory connectivity.
+The readable UI specification and HTML prototype supply the flat retail layout, green action accent, semantic surfaces and system-font baseline. Phase 2 now implements these shared foundations; the neutral scaffold palette has been replaced. The [Phase 2 report](development/PHASE_2_UI_FOUNDATION.md) records implementation details, contrast-driven input-outline adjustments, screenshots and limitations. Section 10 remains the acceptance criteria; visual/owner acceptance is still pending.
 
 Map UI surface/surface-subtle/danger/focus tokens consistently to shadcn card/muted/destructive/ring semantics rather than mixing competing palettes. Verify contrast, 44px targets and focus behavior; the HTML's simplified dialogs/small controls are not compliance evidence. No external fonts/icons/CDNs. Apply labels/icons as well as color to warnings, losses and validation. Later Recharts views need readable legends/tooltips and exact-value table alternatives.
 
@@ -346,7 +346,7 @@ The original D01–D16 identifiers remain stable for history and review. Suggest
 | D09 | Calendar/day cutoff, correction attribution, ranking | Asia/Karachi calendar-day reporting and ranking by units are retained proposals; correction attribution pending | Reporting contracts |
 | D10 | Admin POS access and Salesperson own history | Pending; submitting user's confirmation is required, general own-history convenience is not approved | Authentication/POS |
 | D11 | Login identifier/reset/sessions/Admin management | Admin provisioning/local recovery proposed; username/email-shaped identifier, timeouts and management scope need review | Phase 4 |
-| D12 | Theme/locale/design review | Light/Dark/System and persistence are required by this request; default/fallback, locale/language and screenshots reviewed in Phase 2 | UI acceptance |
+| D12 | Theme/locale/design review | Three modes/persistence implemented. System is the provisional default/fallback; denied storage retains selection only for the current tab. Owner review of fallback, locale/language and screenshots remains pending. | UI acceptance |
 | D13 | Hardware/devices/DNS/TLS/capacity | Dedicated Linux server/UPS and benchmark remain proposals | Deployment/performance |
 | D14 | Backup/retention/RPO/RTO/key custody | Nightly encrypted separate-disk backup is a proposal; objectives/retention need approval | Phase 9 |
 | D15 | Pending-intent retention/shared terminals | Original-key recovery is mandatory; safe storage/retention and lost-storage recovery need review | Phase 6 |
@@ -356,15 +356,15 @@ Approve outcomes in a decision log before dependent implementation. Major archit
 
 ## 10. Master development sequence and acceptance gates
 
-This is the sole current development sequence, established by the owner. Phase numbers in historical plans/guides and UI-* labels are references, not competing schedules. Phase 1 is completed and accepted. Phases 2–9 are planned and not started; this reconciliation is documentation only, not authorization to implement Phase 2.
+This is the sole current development sequence, established by the owner. Historical phase numbers and UI-* labels remain cross-references. Phase 1 is completed and accepted; the separately authorized Phase 2 is implemented/verified and awaiting owner review. The subsequent explicit screen brief authorizes only A01 Login UI within Phase 3; it is implemented/verified and awaiting owner review. Other Phase 3 screens and Phases 4–9 remain planned and unstarted. Finishing verification does not grant owner acceptance or authorize the next phase.
 
 Begin each module with a short plan. Each large phase is split into the reviewable modules below; complete tests/review for the current approved module before implementing the next. Finishing one phase does not automatically authorize the next.
 
 | Phase | Master title | Status |
 | --- | --- | --- |
 | 1 | Project Foundation | Completed and accepted |
-| 2 | Shared UI Design System, Themes and Application Shells | Planned; not started |
-| 3 | Complete Mock UI Screens and Interactions | Planned; not started |
+| 2 | Shared UI Design System, Themes and Application Shells | Implemented and verified; awaiting owner review |
+| 3 | Complete Mock UI Screens and Interactions | A01 Login UI implemented/verified; awaiting review. Other screens unstarted |
 | 4 | Database and Authentication | Planned; not started |
 | 5 | Products and Inventory | Planned; not started |
 | 6 | Sales Processing and Profit | Planned; not started |
@@ -377,12 +377,13 @@ Begin each module with a short plan. Each large phase is split into the reviewab
 - Status: completed, verified and accepted by the owner.
 - Delivered: isolated web/ Next.js App Router/TypeScript/Tailwind/ESLint app, shadcn/ui base setup, liveness endpoint, pinned dependency manifest/lockfile, Vitest/Playwright starter configuration and local-start documentation.
 - Evidence: [Phase 1 report](development/PHASE_1_FOUNDATION.md) and subsequent verification: lint/type checking, two unit tests, production build and two desktop/mobile production browser tests passed. Native compiler installation issues were repaired and reported.
-- Boundaries: no authentication, DB, sales, products or reports delivered. Git initialization was outside the narrowed request; a clean/staged Git status is still unavailable. Historical report wording about awaiting review records its original publication state, not the current acceptance state.
+- Boundaries: no authentication, DB, sales, products or reports delivered. Git initialization followed Phase 1 as the separate verified checkpoint 8aebf2135572af36d43bfcd8ad93ef5ed29f59d5. Historical report wording about awaiting review records its publication state, not current Phase 1 acceptance.
 
 ### Phase 2 — Shared UI Design System, Themes and Application Shells
 
 - Depends on: accepted Phase 1, readable sources and a separately authorized Phase 2 module brief. UI-1 is the reference workstream. No business decision is selected by the design system.
-- Reviewable modules: (a) semantic tokens/theme resolution, (b) reusable accessible primitives/patterns, (c) responsive Admin/Salesperson shells and advisory local-server states. Review each before moving on.
+- Status: implemented and verified, awaiting owner review; see [Phase 2 evidence](development/PHASE_2_UI_FOUNDATION.md). The owner authorized this whole bounded phase as the current delivery. Tokens/themes, primitives and responsive shells/connectivity are its internal work groups; owner review remains required before Phase 3.
+- Evidence: 27 unit/component tests; 40 desktop/mobile Chromium browser tests; lint, type checking and production build pass. Browser coverage includes the three routes at five widths in light/dark, System changes, first paint/persistence/storage denial, focus/keyboard, advisory connectivity, actual contrast/control bounds and 200% CSS-scale/reflow checks. Manual screen-reader/native-browser zoom review remains outstanding.
 - Shared design tokens: implement the UI specification's surface/text, green action, muted, border, focus, success/warning/danger, spacing, typography, radius and numeric styles; map surface tokens to shadcn card/popover semantics. Use one consistent token system for controls, dialogs and later charts. Record any contrast-driven deviation.
 - Themes: Light, Dark and System work; System responds to OS preference changes. Persist explicit browser preference across navigation/reload, restore before first paint without flash/hydration mismatch, and handle unavailable preference storage safely. Confirm default/fallback at UI review. Never persist credentials or private business data as theme state.
 - Reusable components: accessible buttons, inputs, selects, labels/help/error regions, table/card primitives, dialogs, alerts/status, loading/empty/error patterns, breadcrumbs and navigation. Enforce clear disabled/loading semantics and 44x44px minimum interactive targets, with POS primary actions planned at 52–56px.
@@ -393,6 +394,9 @@ Begin each module with a short plan. Each large phase is split into the reviewab
 - Acceptance evidence: component/keyboard tests and Playwright screenshots/checks at 320, 375, 768, 1024 and 1440px in light/dark; exercise System preference changes, stored preference restoration, dialog/drawer focus, loading/error/connectivity states, no page overflow and 200% zoom. No external fonts/CDNs/runtime assets. Run lint/type checking, relevant unit/browser tests and production build; report limitations and obtain owner review. No physical shop outage or business-transaction acceptance is claimed here.
 
 ### Phase 3 — Complete Mock UI Screens and Interactions
+
+- Current screen authorization: **A01 /login only** (UI-5 reference). Username/password fields, visibility control, required-field validation, labeled loading/unavailable feedback, compact advisory connectivity and existing themes are implemented and verified. This is a public UI preview with no credential checking, storage, submission or successful login. The Username label is the owner's UI instruction, not a final D11 identity/session policy. Evidence: [Login UI report](development/LOGIN_UI_REPORT.md).
+- ONE SCREEN AT A TIME: stop for owner review of A01. Other Phase 3 screens, including the existing Admin/POS placeholders, are outside this task and remain unchanged. No overall Phase 2/3 acceptance is inferred from this screen-specific authorization.
 
 - Depends on: reviewed Phase 2 and approved screen/module brief. Uses UI-2 through UI-5 as workstream references; no backend integration.
 - Reviewable modules: (a) Salesperson P01/P02 flow and safe simulated confirmation, (b) products/inventory A03–A11, (c) dashboard/sales/corrections/reports A02/A12–A16, (d) login A01 and separately approved operational account/settings screens. Reuse Phase 2 themes and shells.
@@ -475,6 +479,6 @@ Use Vitest for pure input/money/time/DTO/revision logic, real isolated PostgreSQ
 
 Each executable module requires relevant tests, lint/type checking, production build, reviewed migration SQL if changed, permission/DTO evidence, UI screenshots against the specification, changed-file report, unresolved issues and next-step proposal. Record actual commands/results and review approval; planned tests are not passing tests. Use isolated test data; no production reset or destructive restore without explicit permission.
 
-This reconciliation runs document checks and file-preservation comparisons only. Previous foundation test/build results remain evidence for accepted Phase 1, not proof of future business modules. No application test, package install, application-code edit, Git initialization/commit or Phase 2 implementation is part of this task.
+Historical reconciliation verification covered documents and preservation only. The later, explicitly authorized Phase 2 delivery has now passed the checks recorded in its [report](development/PHASE_2_UI_FOUNDATION.md). No new dependencies were installed. Original SRS/design/guide files, baseline tests and package/configuration files remain unchanged. No Git commit or Phase 3 implementation was made.
 
-Next: review this documentation reconciliation. On a separate instruction, begin only a bounded Phase 2 UI-1 module and stop for its review before continuing.
+Next: owner reviews the implemented Phase 2 UI-1 foundation, screenshots, provisional theme fallback and accessibility limits. Do not start Phase 3 or create a Git commit without the owner's instruction.

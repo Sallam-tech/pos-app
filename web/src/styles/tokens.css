@@ -1,0 +1,66 @@
+/* UI specification §3. Border is decorative; input outlines meet 3:1 contrast. */
+:root {
+  color-scheme: light;
+  --background: #f6f7f9;
+  --surface: #ffffff;
+  --surface-subtle: #eff2f6;
+  --foreground: #17212c;
+  --muted-foreground: #536273;
+  --border: #d9e1e9;
+  --input: #7a8795;
+  --primary: #176f56;
+  --primary-foreground: #ffffff;
+  --success: #166444;
+  --warning: #9c5c00;
+  --danger: #b42332;
+  --danger-foreground: #ffffff;
+  --focus: #166dd6;
+  --shadow-dialog: 0 12px 30px rgb(17 33 48 / 10%);
+  --radius: 12px;
+  --radius-control: 8px;
+  --radius-dialog: 16px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --content-width: 1440px;
+  --sidebar-width: 240px;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #0f141b;
+  --surface: #18212b;
+  --surface-subtle: #222d39;
+  --foreground: #f3f6fa;
+  --muted-foreground: #b1bfce;
+  --border: #394653;
+  --input: #8797a7;
+  --primary: #49d5a0;
+  --primary-foreground: #071a15;
+  --success: #74e0af;
+  --warning: #f4c36c;
+  --danger: #ff9099;
+  --danger-foreground: #0f141b;
+  --focus: #a7c7ff;
+  --shadow-dialog: 0 14px 36px rgb(0 0 0 / 35%);
+}
+
+/* shadcn semantic aliases: one retail palette, rather than competing colors. */
+:root {
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--surface-subtle);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface-subtle);
+  --accent: var(--surface-subtle);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--danger-foreground);
+  --ring: var(--focus);
+}
