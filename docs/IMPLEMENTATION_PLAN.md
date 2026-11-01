@@ -1,8 +1,8 @@
 # POS Implementation Plan
 
-Updated: 1 November 2026 (Asia/Karachi). **Phase 1 is completed and accepted. Phase 2 is implemented and verified, awaiting owner review. A01 Login UI is implemented and verified, awaiting owner review; other Phase 3 screens and Phases 4–9 have not started. The owner-defined master sequence remains Phases 1–9.**
+Updated: 1 November 2026 (Asia/Karachi). **Phase 1 is completed and accepted. Phase 2 foundation and A01 Login are checkpointed at 9cf59d46ddda192a3a1867267955075b9391e518. Login desktop visuals are approved; outstanding manual/overall review remains open. The separately authorized P01 desktop Record Sale prototype at /pos is implemented, verified and owner-approved after all six manual feature checks, including the decimal precision fix; mobile manual refinement is deferred. Other screens and Phases 4–9 remain unstarted.**
 
-The previous bounded Phase 2 shared UI foundation is recorded in [PHASE_2_UI_FOUNDATION.md](development/PHASE_2_UI_FOUNDATION.md); its owner acceptance remains pending. The owner's subsequent ONE SCREEN AT A TIME instruction explicitly authorizes only A01 Login UI at /login. That screen is implemented and verified, awaiting owner review; see [LOGIN_UI_REPORT.md](development/LOGIN_UI_REPORT.md). No other mock screen, real authentication/database/business functionality, deployment or Git commit is authorized. The original SRS remains unchanged.
+The shared UI foundation is recorded in [PHASE_2_UI_FOUNDATION.md](development/PHASE_2_UI_FOUNDATION.md), and A01 in [LOGIN_UI_REPORT.md](development/LOGIN_UI_REPORT.md) and [LOGIN_LAYOUT_FIX_REPORT.md](development/LOGIN_LAYOUT_FIX_REPORT.md). The owner approved Login desktop visuals and created the local checkpoint above; manual accessibility/device and overall acceptance gates remain open. The current ONE SCREEN AT A TIME brief authorizes only P01 /pos with an embedded, explicitly simulated confirmation. Desktop feature review is approved; mobile manual refinement and manual accessibility review remain open; see [POS_RECORD_SALE_UI_REPORT.md](development/POS_RECORD_SALE_UI_REPORT.md). Login and Admin source are unchanged. The owner separately authorizes one local POS checkpoint; no push, deployment, real business functionality or next screen is authorized.
 
 ## 1. Source availability, authority and history
 
@@ -22,7 +22,7 @@ The root POS_Complete_Development_Guide.md is a synchronized convenience copy of
 
 Evidence: S = actual SRS (section references below); A = AGENTS.md; G = engineering guide; U = UI specification or explicit owner instruction; P = proposed engineering/business choice. F/N/D IDs are project planning IDs, not SRS clause numbers.
 
-Git was subsequently initialized at D:\pos with accepted foundation checkpoint 8aebf2135572af36d43bfcd8ad93ef5ed29f59d5. Phase 2 began from a clean working tree and passing desktop/mobile Playwright baseline. Its reviewed-scope changes remain uncommitted for owner review. Original guide/specification publication-time phase statements are retained; this plan, the checklist and the Phase 2 report track current execution status.
+Git was initialized at D:\pos with accepted foundation checkpoint 8aebf2135572af36d43bfcd8ad93ef5ed29f59d5. The owner subsequently checkpointed the verified UI foundation/Login at 9cf59d46ddda192a3a1867267955075b9391e518. This P01 task began with a clean working tree at that commit. Its initial uncommitted delivery and precision correction now have owner desktop approval and separate local checkpoint authorization. Publication-time statements in earlier reports/source guides are historical; this plan, the checklist and the latest screen report track current execution.
 
 ## 2. Functional requirement inventory
 
@@ -206,7 +206,7 @@ These remain the canonical route conventions. Phase 2 implements only /login, /a
 | P02 Sale confirmation | /pos/success/[id] | Safe confirmation for the submitting Salesperson; real authorization in Phase 4/6 |
 | Local-server liveness | /api/health | Existing permission-safe liveness endpoint; advisory, not sale/database confirmation |
 
-Here [id] is the resource ID; the confirmation route uses saleId. No general Salesperson history route is approved. Logout/own-credential actions belong to the authenticated account controls; they are not extra business screens.
+Here [id] is the resource ID; the confirmation route uses saleId. No general Salesperson history route is approved. Logout/own-credential actions belong to the authenticated account controls; they are not extra business screens. The currently authorized P01 preview stays at /pos and renders its simulated summary in place. It creates no saleId or success route; the planned P02 /pos/success/[id] committed-confirmation route remains unimplemented.
 
 | Superseded name | Canonical replacement | Migration note |
 | --- | --- | --- |
@@ -356,7 +356,7 @@ Approve outcomes in a decision log before dependent implementation. Major archit
 
 ## 10. Master development sequence and acceptance gates
 
-This is the sole current development sequence, established by the owner. Historical phase numbers and UI-* labels remain cross-references. Phase 1 is completed and accepted; the separately authorized Phase 2 is implemented/verified and awaiting owner review. The subsequent explicit screen brief authorizes only A01 Login UI within Phase 3; it is implemented/verified and awaiting owner review. Other Phase 3 screens and Phases 4–9 remain planned and unstarted. Finishing verification does not grant owner acceptance or authorize the next phase.
+This is the sole current development sequence, established by the owner. Historical phase numbers and UI-* labels remain cross-references. Phase 1 is accepted. Phase 2 and A01 are verified/checkpointed, with Login desktop approval recorded and manual/overall review still open. The current explicit brief authorizes only P01 /pos and its embedded simulated summary within Phase 3. The desktop prototype is owner-approved after all six manual feature checks, including the precision fix; mobile manual refinement is deferred. All other mock screens and Phases 4–9 remain planned and unstarted; completing checks does not authorize the next screen or grant overall acceptance.
 
 Begin each module with a short plan. Each large phase is split into the reviewable modules below; complete tests/review for the current approved module before implementing the next. Finishing one phase does not automatically authorize the next.
 
@@ -364,7 +364,7 @@ Begin each module with a short plan. Each large phase is split into the reviewab
 | --- | --- | --- |
 | 1 | Project Foundation | Completed and accepted |
 | 2 | Shared UI Design System, Themes and Application Shells | Implemented and verified; awaiting owner review |
-| 3 | Complete Mock UI Screens and Interactions | A01 Login UI implemented/verified; awaiting review. Other screens unstarted |
+| 3 | Complete Mock UI Screens and Interactions | A01 desktop visuals approved; manual review pending. P01 /pos desktop approved; mobile manual refinement deferred. Other screens unstarted |
 | 4 | Database and Authentication | Planned; not started |
 | 5 | Products and Inventory | Planned; not started |
 | 6 | Sales Processing and Profit | Planned; not started |
@@ -395,8 +395,10 @@ Begin each module with a short plan. Each large phase is split into the reviewab
 
 ### Phase 3 — Complete Mock UI Screens and Interactions
 
-- Current screen authorization: **A01 /login only** (UI-5 reference). Username/password fields, visibility control, required-field validation, labeled loading/unavailable feedback, compact advisory connectivity and existing themes are implemented and verified. This is a public UI preview with no credential checking, storage, submission or successful login. The Username label is the owner's UI instruction, not a final D11 identity/session policy. Evidence: [Login UI report](development/LOGIN_UI_REPORT.md).
-- ONE SCREEN AT A TIME: stop for owner review of A01. Other Phase 3 screens, including the existing Admin/POS placeholders, are outside this task and remain unchanged. No overall Phase 2/3 acceptance is inferred from this screen-specific authorization.
+- Previously delivered A01 /login (UI-5): Username/password, visibility control, required validation, loading/unavailable feedback, compact advisory connectivity and themes remain unchanged. Desktop visuals are owner-approved; manual accessibility/device checks remain open. It is a public preview with no credential checking, storage, submission or successful login. Username is the owner's presentation instruction, not a final D11 policy. See [Login UI report](development/LOGIN_UI_REPORT.md).
+- Reviewed screen scope: **P01 /pos only** (UI-2 reference), including an in-place simulated confirmation. Delivered: searchable id/name-only mock products, keyboard combobox, quantity +/- controls, PKR entry, exact decimal totals, field validation/first-error focus, clearly simulated summary and New Sale reset/focus. The POS-only header is compact; shared components, Login and Admin are unchanged. See [POS screen report](development/POS_RECORD_SALE_UI_REPORT.md).
+- Preview assumptions are explicitly non-binding: one product, positive fractional examples, zero-price examples, +/- one convenience, up to 12 whole-number digits per input, 6 quantity decimals and the owner-required maximum 2 selling-price decimals, and exact unrounded totals (including sub-paisa results). D02/D03/D07 still require owner decisions before domain/schema validation. No costs or confidential price thresholds are present. No new dependencies, real authentication, database, inventory effects, business requests, request-key recovery, or persisted confirmation are implemented.
+- ONE SCREEN AT A TIME: all six P01 desktop manual feature checks passed, including the selling-price precision fix. The owner authorizes this local checkpoint only; stop after it. Mobile manual refinement and manual accessibility review remain open. The planned standalone P02 route, other Phase 3 screens and all real workflows remain outside this task. Initial screen verification passed lint/type/build, 54 unit/component tests and 130 desktop/mobile Chromium tests. The subsequent precision fix passed lint/type/build, 30 focused unit/component tests and 8 relevant desktop/mobile browser tests. Saved source/test/configuration hashes match those verified versions; this documentation/checkpoint task requires no repeated browser run. Screenshots cover 320/375/768/1024/1440px in Light/Dark, with System changes, touch/keyboard, errors, exact totals, simulation/reset, no overflow and 200% CSS reflow. Manual screen-reader/native zoom/device review remains outstanding.
 
 - Depends on: reviewed Phase 2 and approved screen/module brief. Uses UI-2 through UI-5 as workstream references; no backend integration.
 - Reviewable modules: (a) Salesperson P01/P02 flow and safe simulated confirmation, (b) products/inventory A03–A11, (c) dashboard/sales/corrections/reports A02/A12–A16, (d) login A01 and separately approved operational account/settings screens. Reuse Phase 2 themes and shells.

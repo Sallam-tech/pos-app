@@ -65,9 +65,9 @@ for (const theme of ["light", "dark"] as const) {
           }
           await expectReadableContrast(page);
           if (route.name === "pos") {
-            expect(await page.locator("body").innerText()).not.toMatch(/purchase cost|remaining stock|profit|Rs\./i);
+            expect(await page.locator("body").innerText()).not.toMatch(/purchase cost|remaining stock|profit/i);
             expect(await response!.text()).not.toMatch(/stockOnHand|currentCost|unitCostSnapshot|grossProfit/);
-            await expect(page.locator("form")).toHaveCount(0);
+            await expect(page.getByRole("form", { name: "Record sale preview" })).toHaveCount(1);
           }
           await page.screenshot({ path: testInfo.outputPath(route.name + "-" + theme + "-" + width + ".png"), fullPage: true, scale: "css" });
         });
