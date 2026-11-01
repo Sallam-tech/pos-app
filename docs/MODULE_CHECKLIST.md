@@ -1,8 +1,8 @@
 # POS Module Checklist
 
-Updated: 1 November 2026 (Asia/Karachi). **Phase 1 accepted. Phase 2/A01 checkpointed at 9cf59d46ddda192a3a1867267955075b9391e518; Login desktop visuals approved, remaining manual/overall review pending. P01 /pos desktop prototype is verified and owner-approved after all six manual feature checks, including the decimal precision fix; mobile manual refinement is deferred. Other screens and Phases 4–9 remain unstarted.**
+Updated: 2 November 2026 (Asia/Karachi). **Phase 1 accepted. Phase 2/A01 checkpointed at 9cf59d46ddda192a3a1867267955075b9391e518; Login desktop visuals approved, remaining manual/overall review pending. P01 /pos desktop prototype is verified and owner-approved after all six manual feature checks, including the decimal precision fix; mobile manual refinement is deferred. A02's five summary cards, Low Stock Products card/A11 mock list and pathname-aware sidebar fix are implemented and verified with owner-approved desktop visuals; manual accessibility/device review remains open; the remaining dashboard and inventory features, other screens and Phases 4–9 remain unstarted.**
 
-Use [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) as the master sequence and contract source. Historical P00–P17 and UI-* labels remain cross-references. [Phase 2](development/PHASE_2_UI_FOUNDATION.md) and [Login](development/LOGIN_UI_REPORT.md) delivery records remain intact. The current ONE SCREEN AT A TIME brief separately authorizes only P01 /pos and its embedded simulated summary; see [POS screen report](development/POS_RECORD_SALE_UI_REPORT.md). No overall phase acceptance, additional screen or real business functionality is implied.
+Use [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) as the master sequence and contract source. Historical P00–P17 and UI-* labels remain cross-references. [Phase 2](development/PHASE_2_UI_FOUNDATION.md) and [Login](development/LOGIN_UI_REPORT.md) delivery records remain intact. The reviewed P01 brief covered /pos and its embedded simulated summary; see [POS screen report](development/POS_RECORD_SALE_UI_REPORT.md). The approved desktop POS checkpoint is f2f6296e83a4e30e9ba46d911d48e791cf3392d5. The preceding A02 brief authorized five mock overview cards; see [dashboard summary report](development/ADMIN_DASHBOARD_SUMMARY_REPORT.md). A separate brief delivered only the Low Stock Products card link and canonical A11 read-only mock list; see [low-stock report](development/LOW_STOCK_CARD_REPORT.md). The owner approved desktop visuals for these cards/list and the sidebar fix and authorized one local checkpoint. No overall phase acceptance, other card interaction or real business functionality is implied.
 
 Checkpoint review — 1 November 2026: the owner reviewed the latest Login screenshot, approved its desktop visual layout and explicitly authorized one local Git checkpoint of the verified Phase 2 foundation and Login prototype. This does not close manual screen-reader, native browser/OS zoom or device review, and does not authorize a push or another screen. Uncommitted/no-commit statements in earlier delivery reports and the implementation plan describe their pre-checkpoint publication state.
 
@@ -25,7 +25,7 @@ The SRS remains business authority and is unchanged. The development guide's sec
 | --- | --- | --- |
 | 1 | Project Foundation | Completed and accepted |
 | 2 | Shared UI Design System, Themes and Application Shells | Implemented and verified; awaiting owner review |
-| 3 | Complete Mock UI Screens and Interactions | A01 desktop approved, manual review pending; P01 /pos desktop approved, mobile manual refinement deferred. Other screens unstarted |
+| 3 | Complete Mock UI Screens and Interactions | A01 desktop approved, manual review pending; P01 desktop approved, mobile manual refinement deferred; A02 cards, Low Stock card/A11 mock list and sidebar fix verified; desktop visuals approved, manual review pending. Remainder unstarted |
 | 4 | Database and Authentication | Planned; not started |
 | 5 | Products and Inventory | Planned; not started |
 | 6 | Sales Processing and Profit | Planned; not started |
@@ -69,7 +69,20 @@ UI workstream reference: UI-1. Legacy plan reference: P04, moved earlier. Shared
 
 ### Phase 3 — Complete Mock UI Screens and Interactions
 
-UI references: UI-2, UI-3, UI-4 and UI-5. ONE SCREEN AT A TIME overrides the earlier grouped order. A01 /login (UI-5) is already checkpointed with desktop visual approval and outstanding manual checks. The reviewed P01 /pos (UI-2) scope includes an in-place simulated confirmation. All six owner desktop manual feature checks passed, including the decimal precision fix; mobile manual refinement is deferred. The current task authorizes only its local Git checkpoint; other screens wait for separate authorization.
+- [x] Previous authorization: A02's five Admin dashboard summary cards only; original delivery added no charts/tables/filters or other dashboard work.
+- [x] Original summary delivery: fixed, clearly labeled mock counts and exact PKR strings, accessible labels and responsive themes. The subsequent low-stock brief below replaces only that count with shared-fixture derivation.
+- [x] Verify two focused unit tests, six final dashboard browser cases, six existing Admin shell checks, lint/type/build and inspected Light/Dark desktop screenshots. See the [feature report](development/ADMIN_DASHBOARD_SUMMARY_REPORT.md).
+- [x] Owner approves the five summary cards' desktop visual design on 2 November 2026. Manual accessibility/device review remains open; the rest of A02 and real backend remain planned.
+
+- [x] Owner separately authorizes only the Low Stock Products card interaction and /admin/inventory/low-stock read-only mock list.
+- [x] Use one Admin mock inventory fixture and inclusive quantity <= threshold filter for both dashboard count and list; do not change the other four card interactions.
+- [x] Show product, remaining quantity, configured threshold, textual/icon Low stock status, mock-data context and dashboard return navigation; preserve sidebar layout and existing themes.
+- [x] Verify seven focused unit/component tests and 12 focused desktop/mobile browser cases, including keyboard/full-card navigation, focus, data consistency, themes, contrast and contained narrow-screen scrolling; lint/type/build pass. Inspect final Light/Dark desktop and narrow-screen screenshots; see [low-stock report](development/LOW_STOCK_CARD_REPORT.md).
+- [x] Owner approves desktop visuals for the Low Stock Products card/list and sidebar navigation fix on 2 November 2026; one local checkpoint is authorized, with no push or next feature.
+- [x] Sidebar pathname fix selects Dashboard on /admin/dashboard and Inventory on /admin/inventory/low-stock; planned items remain non-clickable. One focused route-transition regression, lint and type checking passed; unchanged prior feature verification is reused.
+- [ ] Complete outstanding manual screen-reader, native browser zoom and physical-device review for this Admin preview; desktop visual approval does not close these checks.
+
+UI references: UI-2, UI-3, UI-4 and UI-5. ONE SCREEN AT A TIME overrides the earlier grouped order. A01 /login (UI-5) is already checkpointed with desktop visual approval and outstanding manual checks. The reviewed P01 /pos (UI-2) scope includes an in-place simulated confirmation. All six owner desktop manual feature checks passed, including the decimal precision fix; mobile manual refinement is deferred. That earlier task authorized only the completed local Git checkpoint; the later A02 summary-card brief and current Low Stock card/A11 mock-list brief above are separately authorized.
 
 - [x] Owner explicitly authorizes the A01 Login UI brief only; preserve all existing Phase 2 changes.
 - [x] Verify final saved A01 code: lint/type checking/build, 36 unit/component tests and 98 desktop/mobile browser tests; inspect responsive, height/error and 200% CSS-reflow screenshots. See the [layout fix report](development/LOGIN_LAYOUT_FIX_REPORT.md).
@@ -87,7 +100,7 @@ UI references: UI-2, UI-3, UI-4 and UI-5. ONE SCREEN AT A TIME overrides the ear
 
 - [ ] Approve required screen list/interaction brief and label policy-dependent mock assumptions as illustrative.
 - [ ] Complete the broader future P01/P02 workflow states and planned standalone P02 route after separate approval. The current P01 entry/validation/embedded simulation/reset brief is delivered; server loading/conflicts/original-key unconfirmed recovery are not simulated by this synchronous local preview.
-- [ ] Complete products/inventory A03–A11 mock forms/detail/history, explicit receipt/reprice review, count deltas and low-stock states.
+- [ ] Complete the broader products/inventory A03–A11 mock forms/detail/history and receipt/reprice/count states. Only A11's bounded read-only low-stock list is delivered; real inventory, threshold editing, receiving and broader states remain planned.
 - [ ] Complete dashboard/sales/correction/report A02/A12–A16 mock screens, working mock filters, original-versus-corrected previews and accessible chart summaries.
 - [x] Implement A01 Login UI preview only: branded centered card, Username/Password/Show-Hide, required-field errors/focus, labeled loading/unavailable feedback, compact status, persistent themes and exact browser title. No credential validation, request, persistence, role routing or successful login.
 - [ ] Add A17/A18 operational mocks only if scope separately approved.

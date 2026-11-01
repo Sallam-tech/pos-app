@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -14,11 +15,15 @@ const planned: { name: string; icon: IconName }[] = [
   { name: "Sales", icon: "sales" }, { name: "Reports", icon: "chart" },
 ];
 function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate?: () => void }) {
+  const pathname = usePathname();
+  const isDashboard = pathname === "/admin/dashboard";
+  const isInventory = pathname === "/admin/inventory/low-stock";
+  const activeClasses = "border-l-3 border-primary bg-muted font-semibold text-primary";
   return <nav aria-label={mobile ? "Mobile navigation" : "Main navigation"} className="mt-8">
     <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Workspace</p>
     <ul className="grid gap-2">
-      <li><Link href="/admin/dashboard" aria-current="page" onClick={onNavigate} className="flex min-h-11 items-center gap-3 rounded-md border-l-3 border-primary bg-muted px-3 py-3 text-sm font-semibold text-primary"><Icon name="dashboard" />Dashboard</Link></li>
-      {planned.map((item) => <li key={item.name}><span aria-disabled="true" className="flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm text-muted-foreground"><Icon name={item.icon} />{item.name}<span className="ml-auto text-xs">Planned</span></span></li>)}
+      <li><Link href="/admin/dashboard" aria-current={isDashboard ? "page" : undefined} onClick={onNavigate} className={"flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm " + (isDashboard ? activeClasses : "text-muted-foreground")}><Icon name="dashboard" />Dashboard</Link></li>
+      {planned.map((item) => <li key={item.name}><span aria-disabled="true" aria-current={item.name === "Inventory" && isInventory ? "location" : undefined} className={"flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm " + (item.name === "Inventory" && isInventory ? activeClasses : "text-muted-foreground")}><Icon name={item.icon} />{item.name}<span className="ml-auto text-xs">Planned</span></span></li>)}
     </ul>
   </nav>;
 }
