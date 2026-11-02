@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { getMockLowStockProducts, mockInventory } from "../../src/lib/admin/mock-inventory";
+import { getMockLowStockProducts, getMockStockStatus, mockInventory } from "../../src/lib/admin/mock-inventory";
 import { expectReadableContrast } from "./support/contrast";
 
 for (const theme of ["light", "dark"] as const) {
@@ -21,7 +21,7 @@ for (const theme of ["light", "dark"] as const) {
     const overview = page.getByRole("region", { name: "Shop overview" });
     const card = overview.getByRole("group", { name: "Low Stock Products", exact: true });
     const link = card.getByRole("link", { name: "Low Stock Products", exact: true });
-    await expect(overview.getByRole("link")).toHaveCount(1);
+    await expect(overview.getByRole("link")).toHaveCount(2);
     await expect(link).toHaveAttribute("href", "/admin/inventory/low-stock");
     const products = getMockLowStockProducts();
     await expect(card.locator("data")).toHaveAttribute("value", String(products.length));
@@ -38,14 +38,18 @@ for (const theme of ["light", "dark"] as const) {
     const linkBounds = await link.boundingBox();
     expect(Math.abs(cardBounds!.width - linkBounds!.width)).toBeLessThanOrEqual(2);
     expect(Math.abs(cardBounds!.height - linkBounds!.height)).toBeLessThanOrEqual(2);
-    if (testInfo.project.name === "chromium") {
-      await page.screenshot({ path: testInfo.outputPath("dashboard-card-" + theme + ".png"), fullPage: true, scale: "css" });
-    }
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL("/admin/inventory/low-stock");
     await expect(page.getByRole("heading", { level: 1, name: "Low Stock Products", exact: true })).toBeVisible();
     await expect(page).toHaveTitle("Low Stock Products | Shop POS");
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await expect(page.getByText("Demo Data", { exact: true })).toBeVisible();
+    await expect(page.getByText("Mock UI", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Admin workspace", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Layout preview", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "All previews", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Breadcrumbs" })).toHaveCount(0);
+    await expect(page.getByText(/Advisory only/)).toHaveClass("sr-only");
     const region = page.getByRole("region", { name: "Low-stock list (" + products.length + ")", exact: true });
     await expect(region).toHaveAccessibleDescription(/Mock data only/);
     const table = region.getByRole("table", { name: "Mock low-stock inventory" });
@@ -53,7 +57,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(table.getByRole("columnheader")).toHaveText(["Product name", "Remaining quantity", "Low-stock threshold", "Status"]);
     for (const product of products) {
       const row = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: product.name, exact: true }) });
-      await expect(row.getByRole("cell")).toHaveText([String(product.quantity), String(product.lowStockThreshold), "Low stock"]);
+      await expect(row.getByRole("cell")).toHaveText([String(product.quantity), String(product.lowStockThreshold), getMockStockStatus(product)]);
     }
     for (const product of mockInventory.filter((product) => product.quantity > product.lowStockThreshold)) {
       await expect(table.getByRole("rowheader", { name: product.name, exact: true })).toHaveCount(0);
@@ -61,11 +65,16 @@ for (const theme of ["light", "dark"] as const) {
     // The unchanged sidebar remains available without falsely announcing Dashboard as this page.
     const sidebar = page.getByRole("complementary", { name: "Admin sidebar" });
     await expect(sidebar).toBeVisible();
+    await expect(sidebar.getByText("Inventory")).toHaveAttribute("aria-current", "location");
+    await expect(sidebar.getByText("Inventory")).toHaveClass(/bg-muted/);
+    const toothpaste = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Toothpaste", exact: true }) });
+    await expect(toothpaste.getByRole("cell")).toHaveText(["0", "5", "Out of stock"]);
+    await expect(toothpaste.getByText("Out of stock", { exact: true })).toHaveClass(/text-danger/);
     await expect(sidebar.getByRole("link", { name: "Dashboard", exact: true })).not.toHaveAttribute("aria-current", "page");
     const back = page.getByRole("link", { name: "Back to Admin Dashboard", exact: true });
     await expect(back).toHaveAttribute("href", "/admin/dashboard");
     await expectReadableContrast(page);
-    if (testInfo.project.name === "chromium") {
+    if (testInfo.project.name === "chromium" && theme === "dark") {
       await page.screenshot({ path: testInfo.outputPath("low-stock-" + theme + "-1440.png"), fullPage: true, scale: "css" });
     }
 
@@ -75,9 +84,6 @@ for (const theme of ["light", "dark"] as const) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await expect(back).toBeVisible();
       await expectReadableContrast(page);
-      if (width === 375 && testInfo.project.name === "chromium") {
-        await page.screenshot({ path: testInfo.outputPath("low-stock-" + theme + "-375.png"), fullPage: true, scale: "css" });
-      }
     }
     await back.focus();
     await page.keyboard.press("Tab");

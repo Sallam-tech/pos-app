@@ -13,7 +13,13 @@ export const mockInventory: readonly MockInventoryProduct[] = [
   { id: "hand-soap", name: "Hand Soap", quantity: 30, lowStockThreshold: 8 },
   { id: "rice", name: "Rice", quantity: 40, lowStockThreshold: 10 },
   { id: "shampoo", name: "Shampoo", quantity: 25, lowStockThreshold: 5 },
+  { id: "toothpaste", name: "Toothpaste", quantity: 0, lowStockThreshold: 5 },
 ];
+
+export function getMockStockStatus(product: MockInventoryProduct): "Out of stock" | "Low stock" | "Available" {
+  if (product.quantity === 0) return "Out of stock";
+  return product.quantity <= product.lowStockThreshold ? "Low stock" : "Available";
+}
 
 export function getMockLowStockProducts(
   inventory: readonly MockInventoryProduct[] = mockInventory,

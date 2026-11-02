@@ -48,7 +48,7 @@ for (const theme of ["light", "dark"] as const) {
           expect(response?.status()).toBe(200);
           await expect(page.getByRole("heading", { name: route.heading, exact: true })).toBeVisible();
           await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-          await expect(page.getByText("Mock UI", { exact: true })).toBeVisible();
+          await expect(page.getByText(route.name === "admin" ? "Demo Data" : "Mock UI", { exact: true })).toBeVisible();
           await expect(page.locator("[data-connectivity-state]")).toHaveAttribute("data-connectivity-state", "connected");
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
           if (route.name === "admin") {
@@ -85,7 +85,7 @@ test("theme survives route navigation and refresh", async ({ page }) => {
   await expect(page.getByLabel("Theme", { exact: true })).toHaveValue("dark");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page.getByRole("link", { name: "All previews" }).first().click();
+  await page.goto("/login");
   await page.getByRole("link", { name: "Salesperson shell", exact: true }).click();
   await expect(page).toHaveURL("/pos");
   await expect(page.getByLabel("Theme", { exact: true })).toHaveValue("dark");
@@ -140,32 +140,29 @@ test("theme selection remains usable with browser storage denied", async ({ page
   await expect(page.getByLabel("Theme", { exact: true })).toHaveValue("system");
 });
 
-test("dialog labels, focus loop, Escape and focus restoration in both themes", async ({ page }, testInfo) => {
+test("Admin navigation dialog labels, focus loop, Escape and focus restoration in both themes", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/admin/dashboard");
-  const opener = page.getByRole("button", { name: "View shared components" });
+  const opener = page.getByRole("button", { name: "Open navigation" });
   for (const theme of ["light", "dark"]) {
     await page.getByLabel("Theme", { exact: true }).selectOption(theme);
     await opener.click();
-    const dialog = page.getByRole("dialog", { name: "Shared component preview" });
+    const dialog = page.getByRole("dialog", { name: "Admin navigation", exact: true });
     await expect(dialog).toBeVisible();
     const close = dialog.getByRole("button", { name: "Close dialog", exact: true });
-    const last = dialog.getByRole("button", { name: "Close preview", exact: true });
+    const last = dialog.getByRole("link", { name: "Products", exact: true });
     await expect(close).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(last).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(close).toBeFocused();
-    await dialog.getByLabel("Sample note", { exact: true }).fill("Preview only");
-    await dialog.getByLabel("Sample choice", { exact: true }).selectOption("second");
-    await expect(dialog.getByRole("button", { name: "Loading preview" })).toBeDisabled();
     await expectReadableContrast(page);
-    await dialog.screenshot({ path: testInfo.outputPath("dialog-" + theme + ".png"), scale: "css" });
     await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible();
     await expect(opener).toBeFocused();
     await opener.click();
-    await last.click();
+    await dialog.getByRole("link", { name: "Dashboard", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
     await expect(opener).toBeFocused();
   }
 });
@@ -239,15 +236,13 @@ test("200 percent scale and reduced motion preserve shell controls", async ({ pa
   await page.setViewportSize({ width: 768, height: 900 });
   await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
   await page.goto("/admin/dashboard");
-  // Chromium page zoom's layout effect: halve a 1536px viewport to 768 CSS px.
-  // Additionally exercise CSS 200% visual scaling and text-size reflow.
   await page.addStyleTag({ content: "html { zoom: 2; }" });
   await expect(page.getByLabel("Theme", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole("button", { name: "View shared components" }).click();
-  const dialog = page.getByRole("dialog", { name: "Shared component preview" });
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  const dialog = page.getByRole("dialog", { name: "Admin navigation", exact: true });
   await expect(dialog.getByRole("button", { name: "Close dialog" })).toBeVisible();
-  expect(await dialog.getByText("Loading placeholder", { exact: true }).evaluate((element) => getComputedStyle(element.previousElementSibling!).animationName)).toBe("none");
+  await expect(dialog.getByRole("link", { name: "Products", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
 });

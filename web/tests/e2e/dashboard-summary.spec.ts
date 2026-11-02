@@ -2,9 +2,9 @@ import { expect, test } from "@playwright/test";
 import { expectReadableContrast } from "./support/contrast";
 
 const metrics = [
-  ["Total Products", "6", "6"],
+  ["Total Products", "7", "7"],
   ["Available Stock", "123", "123"],
-  ["Low Stock Products", "2", "2"],
+  ["Low Stock Products", "3", "3"],
   ["Today's Sales Revenue (PKR)", "25690.00", "Rs. 25,690.00"],
   ["Today's Profit (PKR)", "4860.00", "Rs. 4,860.00"],
 ];
@@ -25,6 +25,14 @@ for (const theme of ["light", "dark"] as const) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/admin/dashboard");
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await expect(page.getByText("Demo Data", { exact: true })).toBeVisible();
+    await expect(page.getByText("Mock UI", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Admin workspace", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Layout preview", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "All previews", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("navigation", { name: "Breadcrumbs" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "View shared components" })).toHaveCount(0);
+    await expect(page.getByText(/Advisory only/)).toHaveClass("sr-only");
     const overview = page.getByRole("region", { name: "Shop overview" });
     await expect(overview).toHaveAccessibleDescription("Mock data only. These figures are examples, not live shop records.");
     await expect(overview.getByRole("group")).toHaveCount(5);
@@ -55,7 +63,7 @@ for (const theme of ["light", "dark"] as const) {
         const valueTops = await overview.locator("data").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top));
         expect(Math.max(...cardTops) - Math.min(...cardTops)).toBeLessThan(1);
         expect(Math.max(...valueTops) - Math.min(...valueTops)).toBeLessThan(1);
-        if (testInfo.project.name === "chromium") {
+        if (testInfo.project.name === "chromium" && theme === "dark") {
           await page.screenshot({ path: testInfo.outputPath("dashboard-" + theme + "-1440.png"), fullPage: true, scale: "css" });
         }
       }

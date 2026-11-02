@@ -2,9 +2,27 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import DashboardPage from "@/app/admin/dashboard/page";
 import LowStockPage from "@/app/admin/inventory/low-stock/page";
-import { getMockLowStockProducts, mockInventory, type MockInventoryProduct } from "@/lib/admin/mock-inventory";
+import { getMockLowStockProducts, getMockStockStatus, mockInventory, type MockInventoryProduct } from "@/lib/admin/mock-inventory";
 
 describe("mock low-stock filtering", () => {
+  it.each([
+    { quantity: 0, threshold: 5, status: "Out of stock" },
+    { quantity: 0, threshold: 0, status: "Out of stock" },
+    { quantity: 3, threshold: 5, status: "Low stock" },
+    { quantity: 5, threshold: 5, status: "Low stock" },
+    { quantity: 6, threshold: 5, status: "Available" },
+  ])("classifies quantity $quantity at threshold $threshold as $status", ({ quantity, threshold, status }) => {
+    expect(getMockStockStatus({ id: "example", name: "Example", quantity, lowStockThreshold: threshold })).toBe(status);
+  });
+
+  it("preserves all six original products and appends only the zero-stock Toothpaste example", () => {
+    expect(mockInventory.map(({ name, quantity, lowStockThreshold }) => [name, quantity, lowStockThreshold])).toEqual([
+      ["Diapers", 5, 5], ["Milk Powder", 3, 5], ["Baby Wipes", 20, 5],
+      ["Hand Soap", 30, 8], ["Rice", 40, 10], ["Shampoo", 25, 5], ["Toothpaste", 0, 5],
+    ]);
+    expect(getMockLowStockProducts().map((product) => product.name)).toEqual(["Diapers", "Milk Powder", "Toothpaste"]);
+  });
+
   it("includes below and exactly-at-threshold quantities, including zero, and excludes above", () => {
     const inventory: readonly MockInventoryProduct[] = [
       { id: "below", name: "Below", quantity: 3, lowStockThreshold: 5 },
@@ -23,12 +41,13 @@ describe("mock low-stock filtering", () => {
 });
 
 describe("Low Stock Products card and list", () => {
-  it("links only the low-stock summary card to the canonical route", () => {
+  it("preserves the low-stock link alongside the approved Total Products link", () => {
     render(<DashboardPage />);
     const overview = screen.getByRole("region", { name: "Shop overview" });
     const card = within(overview).getByRole("group", { name: "Low Stock Products" });
     const link = within(card).getByRole("link", { name: "Low Stock Products" });
-    expect(within(overview).getAllByRole("link")).toEqual([link]);
+    expect(within(overview).getAllByRole("link")).toHaveLength(2);
+    expect(within(overview).getByRole("link", { name: "Total Products" })).toHaveAttribute("href", "/admin/products");
     expect(link).toHaveAttribute("href", "/admin/inventory/low-stock");
     expect(link).toHaveAccessibleDescription(/Mock data only/);
     expect(link).not.toHaveAttribute("tabindex", "-1");
@@ -49,7 +68,7 @@ describe("Low Stock Products card and list", () => {
       expect(heading).toHaveAttribute("scope", "row");
       const cells = within(heading.closest("tr")!).getAllByRole("cell");
       expect(cells.map((cell) => cell.textContent)).toEqual([
-        String(product.quantity), String(product.lowStockThreshold), "Low stock",
+        String(product.quantity), String(product.lowStockThreshold), getMockStockStatus(product),
       ]);
     }
     for (const product of mockInventory.filter((product) => product.quantity > product.lowStockThreshold)) {
@@ -60,7 +79,12 @@ describe("Low Stock Products card and list", () => {
   it("labels mock data and all columns, with a canonical dashboard return link and no inventory controls", () => {
     render(<LowStockPage />);
     expect(screen.getByRole("heading", { level: 1, name: "Low Stock Products" })).toBeVisible();
-    expect(screen.getByRole("region", { name: "Low-stock list (2)" })).toHaveAccessibleDescription(/Mock data only/);
+    expect(screen.getByRole("region", { name: "Low-stock list (3)" })).toHaveAccessibleDescription(/Mock data only/);
+    expect(screen.getByText("Demo Data", { exact: true })).toBeVisible();
+    expect(screen.queryByRole("navigation", { name: "Breadcrumbs" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Mock UI", { exact: true })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Low stock", { exact: true })).toHaveLength(2);
+    expect(screen.getByText("Out of stock", { exact: true })).toHaveClass("text-danger");
     expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
       "Product name", "Remaining quantity", "Low-stock threshold", "Status",
     ]);
