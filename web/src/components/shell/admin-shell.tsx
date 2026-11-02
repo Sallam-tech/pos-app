@@ -11,15 +11,18 @@ import { ConnectivityIndicator } from "@/components/shell/connectivity-indicator
 import { Brand, PreviewLink } from "@/components/shell/shared";
 
 const planned: { name: string; icon: IconName }[] = [
-  { name: "Sales", icon: "sales" }, { name: "Reports", icon: "chart" },
+  { name: "Reports", icon: "chart" },
 ];
 function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
   const isDashboard = pathname === "/admin/dashboard";
+  const isTodaySales = pathname === "/admin/sales/today";
   const isProducts = pathname === "/admin/products";
   const isInventory = pathname === "/admin/inventory/low-stock" || pathname === "/admin/inventory/available-stock";
   const [inventoryOpen, setInventoryOpen] = useState(isInventory);
   const inventoryMenuId = useId();
+  const [salesOpen, setSalesOpen] = useState(isTodaySales);
+  const salesMenuId = useId();
   const activeClasses = "border-l-3 border-primary bg-muted font-semibold text-primary";
   return <nav aria-label={mobile ? "Mobile navigation" : "Main navigation"} className="mt-8">
     <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Workspace</p>
@@ -40,13 +43,24 @@ function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNaviga
             className={"flex min-h-11 items-center rounded-md px-3 py-2 text-sm " + (pathname === item.href ? activeClasses : "text-muted-foreground")}>{item.name}</Link></li>)}
         </ul>
       </li>
+      <li>
+        <Button variant="ghost" aria-expanded={salesOpen} aria-controls={salesMenuId}
+          aria-current={isTodaySales ? "location" : undefined} onClick={() => setSalesOpen((expanded) => !expanded)}
+          className={"w-full justify-start gap-3 px-3 py-3 font-normal " + (isTodaySales ? activeClasses : "text-muted-foreground")}>
+          <Icon name="sales" />Sales<Icon name="arrow" className={"ml-auto " + (salesOpen ? "rotate-90" : "")} />
+        </Button>
+        <ul id={salesMenuId} aria-label="Sales pages" hidden={!salesOpen} className={"mt-1 pl-6 " + (salesOpen ? "grid" : "hidden")}>
+          <li><Link href="/admin/sales/today" aria-current={isTodaySales ? "page" : undefined} onClick={onNavigate}
+            className={"flex min-h-11 items-center rounded-md px-3 py-2 text-sm " + (isTodaySales ? activeClasses : "text-muted-foreground")}>Sales Report</Link></li>
+        </ul>
+      </li>
       {planned.map((item) => <li key={item.name}><span aria-disabled="true" className="flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm text-muted-foreground"><Icon name={item.icon} />{item.name}<span className="ml-auto text-xs">Planned</span></span></li>)}
     </ul>
   </nav>;
 }
 export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const compactAdminPreview = ["/admin/products", "/admin/dashboard", "/admin/inventory/low-stock", "/admin/inventory/available-stock"].includes(pathname);
+  const compactAdminPreview = ["/admin/products", "/admin/dashboard", "/admin/inventory/low-stock", "/admin/inventory/available-stock", "/admin/sales/today"].includes(pathname);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");

@@ -18,7 +18,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/admin/dashboard");
     const overview = page.getByRole("region", { name: "Shop overview" });
-    await expect(overview.getByRole("link")).toHaveCount(3);
+    await expect(overview.getByRole("link")).toHaveCount(4);
     const card = overview.getByRole("group", { name: "Available Stock", exact: true });
     const link = card.getByRole("link", { name: "Available Stock", exact: true });
     await expect(card.locator("data")).toHaveAttribute("value", "123");

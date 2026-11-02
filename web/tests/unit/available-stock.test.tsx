@@ -20,7 +20,7 @@ describe("Available Stock read-only drilldown", () => {
     expect(link).toHaveAccessibleDescription(/123 Mock data only/);
     expect(link).not.toHaveAttribute("tabindex", "-1");
     expect(within(overview).getAllByRole("link").map((item) => item.getAttribute("href"))).toEqual([
-      "/admin/products", "/admin/inventory/available-stock", "/admin/inventory/low-stock",
+      "/admin/products", "/admin/inventory/available-stock", "/admin/inventory/low-stock", "/admin/sales/today",
     ]);
     expect(within(stock).getByText("123")).toHaveAttribute("value", "123");
     expect(getMockLowStockProducts()).toHaveLength(3);

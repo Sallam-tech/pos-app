@@ -69,6 +69,14 @@ UI workstream reference: UI-1. Legacy plan reference: P04, moved earlier. Shared
 
 ### Phase 3 — Complete Mock UI Screens and Interactions
 
+Checkpoint review — 2 November 2026 (Sales Report and Available Stock):
+
+- [x] Owner completed the final desktop manual review and approved the Sales Report. Available Stock and Inventory navigation are already checkpointed at fbf73b9f558f8c82afc2a8f551b6d6f88b99169f.
+- [x] Preserve all eight original demo sales, exact integer-paise arithmetic, overall revenue **Rs. 25,690.00** and Diapers revenue **Rs. 7,499.50**. The report remains a read-only mock with a fixed Asia/Karachi business date.
+- [x] Saved source/tests match the final verified snapshot: lint, TypeScript, production build, **27 focused unit/component tests** and **4 affected desktop/mobile browser cases** passed. Reuse those results for this checkpoint; no application code changes or repeat test/build runs.
+
+Outstanding manual accessibility/device checks, authentication/backend work and Pending Business Decisions below remain open. Desktop approval does not accept the whole phase or authorize another feature.
+
 Latest checkpoint approval: the owner visually approved the compact Products page, Total Products navigation/search, Dashboard and Low Stock cleanups, zero-stock danger status and consistent shared-fixture figures. This supersedes earlier awaiting-review/no-commit notes for this bounded Admin preview, including the historical six-product delivery; earlier verification records remain preserved.
 
 - [x] Preserve all six original products and append Toothpaste with quantity 0 and threshold 5. Current fixture-derived totals: **7 products / 123 units / 3 low-stock entries**. Toothpaste is included in the low-stock list and displays **Out of stock**; Diapers and Milk Powder remain Low stock.

@@ -18,6 +18,7 @@ afterEach(() => vi.unstubAllGlobals());
 it.each([
   ["/admin/dashboard", "Dashboard", false],
   ["/admin/products", "Products", false],
+  ["/admin/sales/today", "Sales Report", false],
   ["/admin/inventory/available-stock", "Available Stock", true],
   ["/admin/inventory/low-stock", "Low Stock Products", true],
 ] as const)("selects the correct navigation at %s and preserves planned sections", (path, currentName, isInventory) => {
@@ -49,7 +50,7 @@ it.each([
   expect(within(submenu).getAllByRole("link", { hidden: true }).map((link) => link.getAttribute("href"))).toEqual([
     "/admin/inventory/available-stock", "/admin/inventory/low-stock",
   ]);
-  for (const name of ["Sales", "Reports"]) {
+  for (const name of ["Reports"]) {
     const item = within(navigation).getByText(name).closest("span")!;
     expect(item.tagName).toBe("SPAN");
     expect(item).toHaveAttribute("aria-disabled", "true");
@@ -91,4 +92,37 @@ it("preserves the pre-existing presentation of unlisted Admin routes", () => {
   expect(screen.getByText("Layout preview", { exact: true })).toBeVisible();
   expect(screen.getAllByRole("link", { name: "All previews" })).toHaveLength(2);
   expect(screen.getByRole("button", { name: "Inventory" })).toHaveAttribute("aria-expanded", "false");
+});
+
+it("keeps Sales expandable with only the implemented Sales Report route and resets it from the pathname", () => {
+  vi.mocked(usePathname).mockReturnValue("/admin/sales/today");
+  const { rerender } = render(<AdminShell>Sales preview</AdminShell>);
+  const navigation = () => screen.getByRole("navigation", { name: "Main navigation" });
+  const control = () => within(navigation()).getByRole("button", { name: "Sales" });
+  expect(control()).toHaveAttribute("aria-current", "location");
+  expect(control()).toHaveAttribute("aria-expanded", "true");
+  expect(control()).not.toHaveAttribute("aria-disabled");
+  expect(control()).toHaveClass("bg-muted", "text-primary");
+  expect(within(control()).queryByText("Planned")).not.toBeInTheDocument();
+  const submenu = document.getElementById(control().getAttribute("aria-controls")!)!;
+  expect(within(submenu).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(["/admin/sales/today"]);
+  expect(within(submenu).getByRole("link", { name: "Sales Report" })).toHaveAttribute("aria-current", "page");
+  expect(within(navigation()).getByRole("button", { name: "Inventory" })).toHaveAttribute("aria-expanded", "false");
+  expect(within(navigation()).getByText("Reports").closest("span")).toHaveAttribute("aria-disabled", "true");
+  fireEvent.click(control());
+  expect(control()).toHaveAttribute("aria-expanded", "false");
+  expect(within(navigation()).queryByRole("link", { name: "Sales Report" })).not.toBeInTheDocument();
+  fireEvent.click(control());
+  expect(within(navigation()).getByRole("link", { name: "Sales Report" })).toBeVisible();
+  vi.mocked(usePathname).mockReturnValue("/admin/dashboard");
+  rerender(<AdminShell>Dashboard preview</AdminShell>);
+  expect(control()).toHaveAttribute("aria-expanded", "false");
+  expect(control()).not.toHaveAttribute("aria-current");
+  expect(within(navigation()).getByRole("link", { name: "Dashboard" })).toHaveAttribute("aria-current", "page");
+  fireEvent.click(control());
+  expect(within(navigation()).getByRole("link", { name: "Sales Report" })).toBeVisible();
+  vi.mocked(usePathname).mockReturnValue("/admin/sales/today");
+  rerender(<AdminShell>Sales preview</AdminShell>);
+  expect(control()).toHaveAttribute("aria-expanded", "true");
+  expect(within(navigation()).getByRole("link", { name: "Sales Report" })).toHaveAttribute("aria-current", "page");
 });

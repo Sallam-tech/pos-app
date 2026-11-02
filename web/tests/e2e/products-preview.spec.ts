@@ -22,7 +22,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByRole("link", { name: "All previews", exact: true })).toHaveCount(0);
     await expect(page.getByText("Mock UI", { exact: true })).toHaveCount(0);
     const overview = page.getByRole("region", { name: "Shop overview" });
-    await expect(overview.getByRole("link")).toHaveCount(3);
+    await expect(overview.getByRole("link")).toHaveCount(4);
     const totalCard = overview.getByRole("group", { name: "Total Products", exact: true });
     await expect(totalCard.locator("data")).toHaveAttribute("value", String(mockInventory.length));
     const stockSum = mockInventory.reduce((total, product) => total + product.quantity, 0);

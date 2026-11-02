@@ -46,7 +46,7 @@ describe("Low Stock Products card and list", () => {
     const overview = screen.getByRole("region", { name: "Shop overview" });
     const card = within(overview).getByRole("group", { name: "Low Stock Products" });
     const link = within(card).getByRole("link", { name: "Low Stock Products" });
-    expect(within(overview).getAllByRole("link")).toHaveLength(3);
+    expect(within(overview).getAllByRole("link")).toHaveLength(4);
     expect(within(overview).getByRole("link", { name: "Total Products" })).toHaveAttribute("href", "/admin/products");
     expect(link).toHaveAttribute("href", "/admin/inventory/low-stock");
     expect(link).toHaveAccessibleDescription(/Mock data only/);
