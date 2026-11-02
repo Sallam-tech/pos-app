@@ -150,7 +150,7 @@ test("Admin navigation dialog labels, focus loop, Escape and focus restoration i
     const dialog = page.getByRole("dialog", { name: "Admin navigation", exact: true });
     await expect(dialog).toBeVisible();
     const close = dialog.getByRole("button", { name: "Close dialog", exact: true });
-    const last = dialog.getByRole("link", { name: "Products", exact: true });
+    const last = dialog.getByRole("button", { name: "Inventory", exact: true });
     await expect(close).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(last).toBeFocused();

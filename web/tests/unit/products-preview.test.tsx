@@ -22,7 +22,7 @@ describe("Total Products and read-only mock product list", () => {
     expect(within(total).getByRole("link", { name: "Total Products" })).toHaveAttribute("href", "/admin/products");
     expect(within(total).getByText(String(mockInventory.length), { exact: true })).toHaveAttribute("value", String(mockInventory.length));
     expect(within(overview).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
-      "/admin/products", "/admin/inventory/low-stock",
+      "/admin/products", "/admin/inventory/available-stock", "/admin/inventory/low-stock",
     ]);
     const stock = mockInventory.reduce((total, product) => total + product.quantity, 0);
     expect(stock).toBe(123);

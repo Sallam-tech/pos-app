@@ -41,12 +41,12 @@ describe("mock low-stock filtering", () => {
 });
 
 describe("Low Stock Products card and list", () => {
-  it("preserves the low-stock link alongside the approved Total Products link", () => {
+  it("preserves the low-stock link alongside the other approved inventory links", () => {
     render(<DashboardPage />);
     const overview = screen.getByRole("region", { name: "Shop overview" });
     const card = within(overview).getByRole("group", { name: "Low Stock Products" });
     const link = within(card).getByRole("link", { name: "Low Stock Products" });
-    expect(within(overview).getAllByRole("link")).toHaveLength(2);
+    expect(within(overview).getAllByRole("link")).toHaveLength(3);
     expect(within(overview).getByRole("link", { name: "Total Products" })).toHaveAttribute("href", "/admin/products");
     expect(link).toHaveAttribute("href", "/admin/inventory/low-stock");
     expect(link).toHaveAccessibleDescription(/Mock data only/);

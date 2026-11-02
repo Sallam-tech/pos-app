@@ -4,14 +4,14 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export default function DashboardPage() {
-  // Inventory counts share the same fixture as both mock lists.
+  // Inventory counts share the same fixture as the mock inventory lists.
   // Financial figures remain independent display-only examples.
   const productCount = String(mockInventory.length);
   const lowStockCount = String(getMockLowStockProducts().length);
   const availableStock = String(mockInventory.reduce((total, product) => total + product.quantity, 0));
   const mockSummaryCards = [
     { id: "total-products", label: "Total Products", value: productCount, display: productCount, href: "/admin/products" },
-    { id: "available-stock", label: "Available Stock", value: availableStock, display: availableStock },
+    { id: "available-stock", label: "Available Stock", value: availableStock, display: availableStock, href: "/admin/inventory/available-stock" },
     { id: "low-stock-products", label: "Low Stock Products", value: lowStockCount, display: lowStockCount, href: "/admin/inventory/low-stock" },
     { id: "today-revenue", label: "Today's Sales Revenue (PKR)", value: "25690.00", display: "Rs. 25,690.00" },
     { id: "today-profit", label: "Today's Profit (PKR)", value: "4860.00", display: "Rs. 4,860.00" },
