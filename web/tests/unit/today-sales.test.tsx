@@ -60,12 +60,12 @@ describe("exact read-only mock sales revenue", () => {
 });
 
 describe("Sales Report card and simple product summary", () => {
-  it("preserves the revenue-card destination and unlinked profit example", () => {
+  it("preserves the revenue-card destination alongside the unavailable profit report", () => {
     render(<DashboardPage />);
     const card = screen.getByRole("group", { name: "Today's Sales Revenue (PKR)" });
     expect(within(card).getByRole("link", { name: "Today's Sales Revenue (PKR)" })).toHaveAttribute("href", "/admin/sales/today");
     expect(within(card).getByText("Rs. 25,690.00")).toHaveAttribute("value", "25690.00");
-    expect(within(screen.getByRole("group", { name: "Today's Profit (PKR)" })).queryByRole("link")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "Today's Profit" })).getByRole("link")).toHaveAttribute("href", "/admin/profit/today");
   });
 
   it("shows fixed-date demo context, six simple summary rows and no selling prices until disclosure", () => {

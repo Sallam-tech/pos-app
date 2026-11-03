@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 
 export default function DashboardPage() {
   // Inventory counts share the same fixture as the mock inventory lists.
-  // Revenue shares the sales fixture; profit remains an independent display-only example.
+  // Revenue shares the sales fixture; historical purchase costs are absent.
   const revenuePaise = getMockRevenuePaise();
   const productCount = String(mockInventory.length);
   const lowStockCount = String(getMockLowStockProducts().length);
@@ -16,7 +16,7 @@ export default function DashboardPage() {
     { id: "available-stock", label: "Available Stock", value: availableStock, display: availableStock, href: "/admin/inventory/available-stock" },
     { id: "low-stock-products", label: "Low Stock Products", value: lowStockCount, display: lowStockCount, href: "/admin/inventory/low-stock" },
     { id: "today-revenue", label: "Today's Sales Revenue (PKR)", value: mockRevenueDecimal(revenuePaise), display: formatMockRevenue(revenuePaise), href: "/admin/sales/today" },
-    { id: "today-profit", label: "Today's Profit (PKR)", value: "4860.00", display: "Rs. 4,860.00" },
+    { id: "today-profit", label: "Today's Profit", value: null, display: "Unavailable", href: "/admin/profit/today", note: "Historical purchase costs are not recorded in demo sales." },
   ] as const;
 
   return <>
@@ -34,14 +34,15 @@ export default function DashboardPage() {
           aria-labelledby={card.id + "-label"} aria-describedby="dashboard-mock-notice" className={"href" in card ? "relative sm:p-4 hover:border-primary" : "sm:p-4"}>
           <dt id={card.id + "-label"} className="min-h-10 text-sm font-semibold leading-5 text-muted-foreground">{card.label}</dt>
           <dd id={card.id + "-value"} className="numeric mt-3 break-words text-[22px] font-bold leading-[30px] xl:text-[26px] xl:leading-[34px]">
-            <data value={card.value}>{card.display}</data>
+            {card.value === null ? <span>{card.display}</span> : <data value={card.value}>{card.display}</data>}
           </dd>
+          {"note" in card && <dd id={card.id + "-note"} className="mt-3 text-xs leading-5 text-muted-foreground">{card.note}</dd>}
           <dd className="mt-3 text-sm text-muted-foreground">
             <span>Mock data</span>
             {"href" in card && <Link href={card.href}
-              aria-labelledby={card.id + "-label"} aria-describedby={card.id + "-value dashboard-mock-notice"}
+              aria-labelledby={card.id + "-label"} aria-describedby={card.id + "-value dashboard-mock-notice" + ("note" in card ? " " + card.id + "-note" : "")}
               className="absolute inset-0 flex items-end justify-end rounded-lg p-4">
-              <span className="font-semibold text-primary underline underline-offset-4">View list</span>
+              <span className="font-semibold text-primary underline underline-offset-4">{"note" in card ? "View report" : "View list"}</span>
             </Link>}
           </dd>
         </Card>)}

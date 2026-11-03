@@ -6,7 +6,6 @@ const metrics = [
   ["Available Stock", "123", "123"],
   ["Low Stock Products", "3", "3"],
   ["Today's Sales Revenue (PKR)", "25690.00", "Rs. 25,690.00"],
-  ["Today's Profit (PKR)", "4860.00", "Rs. 4,860.00"],
 ];
 
 for (const theme of ["light", "dark"] as const) {
@@ -53,6 +52,11 @@ for (const theme of ["light", "dark"] as const) {
           return data.left >= card.left && data.right <= card.right && data.bottom <= card.bottom;
         })).toBe(true);
       }
+      const profit = overview.getByRole("group", { name: "Today's Profit", exact: true });
+      await expect(profit.getByText("Unavailable", { exact: true })).toBeVisible();
+      await expect(profit.locator("data")).toHaveCount(0);
+      await expect(profit.getByRole("link")).toHaveAttribute("href", "/admin/profit/today");
+      await expect(page.getByText("Rs. 4,860.00", { exact: true })).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await expect(page.getByRole("complementary", { name: "Admin sidebar" })).toBeVisible({ visible: width >= 1024 });
       await expectReadableContrast(page);

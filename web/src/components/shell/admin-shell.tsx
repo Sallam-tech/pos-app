@@ -63,7 +63,7 @@ function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNaviga
 }
 export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const compactAdminPreview = ["/admin/products", "/admin/products/new", "/admin/dashboard", "/admin/inventory/low-stock", "/admin/inventory/available-stock", "/admin/sales/today"].includes(pathname) || isProductEditPath(pathname);
+  const compactAdminPreview = ["/admin/products", "/admin/products/new", "/admin/dashboard", "/admin/inventory/low-stock", "/admin/inventory/available-stock", "/admin/sales/today", "/admin/profit/today"].includes(pathname) || isProductEditPath(pathname);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");

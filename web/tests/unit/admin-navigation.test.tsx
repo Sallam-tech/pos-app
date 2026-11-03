@@ -127,12 +127,14 @@ it("keeps Sales expandable with only the implemented Sales Report route and rese
   expect(within(navigation()).getByRole("link", { name: "Sales Report" })).toHaveAttribute("aria-current", "page");
 });
 
-it.each(["/admin/products/new", "/admin/products/diapers/edit", "/admin/products/not-a-product/edit"])("keeps Products active and the compact shell at %s", (path) => {
+it.each(["/admin/products/new", "/admin/products/diapers/edit", "/admin/products/not-a-product/edit", "/admin/profit/today"])("keeps the compact shell and existing navigation at %s", (path) => {
   vi.mocked(usePathname).mockReturnValue(path);
   render(<AdminShell>Add Product preview</AdminShell>);
   const navigation = screen.getByRole("navigation", { name: "Main navigation" });
-  expect(within(navigation).getByRole("link", { name: "Products" })).toHaveAttribute("aria-current", "location");
-  expect(within(navigation).getByRole("link", { name: "Products" })).toHaveClass("bg-muted", "text-primary");
+  if (path.startsWith("/admin/products/")) {
+    expect(within(navigation).getByRole("link", { name: "Products" })).toHaveAttribute("aria-current", "location");
+    expect(within(navigation).getByRole("link", { name: "Products" })).toHaveClass("bg-muted", "text-primary");
+  }
   expect(within(navigation).getByRole("link", { name: "Dashboard" })).not.toHaveAttribute("aria-current");
   expect(screen.queryByText("Admin workspace", { exact: true })).not.toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "All previews" })).not.toBeInTheDocument();

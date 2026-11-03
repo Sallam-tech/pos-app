@@ -21,7 +21,7 @@ for (const theme of ["light", "dark"] as const) {
     const overview = page.getByRole("region", { name: "Shop overview" });
     const card = overview.getByRole("group", { name: "Low Stock Products", exact: true });
     const link = card.getByRole("link", { name: "Low Stock Products", exact: true });
-    await expect(overview.getByRole("link")).toHaveCount(4);
+    await expect(overview.getByRole("link")).toHaveCount(5);
     await expect(link).toHaveAttribute("href", "/admin/inventory/low-stock");
     const products = getMockLowStockProducts();
     await expect(card.locator("data")).toHaveAttribute("value", String(products.length));
