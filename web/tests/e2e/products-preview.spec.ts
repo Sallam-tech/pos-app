@@ -60,7 +60,7 @@ for (const theme of ["light", "dark"] as const) {
     for (const product of mockInventory) {
       const row = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: product.name, exact: true }) });
       await expect(row.getByRole("cell")).toHaveText([
-        String(product.quantity), getMockStockStatus(product),
+        product.id === "diapers" ? "Rs. 1,250.00" : "Not set", String(product.quantity), getMockStockStatus(product), "Edit",
       ]);
     }
     await expect(page.locator("[data-connectivity-state]")).toHaveAttribute("data-connectivity-state", "connected");
@@ -86,7 +86,7 @@ for (const theme of ["light", "dark"] as const) {
 
     await search.fill("TOOTHPASTE");
     await expect(table.getByRole("rowheader")).toHaveText(["Toothpaste"]);
-    await expect(table.getByRole("cell")).toHaveText(["0", "Out of stock"]);
+    await expect(table.getByRole("cell")).toHaveText(["Not set", "0", "Out of stock", "Edit"]);
     await expect(table.getByText("Out of stock", { exact: true })).toHaveClass(/text-danger/);
     await page.getByRole("button", { name: "Clear search", exact: true }).click();
 

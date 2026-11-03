@@ -13,11 +13,14 @@ import { Brand, PreviewLink } from "@/components/shell/shared";
 const planned: { name: string; icon: IconName }[] = [
   { name: "Reports", icon: "chart" },
 ];
+function isProductEditPath(pathname: string) {
+  return /^\/admin\/products\/[^/]+\/edit$/.test(pathname);
+}
 function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
   const isDashboard = pathname === "/admin/dashboard";
   const isTodaySales = pathname === "/admin/sales/today";
-  const isProducts = pathname === "/admin/products";
+  const isProducts = pathname === "/admin/products" || pathname === "/admin/products/new" || isProductEditPath(pathname);
   const isInventory = pathname === "/admin/inventory/low-stock" || pathname === "/admin/inventory/available-stock";
   const [inventoryOpen, setInventoryOpen] = useState(isInventory);
   const inventoryMenuId = useId();
@@ -28,7 +31,7 @@ function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNaviga
     <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Workspace</p>
     <ul className="grid gap-2">
       <li><Link href="/admin/dashboard" aria-current={isDashboard ? "page" : undefined} onClick={onNavigate} className={"flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm " + (isDashboard ? activeClasses : "text-muted-foreground")}><Icon name="dashboard" />Dashboard</Link></li>
-      <li><Link href="/admin/products" aria-current={isProducts ? "page" : undefined} onClick={onNavigate} className={"flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm " + (isProducts ? activeClasses : "text-muted-foreground")}><Icon name="box" />Products</Link></li>
+      <li><Link href="/admin/products" aria-current={isProducts ? (pathname === "/admin/products" ? "page" : "location") : undefined} onClick={onNavigate} className={"flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm " + (isProducts ? activeClasses : "text-muted-foreground")}><Icon name="box" />Products</Link></li>
       <li>
         <Button variant="ghost" aria-expanded={inventoryOpen} aria-controls={inventoryMenuId}
           aria-current={isInventory ? "location" : undefined} onClick={() => setInventoryOpen((expanded) => !expanded)}
@@ -60,7 +63,7 @@ function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNaviga
 }
 export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const compactAdminPreview = ["/admin/products", "/admin/dashboard", "/admin/inventory/low-stock", "/admin/inventory/available-stock", "/admin/sales/today"].includes(pathname);
+  const compactAdminPreview = ["/admin/products", "/admin/products/new", "/admin/dashboard", "/admin/inventory/low-stock", "/admin/inventory/available-stock", "/admin/sales/today"].includes(pathname) || isProductEditPath(pathname);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");

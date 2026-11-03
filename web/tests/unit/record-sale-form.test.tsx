@@ -116,3 +116,31 @@ describe("Record Sale preview", () => {
     expect(screen.getByTestId("confirmation-total")).toHaveTextContent("Rs. 0.00");
   });
 });
+
+it("shows optional price guidance without changing actual price, quantity or confirmation arithmetic", () => {
+  render(<RecordSaleForm />);
+  chooseProduct();
+  expect(screen.getByText("Suggested: Rs. 1,250.00")).toBeVisible();
+  expect(screen.getByRole("combobox", { name: "Product" })).toHaveAccessibleDescription("Suggested: Rs. 1,250.00");
+  const price = screen.getByLabelText("Selling price per unit (PKR)");
+  const quantity = screen.getByLabelText("Quantity", { exact: true });
+  expect(price).toHaveValue("");
+  fireEvent.change(price, { target: { value: "1200.00" } });
+  fireEvent.change(quantity, { target: { value: "2" } });
+  expect(screen.getByTestId("sale-total")).toHaveTextContent("Rs. 2,400.00");
+  chooseProduct("milk", "Milk Powder");
+  expect(screen.getByText("No suggested price")).toBeVisible();
+  expect(price).toHaveValue("1200.00");
+  expect(quantity).toHaveValue("2");
+  chooseProduct();
+  expect(price).toHaveValue("1200.00");
+  expect(screen.queryByText(/purchase cost|profit|margin|markup|remaining stock/i)).not.toBeInTheDocument();
+  fireEvent.submit(screen.getByRole("form"));
+  expect(screen.getByTestId("confirmation-price")).toHaveTextContent("Rs. 1,200.00");
+  expect(screen.getByTestId("confirmation-total")).toHaveTextContent("Rs. 2,400.00");
+  fireEvent.click(screen.getByRole("button", { name: "New Sale" }));
+  expect(screen.getByRole("combobox")).toHaveFocus();
+  expect(screen.getByRole("combobox")).toHaveValue("");
+  expect(screen.getByLabelText("Selling price per unit (PKR)")).toHaveValue("");
+  expect(screen.queryByText("Suggested: Rs. 1,250.00")).not.toBeInTheDocument();
+});

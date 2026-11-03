@@ -33,13 +33,14 @@ describe("Total Products and read-only mock product list", () => {
     const table = screen.getByRole("table", { name: "Mock products" });
     expect(within(table).getAllByRole("row")).toHaveLength(mockInventory.length + 1);
     expect(within(table).getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
-      "Product name", "Available stock", "Stock status",
+      "Product name", "Suggested selling price", "Available stock", "Stock status", "Action",
     ]);
     for (const product of mockInventory) {
       const heading = within(table).getByRole("rowheader", { name: product.name });
       const cells = within(heading.closest("tr")!).getAllByRole("cell");
-      expect(cells[0]).toHaveTextContent(String(product.quantity));
-      expect(cells[1]).toHaveTextContent(getMockStockStatus(product));
+      expect(cells[0]).toHaveTextContent(product.id === "diapers" ? "Rs. 1,250.00" : "Not set");
+      expect(cells[1]).toHaveTextContent(String(product.quantity));
+      expect(cells[2]).toHaveTextContent(getMockStockStatus(product));
     }
     const list = screen.getByRole("region", { name: "Product list" });
     expect(list).toHaveAccessibleDescription(/Mock data only/);
@@ -61,7 +62,7 @@ describe("Total Products and read-only mock product list", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Showing 1 of " + mockInventory.length + " mock products.");
     expect(mockInventory).toHaveLength(7);
     if (name === "Toothpaste") {
-      expect(within(table).getAllByRole("cell").map((cell) => cell.textContent)).toEqual(["0", "Out of stock"]);
+      expect(within(table).getAllByRole("cell").map((cell) => cell.textContent)).toEqual(["Not set", "0", "Out of stock", "Edit"]);
       expect(within(table).getByText("Out of stock", { exact: true })).toHaveClass("text-danger");
     }
   });

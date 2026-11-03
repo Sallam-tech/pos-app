@@ -1,12 +1,15 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Table, TableCell, TableHead, TableRegion } from "@/components/ui/table";
 import { getMockStockStatus, type MockInventoryProduct } from "@/lib/admin/mock-inventory";
+import { getMockSuggestedSellingPrice } from "@/lib/mock-suggested-prices";
+import { formatPreviewPKR } from "@/lib/pos-preview";
 
 export function ProductListPreview({ products }: { products: readonly MockInventoryProduct[] }) {
   const [search, setSearch] = useState("");
@@ -39,21 +42,26 @@ export function ProductListPreview({ products }: { products: readonly MockInvent
     </p>
     <div id="product-list-results">
       {filtered.length > 0 ? <TableRegion label="Product results">
-        <Table className="min-w-[26rem]">
+        <Table className="min-w-[40rem]">
           <caption className="sr-only">Mock products</caption>
           <thead><tr>
             <TableHead>Product name</TableHead>
+            <TableHead className="text-right">Suggested selling price</TableHead>
             <TableHead className="text-right">Available stock</TableHead>
             <TableHead>Stock status</TableHead>
+            <TableHead className="text-right">Action</TableHead>
           </tr></thead>
           <tbody>{filtered.map((product) => {
             const status = getMockStockStatus(product);
+            const suggestedPrice = getMockSuggestedSellingPrice(product.id);
             return <tr key={product.id}>
               <th scope="row" className="h-14 border-t px-4 py-3 font-semibold">{product.name}</th>
+              <TableCell className="numeric text-right">{suggestedPrice === null ? <span className="text-sm text-muted-foreground">Not set</span> : formatPreviewPKR(suggestedPrice)}</TableCell>
               <TableCell className="numeric text-right">{product.quantity}</TableCell>
               <TableCell><Badge tone={status === "Out of stock" ? "danger" : status === "Low stock" ? "warning" : "success"} className="whitespace-nowrap">
                 <Icon name={status === "Available" ? "check" : "alert"} className="size-4" />{status}
               </Badge></TableCell>
+              <TableCell className="text-right"><Button asChild variant="outline" size="sm"><Link href={"/admin/products/" + product.id + "/edit"} aria-label={"Edit " + product.name}>Edit</Link></Button></TableCell>
             </tr>;
           })}</tbody>
         </Table>

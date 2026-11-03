@@ -7,6 +7,7 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { ProductCombobox } from "@/components/pos/product-combobox";
+import { getMockSuggestedSellingPrice } from "@/lib/mock-suggested-prices";
 import {
   createSaleSimulation, formatPreviewPKR, previewTotal, pricePrecisionError, stepPreviewQuantity, validatePreview,
   type PreviewErrors, type PreviewField, type PreviewProduct, type SaleSimulation,
@@ -30,6 +31,7 @@ export function RecordSaleForm() {
   const resetting = useRef(false);
   const submitted = useRef(false);
   const total = previewTotal(quantity, price);
+  const suggestedPrice = getMockSuggestedSellingPrice(product?.id);
   const decrease = stepPreviewQuantity(quantity, -1);
   const increase = stepPreviewQuantity(quantity, 1);
 
@@ -96,8 +98,9 @@ export function RecordSaleForm() {
     </section> : <form onSubmit={submit} noValidate aria-label="Record sale preview">
       <fieldset disabled={!ready} className="grid min-w-0 gap-4">
         <legend className="sr-only">Simulated sale details</legend>
-        <Field id="sale-product" label="Product" error={errors.product}>
-          <ProductCombobox value={product} inputRef={productRef} invalid={Boolean(errors.product)} describedBy={description("product")}
+        <Field id="sale-product" label="Product" error={errors.product}
+          hint={product ? suggestedPrice === null ? "No suggested price" : "Suggested: " + formatPreviewPKR(suggestedPrice) : undefined}>
+          <ProductCombobox value={product} inputRef={productRef} invalid={Boolean(errors.product)} describedBy={description("product", Boolean(product))}
             onChange={(value) => { setProduct(value); clearError("product"); }} />
         </Field>
         <Field id="sale-quantity" label="Quantity" error={errors.quantity}>
