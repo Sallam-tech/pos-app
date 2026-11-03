@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { getMockLowStockProducts, mockInventory } from "@/lib/admin/mock-inventory";
 import { formatMockRevenue, getMockRevenuePaise, mockRevenueDecimal } from "@/lib/admin/mock-sales";
+import { getFictionalProfitSales } from "@/lib/admin/mock-historical-costs";
+import { calculateMockProfitTotals, formatProfitMoney, profitDecimal } from "@/lib/admin/mock-profit";
+import { selectMockSalesPeriod } from "@/lib/admin/mock-sales-report";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export default function DashboardPage() {
   // Inventory counts share the same fixture as the mock inventory lists.
-  // Revenue shares the sales fixture; historical purchase costs are absent.
+  // Profit uses separately labeled fictional sale-time costs, never current product prices.
   const revenuePaise = getMockRevenuePaise();
+  const profitSales = selectMockSalesPeriod(getFictionalProfitSales(), { kind: "today" }).sales;
+  const profit = calculateMockProfitTotals(profitSales).grossProfitPaise;
   const productCount = String(mockInventory.length);
   const lowStockCount = String(getMockLowStockProducts().length);
   const availableStock = String(mockInventory.reduce((total, product) => total + product.quantity, 0));
@@ -16,7 +21,7 @@ export default function DashboardPage() {
     { id: "available-stock", label: "Available Stock", value: availableStock, display: availableStock, href: "/admin/inventory/available-stock" },
     { id: "low-stock-products", label: "Low Stock Products", value: lowStockCount, display: lowStockCount, href: "/admin/inventory/low-stock" },
     { id: "today-revenue", label: "Today's Sales Revenue (PKR)", value: mockRevenueDecimal(revenuePaise), display: formatMockRevenue(revenuePaise), href: "/admin/sales/today" },
-    { id: "today-profit", label: "Today's Profit", value: null, display: "Unavailable", href: "/admin/profit/today", note: "Historical purchase costs are not recorded in demo sales." },
+    { id: "today-profit", label: "Today's Profit", value: profit === null ? null : profitDecimal(profit), display: profit === null ? "Unavailable" : formatProfitMoney(profit), href: "/admin/profit/today", note: profit === null ? "Historical costs or exact sale data are missing or invalid." : "Example purchase costs for demo sales." },
   ] as const;
 
   return <>

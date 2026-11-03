@@ -67,8 +67,9 @@ export function TodayProfitPreview({ sales }: { sales: readonly ProfitSale[] }) 
         <dd className="numeric mt-1 break-words text-xl font-bold"><span>{report.error ? "\u2014" : formatProfitMoney(selected.grossProfitPaise)}</span><span className="mt-1 block text-xs font-normal text-muted-foreground">{report.error ? "Valid reporting period required" : query ? "Matching product names" : "All products"}</span></dd>
       </div>
     </dl>
-    {!report.error && total.grossProfitPaise === null && <p className="mb-5 text-sm leading-6 text-muted-foreground">
-      {total.missingCostSales > 0 ? "Historical purchase costs are not recorded for all included sales." : "Some sale data cannot be calculated exactly at supported precision."} Missing or unsupported values are not treated as zero.
+    {!report.error && report.sales.length > 0 && <p className="mb-5 text-sm leading-6 text-muted-foreground">
+      {total.grossProfitPaise !== null ? "Profit calculated using example purchase costs for demo sales."
+        : (total.missingCostSales > 0 ? "Historical purchase costs are not recorded for all included sales." : "Some sale data cannot be calculated exactly at supported precision.") + " Missing or unsupported values are not treated as zero."}
     </p>}
     <div className="flex flex-wrap items-end gap-3">
       <div className="w-full sm:max-w-sm">

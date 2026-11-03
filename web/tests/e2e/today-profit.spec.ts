@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { expectReadableContrast } from "./support/contrast";
 
 for (const theme of ["light", "dark"] as const) {
-  test("Profit Report missing costs, periods, exact revenue and navigation in " + theme, async ({ page, baseURL }, testInfo) => {
+  test("Profit Report fictional costs, periods, exact totals and navigation in " + theme, async ({ page, baseURL }, testInfo) => {
     const errors: string[] = [];
     const unexpected: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
@@ -23,9 +23,10 @@ for (const theme of ["light", "dark"] as const) {
       await expect(overview.getByRole("group", { name, exact: true }).locator("data")).toHaveAttribute("value", value);
     }
     const profit = overview.getByRole("group", { name: "Today's Profit", exact: true });
-    await expect(profit.getByText("Unavailable", { exact: true })).toBeVisible();
-    await expect(profit.getByText("Historical purchase costs are not recorded in demo sales.", { exact: true })).toBeVisible();
-    await expect(profit.locator("data")).toHaveCount(0);
+    await expect(profit.getByText("Rs. 5,140.00", { exact: true })).toBeVisible();
+    await expect(profit.getByText("Example purchase costs for demo sales.", { exact: true })).toBeVisible();
+    await expect(profit.locator("data")).toHaveAttribute("value", "5140.00");
+    const dashboardProfit = await profit.locator("data").textContent();
     await expect(page.getByText("Rs. 4,860.00", { exact: true })).toHaveCount(0);
     await expectReadableContrast(page);
     const link = profit.getByRole("link", { name: "Today's Profit", exact: true });
@@ -46,13 +47,15 @@ for (const theme of ["light", "dark"] as const) {
     const totals = page.getByLabel("Gross profit totals", { exact: true });
     const overall = totals.getByText("Total Gross Profit", { exact: true }).locator("..").locator("dd > span").first();
     const selected = totals.getByText("Selected Products Gross Profit", { exact: true }).locator("..").locator("dd > span").first();
-    await expect(overall).toHaveText("Not available");
-    await expect(selected).toHaveText("Not available");
+    await expect(overall).toHaveText("Rs. 5,140.00");
+    await expect(selected).toHaveText("Rs. 5,140.00");
+    await expect(overall).toHaveText(dashboardProfit!);
+    await expect(page.getByText("Profit calculated using example purchase costs for demo sales.", { exact: true })).toBeVisible();
     const table = page.getByRole("table", { name: "Mock product-wise gross profit", exact: true });
     await expect(table.getByRole("rowheader")).toHaveText(["Diapers", "Milk Powder", "Baby Wipes", "Hand Soap", "Rice", "Shampoo"]);
-    for (const [name, quantity, revenue] of [["Diapers", "6", "Rs. 7,499.50"], ["Milk Powder", "4", "Rs. 6,001.00"], ["Baby Wipes", "10", "Rs. 3,499.50"], ["Hand Soap", "10", "Rs. 1,255.00"], ["Rice", "5", "Rs. 4,250.00"], ["Shampoo", "7", "Rs. 3,185.00"]]) {
+    for (const [name, quantity, revenue, cost, grossProfit] of [["Diapers", "6", "Rs. 7,499.50", "Rs. 6,200.00", "Rs. 1,299.50"], ["Milk Powder", "4", "Rs. 6,001.00", "Rs. 4,900.00", "Rs. 1,101.00"], ["Baby Wipes", "10", "Rs. 3,499.50", "Rs. 2,500.00", "Rs. 999.50"], ["Hand Soap", "10", "Rs. 1,255.00", "Rs. 1,000.00", "Rs. 255.00"], ["Rice", "5", "Rs. 4,250.00", "Rs. 3,500.00", "Rs. 750.00"], ["Shampoo", "7", "Rs. 3,185.00", "Rs. 2,450.00", "Rs. 735.00"]]) {
       const row = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name, exact: true }) });
-      await expect(row.getByRole("cell")).toHaveText([quantity, revenue, "Not available", "Not available"]);
+      await expect(row.getByRole("cell")).toHaveText([quantity, revenue, cost, grossProfit]);
     }
     await expectReadableContrast(page);
     if (desktop && theme === "light") await page.screenshot({ path: testInfo.outputPath("profit-report-desktop.png"), fullPage: true });
@@ -67,11 +70,11 @@ for (const theme of ["light", "dark"] as const) {
     await expect(search).toBeFocused();
     await page.keyboard.type("  DIAPERS  ");
     await expect(table.getByRole("rowheader")).toHaveText(["Diapers"]);
-    await expect(overall).toHaveText("Not available");
-    await expect(selected).toHaveText("Not available");
+    await expect(overall).toHaveText("Rs. 5,140.00");
+    await expect(selected).toHaveText("Rs. 1,299.50");
     await search.fill("no-such-product");
     await expect(page.getByText("No products match your search in this period.", { exact: true })).toBeVisible();
-    await expect(overall).toHaveText("Not available");
+    await expect(overall).toHaveText("Rs. 5,140.00");
     await expect(selected).toHaveText("Rs. 0.00");
     await page.getByRole("button", { name: "Clear search", exact: true }).click();
     await expect(search).toBeFocused();
@@ -84,7 +87,7 @@ for (const theme of ["light", "dark"] as const) {
     await period.selectOption("monthly");
     const month = page.getByLabel("Month and year", { exact: true });
     await expect(page.getByText("Selected month: November 2026", { exact: true })).toBeVisible();
-    await expect(overall).toHaveText("Not available");
+    await expect(overall).toHaveText("Rs. 5,140.00");
     await month.fill("2026-10");
     await expect(page.getByText("No sales for this period.", { exact: true })).toBeVisible();
     await expect(overall).toHaveText("Rs. 0.00");
@@ -96,7 +99,7 @@ for (const theme of ["light", "dark"] as const) {
     const to = page.getByLabel("To Date", { exact: true });
     await expect(page.getByText("From: 02 Nov 2026", { exact: true })).toBeVisible();
     await expect(page.getByText("To: 02 Nov 2026", { exact: true })).toBeVisible();
-    await expect(overall).toHaveText("Not available");
+    await expect(overall).toHaveText("Rs. 5,140.00");
     await from.fill("2026-11-03");
     await expect(page.locator("#profit-period-error")).toHaveText("From Date must be on or before To Date.");
     await expect(from).toHaveAttribute("aria-invalid", "true");
@@ -107,12 +110,12 @@ for (const theme of ["light", "dark"] as const) {
     await expect(overall).toHaveText("Rs. 0.00");
     await from.fill("2026-11-01");
     await to.fill("2026-11-02");
-    await expect(overall).toHaveText("Not available");
+    await expect(overall).toHaveText("Rs. 5,140.00");
     await expect(table.getByRole("rowheader")).toHaveCount(6);
     await from.fill("");
     await expect(page.locator("#profit-period-error")).toHaveText("Enter valid From and To dates.");
     await period.selectOption("today");
-    await expect(overall).toHaveText("Not available");
+    await expect(overall).toHaveText("Rs. 5,140.00");
 
     await page.getByLabel("Theme", { exact: true }).selectOption("system");
     await page.emulateMedia({ colorScheme: theme === "light" ? "dark" : "light" });

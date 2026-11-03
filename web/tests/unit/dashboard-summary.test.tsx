@@ -40,9 +40,9 @@ describe("Admin dashboard overview preview", () => {
       expect(within(group).getByText(display, { exact: true })).toHaveAttribute("value", value);
     }
     const profit = within(overview).getByRole("group", { name: "Today's Profit" });
-    expect(within(profit).getByText("Unavailable")).toBeVisible();
-    expect(profit.querySelector("data")).toBeNull();
-    expect(within(profit).getByText("Historical purchase costs are not recorded in demo sales.")).toBeVisible();
+    expect(within(profit).getByText("Rs. 5,140.00")).toBeVisible();
+    expect(profit.querySelector("data")).toHaveAttribute("value", "5140.00");
+    expect(within(profit).getByText("Example purchase costs for demo sales.")).toBeVisible();
     expect(within(profit).getByRole("link")).toHaveAttribute("href", "/admin/profit/today");
     expect(screen.queryByText("Rs. 4,860.00")).not.toBeInTheDocument();
     expect(within(overview).getAllByRole("link")).toHaveLength(5);

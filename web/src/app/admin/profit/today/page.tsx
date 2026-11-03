@@ -3,7 +3,9 @@ import Link from "next/link";
 import { TodayProfitPreview } from "@/components/admin/today-profit-preview";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { mockSales, mockSalesBusinessDate } from "@/lib/admin/mock-sales";
+import { mockSalesBusinessDate } from "@/lib/admin/mock-sales";
+
+import { getFictionalProfitSales } from "@/lib/admin/mock-historical-costs";
 
 export const metadata: Metadata = { title: "Profit Report | Shop POS" };
 
@@ -16,6 +18,6 @@ export default function TodayProfitPage() {
       </div>
       <Button asChild variant="outline"><Link href="/admin/dashboard">Back to Dashboard</Link></Button>
     </div>
-    <TodayProfitPreview sales={mockSales} />
+    <TodayProfitPreview sales={getFictionalProfitSales()} />
   </>;
 }

@@ -53,8 +53,8 @@ for (const theme of ["light", "dark"] as const) {
         })).toBe(true);
       }
       const profit = overview.getByRole("group", { name: "Today's Profit", exact: true });
-      await expect(profit.getByText("Unavailable", { exact: true })).toBeVisible();
-      await expect(profit.locator("data")).toHaveCount(0);
+      await expect(profit.getByText("Rs. 5,140.00", { exact: true })).toBeVisible();
+      await expect(profit.locator("data")).toHaveAttribute("value", "5140.00");
       await expect(profit.getByRole("link")).toHaveAttribute("href", "/admin/profit/today");
       await expect(page.getByText("Rs. 4,860.00", { exact: true })).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

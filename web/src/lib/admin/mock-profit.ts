@@ -1,5 +1,5 @@
 import type { MockSale } from "@/lib/admin/mock-sales";
-import { formatMockRevenue } from "@/lib/admin/mock-sales";
+import { formatMockRevenue, mockRevenueDecimal } from "@/lib/admin/mock-sales";
 import { previewTotal } from "@/lib/pos-preview";
 
 // Admin-only report input. A snapshot belongs to this completed sale, never its
@@ -70,6 +70,10 @@ export function aggregateMockProfit(sales: readonly ProfitSale[]) {
   return [...groups.values()].map(({ productId, productName, sales }) => ({
     productId, productName, ...calculateMockProfitTotals(sales),
   }));
+}
+
+export function profitDecimal(paise: bigint): string {
+  return (paise < BigInt(0) ? "-" : "") + mockRevenueDecimal(paise < BigInt(0) ? -paise : paise);
 }
 
 export function formatProfitMoney(paise: bigint | null): string {
