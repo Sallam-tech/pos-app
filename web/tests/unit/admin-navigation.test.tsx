@@ -19,9 +19,13 @@ it.each([
   ["/admin/dashboard", "Dashboard", false],
   ["/admin/products", "Products", false],
   ["/admin/sales/today", "Sales Report", false],
+  ["/admin/reports", "Reports", false],
+  ["/admin/reports/sales", "Reports", false],
+  ["/admin/reports/profit", "Reports", false],
+  ["/admin/profit/today", "Reports", false],
   ["/admin/inventory/available-stock", "Available Stock", true],
   ["/admin/inventory/low-stock", "Low Stock Products", true],
-] as const)("selects the correct navigation at %s and preserves planned sections", (path, currentName, isInventory) => {
+] as const)("selects the correct navigation at %s and preserves existing sections", (path, currentName, isInventory) => {
   vi.mocked(usePathname).mockReturnValue(path);
   render(<AdminShell>Screen preview</AdminShell>);
   const navigation = screen.getByRole("navigation", { name: "Main navigation" });
@@ -34,9 +38,9 @@ it.each([
   expect(inventory).not.toHaveAttribute("aria-disabled");
   expect(within(inventory).queryByText("Planned")).not.toBeInTheDocument();
   const current = within(navigation).getByRole("link", { name: currentName });
-  expect(current).toHaveAttribute("aria-current", "page");
+  expect(current).toHaveAttribute("aria-current", (path === "/admin/profit/today" || path.startsWith("/admin/reports/")) ? "location" : "page");
   expect(current).toHaveClass("bg-muted", "text-primary");
-  expect(navigation.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+  expect(navigation.querySelectorAll('[aria-current="page"]')).toHaveLength((path === "/admin/profit/today" || path.startsWith("/admin/reports/")) ? 0 : 1);
   if (isInventory) {
     expect(submenu).toBeVisible();
     expect(inventory).toHaveAttribute("aria-current", "location");
@@ -50,16 +54,17 @@ it.each([
   expect(within(submenu).getAllByRole("link", { hidden: true }).map((link) => link.getAttribute("href"))).toEqual([
     "/admin/inventory/available-stock", "/admin/inventory/low-stock",
   ]);
-  for (const name of ["Reports"]) {
-    const item = within(navigation).getByText(name).closest("span")!;
-    expect(item.tagName).toBe("SPAN");
-    expect(item).toHaveAttribute("aria-disabled", "true");
-    expect(item).not.toHaveAttribute("href");
-    expect(item).not.toHaveAttribute("tabindex");
-    expect(within(item).getByText("Planned")).toBeVisible();
-    expect(item).not.toHaveAttribute("aria-current");
-    expect(item).toHaveClass("text-muted-foreground");
-    expect(item).not.toHaveClass("bg-muted", "text-primary");
+  const reports = within(navigation).getByRole("link", { name: "Reports" });
+  expect(reports).toHaveAttribute("href", "/admin/reports");
+  expect(reports).not.toHaveAttribute("aria-disabled");
+  expect(reports).not.toHaveAttribute("aria-expanded");
+  expect(within(navigation).queryByText("Planned")).not.toBeInTheDocument();
+  if (path.startsWith("/admin/reports") || path === "/admin/profit/today") {
+    expect(reports).toHaveClass("bg-muted", "text-primary");
+    expect(within(navigation).getByRole("button", { name: "Sales" })).not.toHaveAttribute("aria-current");
+  } else {
+    expect(reports).not.toHaveAttribute("aria-current");
+    expect(reports).toHaveClass("text-muted-foreground");
   }
 });
 
@@ -108,7 +113,7 @@ it("keeps Sales expandable with only the implemented Sales Report route and rese
   expect(within(submenu).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(["/admin/sales/today"]);
   expect(within(submenu).getByRole("link", { name: "Sales Report" })).toHaveAttribute("aria-current", "page");
   expect(within(navigation()).getByRole("button", { name: "Inventory" })).toHaveAttribute("aria-expanded", "false");
-  expect(within(navigation()).getByText("Reports").closest("span")).toHaveAttribute("aria-disabled", "true");
+  expect(within(navigation()).getByRole("link", { name: "Reports" })).not.toHaveAttribute("aria-current");
   fireEvent.click(control());
   expect(control()).toHaveAttribute("aria-expanded", "false");
   expect(within(navigation()).queryByRole("link", { name: "Sales Report" })).not.toBeInTheDocument();
@@ -127,7 +132,7 @@ it("keeps Sales expandable with only the implemented Sales Report route and rese
   expect(within(navigation()).getByRole("link", { name: "Sales Report" })).toHaveAttribute("aria-current", "page");
 });
 
-it.each(["/admin/products/new", "/admin/products/diapers/edit", "/admin/products/not-a-product/edit", "/admin/profit/today"])("keeps the compact shell and existing navigation at %s", (path) => {
+it.each(["/admin/products/new", "/admin/products/diapers/edit", "/admin/products/not-a-product/edit", "/admin/profit/today", "/admin/reports", "/admin/reports/sales", "/admin/reports/profit"])("keeps the compact shell and existing navigation at %s", (path) => {
   vi.mocked(usePathname).mockReturnValue(path);
   render(<AdminShell>Add Product preview</AdminShell>);
   const navigation = screen.getByRole("navigation", { name: "Main navigation" });

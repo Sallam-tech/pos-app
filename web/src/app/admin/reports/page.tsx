@@ -1,0 +1,28 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
+
+export const metadata: Metadata = { title: "Reports | Shop POS" };
+
+export default function ReportsPage() {
+  return <>
+    <div className="mb-5">
+      <div className="flex flex-wrap items-center gap-3"><h1 className="page-title">Reports</h1><Badge>Demo Data</Badge></div>
+      <p className="mt-1 text-sm leading-6 text-muted-foreground">Choose a report to view demo sales or profit.</p>
+    </div>
+    <section aria-label="Available reports" className="grid gap-4 md:grid-cols-2">
+      <Card role="group" aria-labelledby="sales-report-title" className="flex flex-col items-start">
+        <CardTitle id="sales-report-title">Sales Report</CardTitle>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">See sales, items sold and simple charts.</p>
+        <Button asChild className="mt-5"><Link href="/admin/reports/sales">View Sales Charts</Link></Button>
+      </Card>
+      <Card role="group" aria-labelledby="profit-report-title" className="flex flex-col items-start">
+        <CardTitle id="profit-report-title">Profit Report</CardTitle>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">See profit and which products earned the most.</p>
+        <Button asChild className="mt-5"><Link href="/admin/reports/profit">View Profit Charts</Link></Button>
+      </Card>
+    </section>
+  </>;
+}

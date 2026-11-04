@@ -4,21 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Icon, type IconName } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
 import { Dialog } from "@/components/ui/dialog";
 import { ThemeSelector } from "@/components/theme/theme-selector";
 import { ConnectivityIndicator } from "@/components/shell/connectivity-indicator";
 import { Brand, PreviewLink } from "@/components/shell/shared";
 
-const planned: { name: string; icon: IconName }[] = [
-  { name: "Reports", icon: "chart" },
-];
 function isProductEditPath(pathname: string) {
   return /^\/admin\/products\/[^/]+\/edit$/.test(pathname);
 }
 function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
   const isDashboard = pathname === "/admin/dashboard";
+  const isReports = ["/admin/reports", "/admin/reports/sales", "/admin/reports/profit", "/admin/profit/today"].includes(pathname);
   const isTodaySales = pathname === "/admin/sales/today";
   const isProducts = pathname === "/admin/products" || pathname === "/admin/products/new" || isProductEditPath(pathname);
   const isInventory = pathname === "/admin/inventory/low-stock" || pathname === "/admin/inventory/available-stock";
@@ -57,13 +55,14 @@ function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNaviga
             className={"flex min-h-11 items-center rounded-md px-3 py-2 text-sm " + (isTodaySales ? activeClasses : "text-muted-foreground")}>Sales Report</Link></li>
         </ul>
       </li>
-      {planned.map((item) => <li key={item.name}><span aria-disabled="true" className="flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm text-muted-foreground"><Icon name={item.icon} />{item.name}<span className="ml-auto text-xs">Planned</span></span></li>)}
+      <li><Link href="/admin/reports" aria-current={isReports ? (pathname === "/admin/reports" ? "page" : "location") : undefined} onClick={onNavigate}
+        className={"flex min-h-11 items-center gap-3 rounded-md px-3 py-3 text-sm " + (isReports ? activeClasses : "text-muted-foreground")}><Icon name="chart" />Reports</Link></li>
     </ul>
   </nav>;
 }
 export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const compactAdminPreview = ["/admin/products", "/admin/products/new", "/admin/dashboard", "/admin/inventory/low-stock", "/admin/inventory/available-stock", "/admin/sales/today", "/admin/profit/today"].includes(pathname) || isProductEditPath(pathname);
+  const compactAdminPreview = ["/admin/products", "/admin/products/new", "/admin/dashboard", "/admin/inventory/low-stock", "/admin/inventory/available-stock", "/admin/sales/today", "/admin/profit/today", "/admin/reports", "/admin/reports/sales", "/admin/reports/profit"].includes(pathname) || isProductEditPath(pathname);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
@@ -88,7 +87,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
       </header>
       <main id="main-content" tabIndex={-1} className={"content-container outline-none" + (compactAdminPreview ? " pt-5" : "")}>{children}</main>
     </div>
-    <Dialog open={open} onOpenChange={setOpen} title="Admin navigation" description="Mock navigation. Planned sections are unavailable in this preview." variant="drawer">
+    <Dialog open={open} onOpenChange={setOpen} title="Admin navigation" description="Choose an Admin page." variant="drawer">
       <Brand /><Navigation key={pathname} mobile onNavigate={() => setOpen(false)} />{!compactAdminPreview && <div className="mt-6 border-t pt-4"><PreviewLink /></div>}
     </Dialog>
   </div>;

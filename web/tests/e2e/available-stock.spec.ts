@@ -182,7 +182,7 @@ test("Inventory submenu supports mouse, keyboard and mobile drawer navigation", 
   await expect(inventory).toHaveAttribute("aria-expanded", "true");
   await expect(available).toBeVisible();
   await expect(lowStock).toBeVisible();
-  await expect(navigation.getByRole("link")).toHaveCount(4);
+  await expect(navigation.getByRole("link")).toHaveCount(5);
   await expect(inventory.getByText("Planned", { exact: true })).toHaveCount(0);
   await inventory.focus();
   await expect(inventory).toHaveCSS("outline-width", "3px");
