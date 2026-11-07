@@ -6,9 +6,9 @@ declare global {
 }
 
 const routes = [
-  { path: "/login", heading: "Login", name: "login" },
+  { path: "/login", heading: "Shop POS", name: "login" },
   { path: "/admin/dashboard", heading: "Dashboard", name: "admin" },
-  { path: "/pos", heading: "Record sale", name: "pos" },
+  { path: "/pos", heading: "Make a Sale", name: "pos" },
 ];
 const widths = [320, 375, 768, 1024, 1440];
 
@@ -48,7 +48,7 @@ for (const theme of ["light", "dark"] as const) {
           expect(response?.status()).toBe(200);
           await expect(page.getByRole("heading", { name: route.heading, exact: true })).toBeVisible();
           await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-          await expect(page.getByText(route.name === "admin" ? "Demo Data" : "Mock UI", { exact: true })).toBeVisible();
+          await expect(page.getByRole("main").getByText(route.name === "admin" ? "Demo Data" : route.name === "login" ? "UI Preview" : "Demo Mode", { exact: true })).toBeVisible();
           await expect(page.locator("[data-connectivity-state]")).toHaveAttribute("data-connectivity-state", "connected");
           expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
           if (route.name === "admin") {
@@ -80,13 +80,13 @@ test("theme survives route navigation and refresh", async ({ page }) => {
   await page.goto("/login");
   await page.getByLabel("Theme", { exact: true }).selectOption("dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page.getByRole("link", { name: "Admin shell", exact: true }).click();
+  await page.getByRole("link", { name: "Preview Admin", exact: true }).click();
   await expect(page).toHaveURL("/admin/dashboard");
   await expect(page.getByLabel("Theme", { exact: true })).toHaveValue("dark");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.goto("/login");
-  await page.getByRole("link", { name: "Salesperson shell", exact: true }).click();
+  await page.getByRole("link", { name: "Preview Salesperson", exact: true }).click();
   await expect(page).toHaveURL("/pos");
   await expect(page.getByLabel("Theme", { exact: true })).toHaveValue("dark");
   expect(await page.evaluate(() => localStorage.getItem("pos-theme"))).toBe("dark");
@@ -134,7 +134,7 @@ test("theme selection remains usable with browser storage denied", async ({ page
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await page.getByLabel("Theme", { exact: true }).selectOption("dark");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page.getByRole("link", { name: "Salesperson shell", exact: true }).click();
+  await page.getByRole("link", { name: "Preview Salesperson", exact: true }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.reload();
   await expect(page.getByLabel("Theme", { exact: true })).toHaveValue("system");
@@ -150,7 +150,7 @@ test("Admin navigation dialog labels, focus loop, Escape and focus restoration i
     const dialog = page.getByRole("dialog", { name: "Admin navigation", exact: true });
     await expect(dialog).toBeVisible();
     const close = dialog.getByRole("button", { name: "Close dialog", exact: true });
-    const last = dialog.getByRole("button", { name: "Sales", exact: true });
+    const last = dialog.getByRole("link", { name: "Settings", exact: true });
     await expect(close).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(last).toBeFocused();
@@ -210,7 +210,7 @@ test("local health states are advisory and independent of navigator.onLine", asy
     await expect(indicator).toHaveAttribute("data-connectivity-state", expected);
   }
   await expect(page.getByText(/Advisory only/)).toHaveText(/does not confirm a transaction/);
-  await expect(page.getByRole("link", { name: "Salesperson shell", exact: true })).toBeEnabled();
+  await expect(page.getByRole("link", { name: "Preview Salesperson", exact: true })).toBeEnabled();
 });
 
 test("keyboard skip link and visible focus reach Login and the Admin preview", async ({ page }) => {
@@ -220,10 +220,10 @@ test("keyboard skip link and visible focus reach Login and the Admin preview", a
   await page.keyboard.press("Enter");
   await expect(page.locator("#main-content")).toBeFocused();
   await page.keyboard.press("Tab");
-  const username = page.getByLabel("Username", { exact: true });
-  await expect(username).toBeFocused();
-  await expect(username).toHaveCSS("outline-width", "3px");
-  const admin = page.getByRole("link", { name: "Admin shell", exact: true });
+  const password = page.getByLabel("Password", { exact: true });
+  await expect(password).toBeFocused();
+  await expect(password).toHaveCSS("outline-width", "3px");
+  const admin = page.getByRole("link", { name: "Preview Admin", exact: true });
   await admin.focus();
   await expect(admin).toBeFocused();
   await expect(admin).toHaveCSS("outline-style", "solid");

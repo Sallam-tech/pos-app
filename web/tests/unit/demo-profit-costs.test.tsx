@@ -74,11 +74,11 @@ describe("explicit fictional sale-time costs", () => {
     const today = selectMockSalesPeriod(getFictionalProfitSales(), { kind: "today" }).sales;
     const profit = calculateMockProfitTotals(today).grossProfitPaise!;
     const { unmount } = render(<DashboardPage />);
-    const card = screen.getByRole("group", { name: "Today's Profit" });
+    const card = screen.getByRole("group", { name: "Today's Gross Profit" });
     expect(within(card).getByText(formatProfitMoney(profit))).toHaveAttribute("value", profitDecimal(profit));
     unmount();
     render(<TodayProfitPage />);
-    expect(screen.getByText("Total Gross Profit").nextElementSibling?.firstElementChild).toHaveTextContent(formatProfitMoney(profit));
+    expect(within(screen.getByLabelText("Gross profit totals")).getByText("Gross Profit").nextElementSibling?.firstElementChild).toHaveTextContent(formatProfitMoney(profit));
   });
 
   it.each([
@@ -107,10 +107,10 @@ describe("explicit fictional sale-time costs", () => {
   it("preserves fixed costs/profit when Admin previews a different current cost and suggested price", () => {
     const original = JSON.stringify(getFictionalProfitSales());
     render(<AddProductPreview product={mockInventory[0]} />);
-    fireEvent.change(screen.getByLabelText("New Purchase Cost (Demo)"), { target: { value: "900.00" } });
-    fireEvent.change(screen.getByLabelText("Suggested Selling Price (Rs.)"), { target: { value: "1600.00" } });
+    fireEvent.change(screen.getByLabelText("Buying Price (Rs.)"), { target: { value: "900.00" } });
+    fireEvent.change(screen.getByLabelText("Selling Price (Rs.)"), { target: { value: "1600.00" } });
     fireEvent.submit(screen.getByRole("form"));
-    expect(screen.getByRole("status")).toHaveTextContent("purchase cost was not updated");
+    expect(screen.getByRole("status")).toHaveTextContent("buying price was not updated");
     expect(JSON.stringify(getFictionalProfitSales())).toBe(original);
     expect(calculateMockProfitTotals(getFictionalProfitSales()).grossProfitPaise).toBe(BigInt(514000));
     expect(getMockSuggestedSellingPrice("diapers")).toBe("1250.00");

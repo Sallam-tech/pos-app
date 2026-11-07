@@ -34,7 +34,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByText(/Advisory only/)).toHaveClass("sr-only");
     const overview = page.getByRole("region", { name: "Shop overview" });
     await expect(overview).toHaveAccessibleDescription("Mock data only. These figures are examples, not live shop records.");
-    await expect(overview.getByRole("group")).toHaveCount(5);
+    await expect(overview.getByRole("group")).toHaveCount(8);
     await expect(page.locator("[data-connectivity-state]")).toHaveAttribute("data-connectivity-state", "connected");
 
     for (const width of [1440, 1280, 1024, 768, 375, 320]) {
@@ -43,7 +43,7 @@ for (const theme of ["light", "dark"] as const) {
         const card = overview.getByRole("group", { name, exact: true });
         await expect(card).toBeVisible();
         await expect(card).toHaveAccessibleDescription(/Mock data only/);
-        await expect(card.getByText("Mock data", { exact: true })).toBeVisible();
+        await expect(card.getByRole("link")).toHaveAccessibleName(name);
         await expect(card.locator("data")).toHaveAttribute("value", value);
         await expect(card.locator("data")).toHaveText(display);
         expect(await card.locator("data").evaluate((element) => {
@@ -52,7 +52,11 @@ for (const theme of ["light", "dark"] as const) {
           return data.left >= card.left && data.right <= card.right && data.bottom <= card.bottom;
         })).toBe(true);
       }
-      const profit = overview.getByRole("group", { name: "Today's Profit", exact: true });
+      const expense = overview.getByRole("group", { name: "Shop Expenses", exact: true });
+      await expect(expense.getByText("Unavailable", { exact: true })).toBeVisible();
+      await expect(expense.locator("data")).toHaveCount(0);
+      await expect(expense.getByRole("link")).toHaveAttribute("href", "/admin/expenses");
+      const profit = overview.getByRole("group", { name: "Today's Gross Profit", exact: true });
       await expect(profit.getByText("Rs. 5,140.00", { exact: true })).toBeVisible();
       await expect(profit.locator("data")).toHaveAttribute("value", "5140.00");
       await expect(profit.getByRole("link")).toHaveAttribute("href", "/admin/profit/today");
@@ -61,17 +65,59 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.getByRole("complementary", { name: "Admin sidebar" })).toBeVisible({ visible: width >= 1024 });
       await expectReadableContrast(page);
       await expect(page.locator("table:visible")).toHaveCount(0);
-      await expect(overview.locator("button,input,select,svg,canvas,table")).toHaveCount(0);
+      await expect(overview.locator("button,input,select,canvas,table")).toHaveCount(0);
       if (width === 1440) {
-        const cardTops = await overview.getByRole("group").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top));
-        const valueTops = await overview.locator("data").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top));
-        expect(Math.max(...cardTops) - Math.min(...cardTops)).toBeLessThan(1);
-        expect(Math.max(...valueTops) - Math.min(...valueTops)).toBeLessThan(1);
-        if (testInfo.project.name === "chromium" && theme === "dark") {
+        for (const section of ["Sales & Profit", "Inventory Overview", "Investment Overview"]) {
+          const row = overview.getByRole("region", { name: section, exact: true });
+          const cardTops = await row.getByRole("group").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top));
+          expect(Math.max(...cardTops) - Math.min(...cardTops)).toBeLessThan(1);
+        }
+        if (testInfo.project.name === "chromium") {
           await page.screenshot({ path: testInfo.outputPath("dashboard-" + theme + "-1440.png"), fullPage: true, scale: "css" });
         }
       }
     }
+    await page.setViewportSize({ width: testInfo.project.name === "chromium" ? 1440 : 375, height: 900 });
+    const expenseLink = overview.getByRole("link", { name: "Shop Expenses", exact: true });
+    await expenseLink.focus(); await expect(expenseLink).toHaveCSS("outline-width", "3px");
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL("/admin/expenses");
+    await expect(page).toHaveTitle("Shop Expenses | Shop POS");
+    await expect(page.getByRole("heading", { name: "Shop Expenses", exact: true })).toBeVisible();
+    const totals = page.getByLabel("Expense review totals", { exact: true });
+    await expect(totals.getByText("Unavailable", { exact: true })).toHaveCount(2);
+    await expect(page.getByRole("table")).toContainText("No recorded expense data is available");
+    await expect(page.getByRole("main").getByRole("button")).toHaveCount(0);
+    await expect(page.getByRole("main").getByRole("form")).toHaveCount(0);
+    await expect(page.getByText(/not saved or shared with Admin/)).toBeVisible();
+    await expectReadableContrast(page);
+    const day = page.getByLabel("Business day", { exact: true });
+    await day.focus(); await expect(day).toHaveCSS("outline-width", "3px");
+    await day.fill("");
+    await expect(page.getByRole("main").getByRole("alert")).toHaveText("Choose a valid business day.");
+    await expect(totals.getByText("Unavailable", { exact: true })).toHaveCount(2);
+    await day.fill("2026-11-02");
+    if (testInfo.project.name === "chromium") {
+      await expect(page.getByRole("navigation", { name: "Main navigation", exact: true }).getByRole("link", { name: "Dashboard", exact: true })).toHaveAttribute("aria-current", "location");
+      await page.screenshot({ path: testInfo.outputPath("admin-expenses-" + theme + ".png"), fullPage: true });
+    }
+    for (const width of [320, 375, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 720 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+    await page.getByRole("link", { name: "Back to Dashboard", exact: true }).click();
+    await expect(page).toHaveURL("/admin/dashboard");
+    // Ordinary temporary input in the existing Salesperson flow is not an Admin record.
+    await page.goto("/pos/expenses");
+    await page.getByLabel("Amount (Rs.)", { exact: true }).fill("100.25");
+    await page.getByRole("button", { name: "Add Expense", exact: true }).click();
+    await page.getByRole("button", { name: "View Expense Summary", exact: true }).click();
+    await expect(page.getByRole("table")).toContainText("Rs. 100.25");
+    await page.goto("/admin/expenses");
+    await expect(page.getByLabel("Expense review totals", { exact: true }).getByText("Unavailable", { exact: true })).toHaveCount(2);
+    await page.goto("/admin/dashboard");
+    await expect(page.getByRole("group", { name: "Shop Expenses", exact: true })).toContainText("Unavailable");
+    await expect(page.getByRole("group", { name: "Today's Gross Profit", exact: true })).toContainText("Rs. 5,140.00");
     expect(unexpected).toEqual([]);
     expect(errors).toEqual([]);
   });
@@ -87,5 +133,5 @@ test("Dashboard summary System theme follows OS and persists", async ({ page }) 
   await page.reload();
   await expect(page.getByLabel("Theme", { exact: true })).toHaveValue("system");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect(page.getByRole("region", { name: "Shop overview" }).getByRole("group")).toHaveCount(5);
+  await expect(page.getByRole("region", { name: "Shop overview" }).getByRole("group")).toHaveCount(8);
 });

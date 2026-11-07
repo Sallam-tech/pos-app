@@ -1,5 +1,27 @@
 # POS Module Checklist
 
+## Current owner-authorized UI revision - 6 November 2026
+
+This is the current review state and supersedes the earlier Demo Tools placement and presentation-scope statements below. Previous reports remain historical evidence. The prior appearance was rejected; **the new visual design is awaiting owner review**, not approved. This does not advance the master backend phases.
+
+- [x] Preserve all 39 pre-existing pending files, root Login/role-preview entry, existing workflows and financial fixtures.
+- [x] Strengthen shared Light/Dark typography, surfaces, form/table styling, focus and active navigation; retain System theme and its preference.
+- [x] Provide Salesperson Make a Sale, Return Item and Shop Expenses directly; keep receipt inside Make a Sale.
+- [x] Replace Admin Demo Tools navigation with direct Total Investment; retain Dashboard, Products, Inventory, Sales, Reports and safe redirects for old demo URLs.
+- [x] Preserve actual-price, suggested-price guidance, decimal validation, exact no-discount/discount/cash/receipt calculations and temporary resets.
+- [x] Keep Return/Expenses clients free of Admin cost/profit/stock data; show the required unavailable-refund sentence and never invent a refund.
+- [x] Add an optional temporary investment note without changing the amount calculation.
+- [x] Verify focused unit/component tests, lint, TypeScript, one production build, 10 connected desktop/mobile browser cases and six focused keyboard/drawer regressions.
+- [x] Inspect all eight required main-app screenshots; check six widths from 320 to 1920px, Light/Dark/System, contrast and horizontal overflow.
+- [x] Update the separate standalone HTML with matching navigation/presentation; verify nine helper hashes, shared theme hash, all 12 invariants, local-file interactions, six widths and zero HTTP/storage.
+- [ ] Owner reviews the new visuals and portable showcase.
+- [ ] Manual screen-reader, native browser/OS zoom, physical-device and physical printer review remain outstanding.
+- [ ] Chart visual design remains deferred pending shopkeeper feedback; chart algorithms are unchanged.
+- [ ] Real authentication/role enforcement, database storage, atomic transactions, refund/expense/investment accounting, idempotency and audit integration remain unimplemented.
+
+Evidence: [final UI report](development/FINAL_SHOPKEEPER_UI_REPORT.md), [demo walkthrough](SHOPKEEPER_DEMO_GUIDE.md). The detailed historical checklists and pending business decisions below remain in force.
+
+
 Updated: 2 November 2026 (Asia/Karachi). **Phase 1 accepted. Phase 2/A01 checkpointed at 9cf59d46ddda192a3a1867267955075b9391e518; Login desktop visuals approved, remaining manual/overall review pending. P01 /pos desktop prototype is verified and owner-approved after all six manual feature checks, including the decimal precision fix; mobile manual refinement is deferred. A02's five summary cards, Low Stock Products card/A11 mock list and pathname-aware sidebar fix are implemented and verified with owner-approved desktop visuals; manual accessibility/device review remains open; the Total Products/A03 searchable preview, compact Products/Dashboard/Low Stock layouts and zero-stock example are implemented and verified with owner-approved desktop visuals. Remaining features and Phases 4–9 stay unstarted.**
 
 Use [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) as the master sequence and contract source. Historical P00–P17 and UI-* labels remain cross-references. [Phase 2](development/PHASE_2_UI_FOUNDATION.md) and [Login](development/LOGIN_UI_REPORT.md) delivery records remain intact. The reviewed P01 brief covered /pos and its embedded simulated summary; see [POS screen report](development/POS_RECORD_SALE_UI_REPORT.md). The approved desktop POS checkpoint is f2f6296e83a4e30e9ba46d911d48e791cf3392d5. The preceding A02 brief authorized five mock overview cards; see [dashboard summary report](development/ADMIN_DASHBOARD_SUMMARY_REPORT.md). A separate brief delivered only the Low Stock Products card link and canonical A11 read-only mock list; see [low-stock report](development/LOW_STOCK_CARD_REPORT.md). The owner-approved cards/list/sidebar checkpoint is 8271344e23ddda89b6a2f32b6d1ccf9f618de9c4. The owner has now approved the related Admin Products and inventory desktop previews and authorized one local Git checkpoint only; no push or next feature is authorized. No overall phase acceptance, other card interaction or real business functionality is implied.
@@ -266,3 +288,48 @@ Other retained decisions:
 - [ ] Owner reviews current module before the next; deployment/destructive/major architecture actions separately approved.
 
 Historical reconciliation covered documentation consistency/source preservation. The original Phase 2 record passed 27 unit/component and 40 browser tests; the first A01 report passed 36/74 and the final Login layout report 36/98. Those publication-time reports remain intact. The foundation/Login checkpoint is now 9cf59d46. Current P01 evidence is [POS_RECORD_SALE_UI_REPORT.md](development/POS_RECORD_SALE_UI_REPORT.md): 54 unit/component and 130 browser tests plus lint/type/build pass. Login/Admin source, source documents and dependency files are unchanged from that checkpoint. Only POS files, its tests, the placeholder-specific shell assertions and current progress documentation change. The owner approved the desktop P01 prototype after all six manual feature checks, including precision validation, and authorized its local checkpoint. Mobile manual refinement is deferred. No push or next screen is authorized.
+
+## Separately authorized shopkeeper demo additions - 6 November 2026
+
+This owner brief authorizes isolated previews outside the original V1 SRS. It does not change the SRS, phase sequence or production accounting requirements. Existing screen structures and all prior uncommitted demo-entry work are preserved. Evidence: [shopkeeper demo upgrade report](development/SHOPKEEPER_DEMO_UPGRADE_REPORT.md).
+
+- [x] Preserve the root -> Login -> role-preview flow, familiar Admin sections, existing page layouts, Light/Dark/System themes and keyboard focus.
+- [x] Extend the existing one-product POS preview with optional discount/cash and an unsaved sample receipt; leave the original no-discount helper and fixtures unchanged. Demo percentage precision is at most two decimals; reject unsupported fractional-paisa results.
+- [x] Add a separate Admin Demo Tools location for temporary expenses, safe return review and owner-entered investment; no storage, transactions, stock movements or report integration.
+- [x] Keep refund unavailable when original discount/refund terms are missing. Show the recorded amount as a comparison only. Do not fabricate a completed return.
+- [x] Retain Gross Profit = revenue minus historical sold-item costs. Expenses and owner investment never alter it.
+- [x] Verify the main app with 157 focused unit/component tests, lint, TypeScript, production build and 10 relevant desktop/mobile browser cases (affected assertions rechecked after fixes). Inspect actual final desktop/mobile screenshots; check 320/375/768/1024/1440/1920px reflow.
+- [x] Create the separate offline HTML showcase from nine bundled original helper sources; local-file Chromium checks, exact invariants, responsive layouts, temporary resets and zero HTTP/storage checks pass.
+- [ ] Owner reviews these new previews and the separate portable showcase visually.
+- [ ] Manual screen-reader, native zoom, physical-device and printer testing remain open. Chart visual design remains deferred pending shopkeeper feedback.
+- [ ] Production discount/payment/refund policies, expense accounting scope, investment definition, authentication/authorization, persistence, atomic transactions and audits remain unimplemented.
+
+### Current owner-directed UI revision — 7 November 2026
+
+This entry supersedes the earlier current Login presentation only; historical delivery notes and outstanding manual/backend checks are retained.
+
+- [x] Compact Dashboard: three Sales & Profit, three Inventory and two Investment cards; original values/links retained; Close Day navigates to review.
+- [x] Shared navy navigation, distinct Light page/white surfaces and neutral Dark surfaces; mobile active-text contrast verified.
+- [x] Admin Settings: validated browser-local public shop/receipt preferences, safe text rendering and supported print-layout selection; no device synchronization claimed.
+- [x] Configured shop branding on Login/shared shell/new invoice and sample previews; historical receipts unchanged.
+- [x] Password-only Open Shop UI with honest unprotected demo links; ephemeral password-management preview and Show/Hide controls; no credential persistence or fake authentication.
+- [x] Read-only Daily Closing, selected Asia/Karachi example date, missing-data states and disabled durable confirmation.
+- [x] Honest Backup & Recovery status and [required future backup/closing/security contract](development/SETTINGS_CLOSING_BACKUP_CONTRACT.md).
+- [x] Focused checks: 145 unit/component tests and ten desktop/mobile browser cases; scoped lint, TypeScript and build passed. Six requested desktop views inspected.
+- [ ] Owner visual approval of this revision.
+- [ ] Outstanding manual screen-reader, physical-device and actual printer checks.
+- [ ] Secure local authentication, server authorization, account recovery, database persistence, genuine transactions, immutable/idempotent closing, automatic verified backups and restore drills.
+
+### Settings / header / Back arrow owner revision - 8 November 2026
+
+- [x] Compact Settings reference structure; working saved-details receipt preview; supported paper options only; currency fixed PKR.
+- [x] Two-row Passwords card with separate accessible Change dialogs; disabled secure submission, Show/Hide and 8-128 character preview validation without composition rules.
+- [x] Empty Login password on entry/reload/restoration, autocomplete discouraged, no credential persistence, automatic role selection or fake authentication.
+- [x] Small Automatic Backup card honestly marked Setup pending; future verified backup/restore requirements retained.
+- [x] Navy Admin/Salesperson headers in Light/Dark/System; connectivity and theme controls preserved; Exit Demo outside header and accessible on mobile.
+- [x] Shared left-of-heading 44px Back arrows, safe role-specific parents, direct-link/reload fallbacks, no duplicate text Back links; root pages omit arrows.
+- [x] New Back/Exit confirmations protect temporary form input; existing modal close/focus and approved workflows preserved.
+- [x] 272 focused unit/component tests and 12 targeted desktop/mobile browser tests passed; scoped lint, TypeScript and one production build passed. Four requested desktop screenshots inspected; original documents, financial data/helpers and previous work preserved.
+- [ ] Owner visual approval of this Settings/header/navigation revision.
+- [ ] Manual screen-reader, real device, native zoom and physical printer checks; browser-controlled password prompts cannot be guaranteed disabled.
+- [ ] Secure local backend authentication/authorization, password hashing/recovery, shared persistence, durable closing and scheduled verified backups/restore drills.

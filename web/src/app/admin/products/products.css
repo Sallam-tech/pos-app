@@ -1,0 +1,51 @@
+/* Product Management only; the Admin shell and other route palettes are unchanged. */
+.product-management-workspace {
+  --background: #f1f5f3;
+  --surface: #ffffff;
+  --surface-subtle: #f1f5f3;
+  --foreground: #20352d;
+  --muted-foreground: #53685d;
+  --border: #d5e3da;
+  --input: #799184;
+  /* Slightly deeper than the reference green for readable normal-size white text. */
+  --primary: #078354;
+  --primary-hover: #056b44;
+  --primary-foreground: #ffffff;
+  --success: #176742;
+  --warning: #985000;
+  --danger: #b42332;
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--surface-subtle);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface-subtle);
+  --accent: var(--surface-subtle);
+  --accent-foreground: var(--foreground);
+  min-width: 0;
+  min-height: calc(100svh - 120px);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--background);
+  color: var(--foreground);
+}
+/* Match the existing neutral Shop POS dark surfaces; green remains an action/status accent. */
+[data-theme="dark"] .product-management-workspace {
+  --background: #141c26;
+  --surface: #1c2733;
+  --surface-subtle: #263442;
+  --foreground: #f3f6fa;
+  --muted-foreground: #b1bfce;
+  --border: #405064;
+  --input: #8797a7;
+  --primary: #63d6ac;
+  --primary-hover: #80e0bd;
+  --primary-foreground: #071a15;
+  --success: #74e0af;
+  --warning: #f4c36c;
+  --danger: #ff9099;
+}
+@media (min-width: 768px) { .product-management-workspace { padding: 20px; } }
+
+.product-management-workspace [data-product-details][open] { grid-column: 1 / -1; grid-row: 2; margin-top: 8px; }

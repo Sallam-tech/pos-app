@@ -1,0 +1,34 @@
+/* Scoped to Investment; existing module and shell colors are preserved. */
+.investment-workspace {
+  --background: #f1f5f3;
+  --surface: #ffffff;
+  --surface-subtle: #f1f5f3;
+  --foreground: #20352d;
+  --muted-foreground: #53685d;
+  --border: #d5e3da;
+  --input: #799184;
+  --primary: #078354;
+  --primary-foreground: #ffffff;
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --muted: var(--surface-subtle);
+  --accent: var(--surface-subtle);
+  min-width: 0;
+  min-height: calc(100svh - 120px);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--background);
+  color: var(--foreground);
+}
+[data-theme="dark"] .investment-workspace {
+  --background: #141c26;
+  --surface: #1c2733;
+  --surface-subtle: #263442;
+  --foreground: #f3f6fa;
+  --muted-foreground: #b1bfce;
+  --border: #405064;
+  --input: #8797a7;
+  --primary: #63d6ac;
+  --primary-foreground: #071a15;
+}
+@media (min-width: 768px) { .investment-workspace { padding: 20px; } }

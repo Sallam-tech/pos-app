@@ -52,22 +52,19 @@ for (const theme of ["light", "dark"] as const) {
       for (const height of [600, 720, 768]) {
         await page.setViewportSize({ width, height });
         await page.goto("/login");
-        const username = page.getByLabel("Username", { exact: true });
         const password = page.getByLabel("Password", { exact: true });
-        const submit = page.getByRole("button", { name: "Sign In", exact: true });
+        const submit = page.getByRole("button", { name: "Open Shop", exact: true });
         await expect(submit).toBeEnabled();
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
         for (const state of ["idle", "validation", "unavailable"] as const) {
           await test.step(height + "px / " + state, async () => {
             if (state === "validation") {
-              await username.focus();
+              await password.focus();
               await page.keyboard.press("Enter");
-              await expect(username).toBeFocused();
-              await expect(username).toHaveAccessibleDescription("Enter a username.");
+              await expect(password).toBeFocused();
               await expect(password).toHaveAccessibleDescription("Enter a password.");
             }
             if (state === "unavailable") {
-              await username.fill("layout-preview-only");
               await password.fill("layout-preview-only");
               await submit.click();
               const error = page.getByRole("form").getByRole("alert").filter({ hasText: "Sign-in is unavailable" });
@@ -107,12 +104,12 @@ for (const theme of ["light", "dark"] as const) {
             // document scrolling, without an inner form/card scroll area.
             const alerts = page.getByRole("form").getByRole("alert");
             for (const alert of await alerts.all()) await reachable(alert);
-            for (const control of [username, password,
+            for (const control of [password,
               page.getByRole("button", { name: "Show password", exact: true }), submit,
               page.getByRole("button", { name: "Check shop server connection" }),
-              page.getByRole("link", { name: "Admin shell", exact: true }),
-              page.getByRole("link", { name: "Salesperson shell", exact: true }),
-              page.getByRole("contentinfo"), page.getByText("Shop POS", { exact: true })]) {
+              page.getByRole("link", { name: "Preview Admin", exact: true }),
+              page.getByRole("link", { name: "Preview Salesperson", exact: true }),
+              page.getByRole("contentinfo"), page.getByRole("heading", { level: 1, name: "Shop POS", exact: true })]) {
               await reachable(control);
             }
           });
@@ -134,16 +131,13 @@ for (const theme of ["light", "dark"] as const) {
     await page.keyboard.press("Enter");
     await expect(page.locator("#main-content")).toBeFocused();
     await page.keyboard.press("Tab");
-    const username = page.getByLabel("Username", { exact: true });
     const password = page.getByLabel("Password", { exact: true });
-    await expect(username).toBeFocused();
+    await expect(password).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(username).toBeFocused();
+    await expect(password).toBeFocused();
     const alerts = page.getByRole("form").getByRole("alert");
     for (const alert of await alerts.all()) await reachable(alert);
-    await username.focus();
-    await username.fill("layout-preview-only");
-    await page.keyboard.press("Tab");
+    await password.focus();
     await expect(password).toBeFocused();
     await password.fill("layout-preview-only");
     await page.keyboard.press("Tab");
@@ -152,7 +146,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.keyboard.press("Space");
     await expect(password).toHaveAttribute("type", "text");
     await page.keyboard.press("Tab");
-    const submit = page.getByRole("button", { name: "Sign In", exact: true });
+    const submit = page.getByRole("button", { name: "Open Shop", exact: true });
     await expect(submit).toBeFocused();
     await expect(submit).toBeInViewport({ ratio: 1 });
     await expect(submit).toHaveCSS("outline-width", "3px");
@@ -176,7 +170,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByRole("contentinfo")).toBeInViewport({ ratio: 1 });
     await page.evaluate(() => scrollTo(0, 0));
     expect(await page.evaluate(() => scrollY)).toBe(0);
-    await expect(page.getByText("Shop POS", { exact: true })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("heading", { level: 1, name: "Shop POS", exact: true })).toBeInViewport({ ratio: 1 });
     // Capture from the top: a full-page capture while scrolled can paint
     // otherwise off-screen fixed elements into the stitched image.
     await page.screenshot({ path: testInfo.outputPath("login-" + theme + "-200-percent-full.png"), fullPage: true, scale: "css" });

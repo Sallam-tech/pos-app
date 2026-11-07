@@ -1,0 +1,28 @@
+/* Scoped cashier accents and new invoice paper; other modules retain their styles. */
+.sale-remove-button { border-radius: 999px; background: #fff0f0; color: #b42332; }
+.sale-remove-button:hover { background: #ffe0e2; color: #9f1d2b; }
+.dark .sale-remove-button { background: #422830; color: #ffb3ba; }
+.dark .sale-remove-button:hover { background: #56323c; color: #ffcbd0; }
+.invoice-item-table { table-layout: fixed; font-size: 12px; }
+.invoice-item-table th, .invoice-item-table td { padding: 8px 3px; overflow-wrap: anywhere; vertical-align: top; }
+.invoice-item-table th:nth-child(1), .invoice-item-table td:nth-child(1),
+.invoice-item-table th:nth-child(2), .invoice-item-table td:nth-child(2) { text-align: left; }
+.invoice-item-table thead th { background: #f3f4f6; border-block: 1px solid #9ca3af; }
+.invoice-item-table tbody tr { border-bottom: 1px solid #e5e7eb; }
+.invoice-summary { width: min(100%, 280px); margin-left: auto; }
+.invoice-summary > div { display: flex; justify-content: space-between; gap: 12px; padding-block: 4px; }
+.invoice-summary dd { overflow-wrap: anywhere; text-align: right; }
+.invoice-summary .invoice-total { border-block: 2px solid #111; margin-block: 4px; padding-block: 8px; font-size: 18px; font-weight: 700; }
+@media print {
+  .invoice-item-table { font-size: 10pt; }
+  .invoice-item-table thead { display: table-header-group; }
+  .invoice-item-table tr { break-inside: avoid; }
+  .invoice-summary { break-inside: avoid; }
+  #shop-pos-print-receipt[data-layout="compact"] .invoice-item-table { font-size: 8pt; }
+  #shop-pos-print-receipt[data-layout="compact"] .invoice-item-table th,
+  #shop-pos-print-receipt[data-layout="compact"] .invoice-item-table td { padding: 5px 2px; }
+}
+
+/* Prevent an enclosing history table from tinting nested white invoice paper. */
+.invoice-item-table th, .invoice-item-table td { color: #000; }
+.invoice-item-table tbody tr:hover { background: #fff; }

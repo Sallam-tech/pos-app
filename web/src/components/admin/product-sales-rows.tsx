@@ -17,17 +17,16 @@ export function ProductSalesRows({ product, sales }: { product: MockProductReven
 
   return <>
     <tr>
-      <th scope="row" className="h-14 border-t px-4 py-3 font-semibold">{product.productName}</th>
-      <TableCell className="numeric text-right">{product.quantity}</TableCell>
-      <TableCell className="numeric text-right font-semibold">{formatMockRevenue(product.revenuePaise)}</TableCell>
-      <TableCell className="text-right">
+      <th scope="row" aria-label={product.productName} className="h-14 border-t px-4 py-2 font-semibold"><div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1"><span>{product.productName}</span>
         <Button variant="outline" size="sm" aria-expanded={open} aria-controls={detailsId}
           aria-label={(open ? "Hide sales for " : "View sales for ") + product.productName}
           onClick={() => { setOpen((expanded) => !expanded); setPage(0); }}>{open ? "Hide sales" : "View sales"}</Button>
-      </TableCell>
+      </div></th>
+      <TableCell className="numeric text-right">{product.quantity}</TableCell>
+      <TableCell className="numeric text-right font-semibold">{formatMockRevenue(product.revenuePaise)}</TableCell>
     </tr>
     <tr id={detailsId} hidden={!open}>
-      <td colSpan={4} className="border-t bg-muted/30 p-4">
+      <td colSpan={3} className="border-t bg-muted/30 p-4">
         {open && <section aria-label={"Individual sales for " + product.productName}>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-sm font-semibold">Individual sales — {product.productName}</h3>

@@ -1,0 +1,754 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="description" content="Shop POS standalone showcase. All actions are temporary demonstrations.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>Shop POS | Offline Demo Showcase</title>
+<style>
+/* UI specification §3. Border is decorative; input outlines meet 3:1 contrast. */
+:root {
+  color-scheme: light;
+  --background: #f2f5f8;
+  --surface: #ffffff;
+  --surface-subtle: #eaf0f5;
+  --foreground: #15263d;
+  --muted-foreground: #465972;
+  --border: #cbd5e1;
+  --input: #71829a;
+  --primary: #116149;
+  --primary-foreground: #ffffff;
+  --success: #146345;
+  --warning: #9c5c00;
+  --danger: #b42332;
+  --danger-foreground: #ffffff;
+  --focus: #166dd6;
+  --nav-active: #dceee5;
+  --shadow-panel: 0 2px 5px rgb(21 38 61 / 5%);
+  --shadow-dialog: 0 12px 30px rgb(17 33 48 / 10%);
+  --radius: 12px;
+  --radius-control: 8px;
+  --radius-dialog: 16px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --content-width: 1440px;
+  --sidebar-width: 240px;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #101820;
+  --surface: #1a2632;
+  --surface-subtle: #263543;
+  --foreground: #f3f6fa;
+  --muted-foreground: #b1bfce;
+  --border: #435366;
+  --input: #8797a7;
+  --primary: #54d6a1;
+  --primary-foreground: #071a15;
+  --success: #74e0af;
+  --warning: #f4c36c;
+  --danger: #ff9099;
+  --danger-foreground: #0f141b;
+  --focus: #a7c7ff;
+  --nav-active: #193e33;
+  --shadow-panel: 0 2px 5px rgb(0 0 0 / 15%);
+  --shadow-dialog: 0 14px 36px rgb(0 0 0 / 35%);
+}
+
+/* shadcn semantic aliases: one retail palette, rather than competing colors. */
+:root {
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--surface-subtle);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--surface-subtle);
+  --accent: var(--surface-subtle);
+  --accent-foreground: var(--foreground);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--danger-foreground);
+  --ring: var(--focus);
+}
+
+:root{--subtle:var(--surface-subtle);--text:var(--foreground);--muted:var(--muted-foreground)}
+*{box-sizing:border-box}body{margin:0;background:var(--background);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}button,input,select{font:inherit}button{min-height:44px;padding:10px 16px;border:1px solid var(--input);border-radius:8px;background:var(--surface);color:var(--text);font-weight:650;cursor:pointer;transition:background-color 120ms}button:hover{background:var(--subtle)}button:active{background:color-mix(in srgb,var(--subtle) 80%,var(--surface))}button.primary{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}button.primary:hover{background:color-mix(in srgb,var(--primary) 90%,var(--surface))}button.primary:active{background:color-mix(in srgb,var(--primary) 95%,var(--surface))}button:disabled{opacity:.6;cursor:not-allowed}input,select{min-height:48px;min-width:0;width:100%;padding:10px 12px;border:1px solid var(--input);border-radius:8px;color:inherit;background:var(--surface)}:where(button,input,select,a,[tabindex]):focus-visible{outline:3px solid var(--focus);outline-offset:3px}input[aria-invalid=true],select[aria-invalid=true]{border-color:var(--danger)}h1,h2,h3,p{margin:0}h1{font-size:28px;line-height:1.25;letter-spacing:-.6px}h2{font-size:20px;line-height:1.4}h3{font-size:16px}p+p{margin-top:8px}a{color:var(--primary)}[hidden]{display:none!important}.skip{position:fixed;top:8px;left:8px;transform:translateY(-160%);padding:8px;background:var(--surface);z-index:5}.skip:focus{transform:none}header{border-bottom:1px solid var(--border);background:var(--surface);padding:14px 24px}.header-inner{max-width:1680px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.brand{font-size:21px;font-weight:750;letter-spacing:-.4px}.brand span{color:var(--primary)}.badge{display:inline-block;padding:4px 9px;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;font-weight:650;white-space:nowrap}.header-actions,.actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.theme-label{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600}.theme-label select{width:112px;min-height:44px;padding:8px}.muted,.help{color:var(--muted)}.help{font-size:14px;line-height:1.55}.error{color:var(--danger);font-size:14px;line-height:1.5}.error:not(:empty){margin-top:6px}.notice{padding:12px 16px;border:1px solid var(--border);background:var(--subtle);border-radius:8px;color:var(--muted);font-size:14px;margin-top:16px}.warning{color:var(--warning)}.showcase-workspace{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:calc(100vh - 145px)}.showcase-workspace.entry-workspace{display:block}#showcase-sidebar{border-right:1px solid var(--border);background:var(--surface);padding:24px 18px}.workspace-label{margin-bottom:20px;color:var(--muted);font-size:12px;font-weight:750;letter-spacing:1.2px;text-transform:uppercase}.role-nav{display:grid;gap:6px}.role-nav button{border-color:transparent;background:transparent;text-align:left;min-height:48px;font-size:15px;color:var(--muted);font-weight:550}.role-nav button:hover{background:var(--subtle);color:var(--text)}.role-nav button[aria-current=page]{background:var(--nav-active);color:var(--primary);box-shadow:inset 3px 0 var(--primary);font-weight:750}.sidebar-note{margin-top:24px;border-top:1px solid var(--border);padding-top:16px}main{width:100%;max-width:1440px;padding:28px 32px 40px;margin:auto;align-self:start;min-width:0}main:focus{outline:none}.page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:20px}.page-head p{margin-top:6px}.card{padding:24px;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:var(--shadow-panel);min-width:0}.card>h2{margin-bottom:16px}.grid{display:grid;gap:16px}.metrics{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:20px}.metric-label{font-size:14px;color:var(--muted)}.metric-value{margin:6px 0 0;font-variant-numeric:tabular-nums;font-size:27px;font-weight:750;overflow-wrap:anywhere}.metric-value.small{font-size:23px}.entry{max-width:490px;margin:6vh auto}.entry .brand{margin-bottom:22px}.entry h1{margin-bottom:10px}.entry .actions{margin-top:24px;display:grid;grid-template-columns:1fr 1fr}.field{display:grid;min-width:0;align-content:start;gap:7px;margin-bottom:18px}label{font-weight:650}.form-width{max-width:720px;margin-inline:auto}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}.stepper{display:grid;grid-template-columns:48px minmax(44px,1fr) 48px;gap:8px}.stepper input{text-align:center}.stepper button{padding:6px;font-size:22px}.summary{background:var(--subtle);padding:16px;border-radius:8px;margin:18px 0}.summary dl,dl{margin:0}.summary dl>div,.receipt-row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 16px;margin-bottom:12px}.summary dd,.receipt-row dd{margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;text-align:right}.summary .final{padding-top:16px;border-top:1px solid var(--border);font-size:23px;font-weight:750;margin-bottom:0}.full{width:100%;min-height:52px;font-size:18px}.stack{display:grid;gap:20px}.table-region{overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--surface)}table{width:100%;border-collapse:collapse;text-align:left;font-size:14px}th,td{padding:14px;border-bottom:1px solid var(--border);vertical-align:top}thead{background:var(--subtle)}th{font-weight:650}thead th{color:var(--muted);font-size:13px}tr:last-child td,tr:last-child th{border-bottom:0}tbody tr:hover{background:color-mix(in srgb,var(--subtle) 55%,var(--surface))}.number{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.stock-status{font-weight:650}.empty{padding:24px;color:var(--muted)}.toolbar{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px}.toolbar .field{flex:1 1 220px;margin:0}.checkout-card{max-width:1120px;margin-inline:auto;padding:0;overflow:hidden}.checkout-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.75fr)}.checkout-details{padding:24px;min-width:0}.checkout-details>h2{margin-bottom:4px}.checkout-details>.help{margin-bottom:22px}.checkout-optional{margin-top:6px;border-top:1px solid var(--border);padding-top:20px}.checkout-optional h3{margin-bottom:16px}.checkout-review{padding:24px;min-width:0;border-left:1px solid var(--border);background:color-mix(in srgb,var(--subtle) 70%,var(--surface));display:flex;flex-direction:column}.checkout-review .summary{background:transparent;margin:20px 0 24px;padding:0}.checkout-review .final{display:block;font-size:14px}.checkout-review .final dd{margin-top:8px;font-size:34px;line-height:1.2;text-align:left;color:var(--primary)}.checkout-review .sale-action{margin-top:auto;border-top:1px solid var(--border);padding-top:20px}.two-column{display:grid;gap:20px;grid-template-columns:minmax(0,1.1fr) minmax(260px,.9fr);align-items:start}.two-column .form-width{width:100%;max-width:none}.receipt{max-width:620px;margin-inline:auto}.receipt h1{font-size:22px}.receipt .shop{text-align:center;margin-bottom:24px}.receipt .notice{text-align:center}.receipt.compact{max-width:340px}.receipt.compact .receipt-row{font-size:14px}.screen-only{margin-bottom:18px}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}footer{max-width:1440px;margin:auto;padding:16px 24px 24px;font-size:12px;color:var(--muted)}
+@media(max-width:1279px){.checkout-details .form-grid{grid-template-columns:1fr}.checkout-details{padding:20px}.checkout-review{padding:20px}}
+@media(max-width:1023px){.showcase-workspace{display:block}#showcase-sidebar{border-right:0;border-bottom:1px solid var(--border);padding:10px 16px}.workspace-label,.sidebar-note{display:none}.role-nav{display:flex;flex-wrap:wrap;gap:6px}.role-nav button{flex:1 1 100px;text-align:center;padding:10px 8px}.role-nav.salesperson{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.role-nav.salesperson button{font-size:14px;min-width:0}.checkout-layout,.two-column{grid-template-columns:1fr}.checkout-review{border-left:0;border-top:1px solid var(--border)}.checkout-details .form-grid{grid-template-columns:1fr 1fr}main{padding:24px}.checkout-review .sale-action{margin-top:0}}
+@media(max-width:600px){header{padding:14px 16px}main{padding:22px 16px 36px}.card{padding:18px}.checkout-card{padding:0}h1{font-size:24px}.form-grid,.checkout-details .form-grid{grid-template-columns:1fr}.header-actions{gap:8px}.header-actions button{padding:8px 11px}.header-inner{gap:10px}.metrics{grid-template-columns:1fr 1fr;gap:12px}.metrics .card{padding:14px}.metric-value{font-size:23px}.metric-value.small{font-size:19px}.entry{margin:3vh auto}.entry .actions{grid-template-columns:1fr}.summary .final{font-size:20px}.checkout-review .final dd{font-size:32px}.receipt-row dt{max-width:65%}.page-head{gap:12px}.theme-label{font-size:12px}.theme-label select{width:95px}.checkout-details,.checkout-review{padding:20px}}
+@media(max-width:360px){.metrics{grid-template-columns:1fr}.header-actions{gap:6px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+@media print{header,nav,footer,.screen-only,.skip,#showcase-sidebar{display:none!important}.showcase-workspace{display:block}body{background:white;color:black}main{padding:0;margin:0;max-width:none}.receipt{border:0;box-shadow:none;padding:0;margin:auto;max-width:170mm}.receipt.compact{width:72mm;max-width:72mm}.receipt .notice{background:white;border:1px solid #999}.receipt-row{break-inside:avoid}.receipt,.receipt *{color:black!important;background:white!important}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header><div class="header-inner"><div class="brand"><span>Shop</span> POS <span class="badge">Demo only</span></div><div class="header-actions" id="header-actions"></div></div></header>
+<div class="showcase-workspace entry-workspace" id="showcase-workspace"><aside id="showcase-sidebar" hidden></aside><main id="main" tabindex="-1"></main></div>
+<footer>Offline showcase only. No sign-in, saved transactions, payment processing or stock changes. The Next.js application remains the source of truth.</footer>
+<noscript><p>This interactive demonstration requires JavaScript enabled in the browser.</p></noscript>
+<script id="showcase-provenance" type="application/json">{"theme":{"file":"web/src/styles/tokens.css","sha256":"a4d604544a0a079b04092cefd2b35e37386d8593fc07f5033ac495bf188d1e89"},"purpose":"Shop POS standalone demo; no authoritative records or authentication","generatedBy":"node web/scripts/build-demo-showcase.mjs","sources":[{"file":"web/src/lib/pos-preview.ts","sha256":"14a2a585968d7179160ab9209bea019d7df48c3430573307d47a1ec3403bcc9b"},{"file":"web/src/lib/mock-suggested-prices.ts","sha256":"21c0d5594ed805437bdf4c6b2838854d52e0a360f4c69b9bfbeeb34030228983"},{"file":"web/src/lib/admin/mock-inventory.ts","sha256":"eab94467a6ffe26c206f64ee96491e76daeda602a677982f36a7cf7489b0e74f"},{"file":"web/src/lib/admin/mock-sales.ts","sha256":"4e6980e7e503fc7b18dcaae7df12cc616989a823c9210b80b1bb10a953af97dd"},{"file":"web/src/lib/admin/mock-historical-costs.ts","sha256":"9500e69a1b0ec309f1dd5ca3e3d15711f655130666063b2d11fbcccd0bd2518b"},{"file":"web/src/lib/admin/mock-profit.ts","sha256":"7162a2727f7b417ba19f87c6bb5c1283a192c3715b15d8ea51981cbe5ac91455"},{"file":"web/src/lib/demo/money.ts","sha256":"9dc1802e15a4d4060c9a3d04e1ae27e586adb5b3e29c519dd13dd95f05c33447"},{"file":"web/src/lib/demo/checkout.ts","sha256":"d054c8a8f470936b440698c49158c84e9dc3130a750569ef611c192b0e1a11f2"},{"file":"web/src/lib/demo/admin-preview.ts","sha256":"731779b7302d457fb4a8b9865a8e24228a589224bf5e19630d49adf51b18ce13"}]}</script>
+<script>
+'use strict';
+const core = (() => {
+const factories = {"lib/pos-preview.ts": function(module, exports, require) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.previewProducts = void 0;
+exports.previewTotal = previewTotal;
+exports.formatPreviewPKR = formatPreviewPKR;
+exports.stepPreviewQuantity = stepPreviewQuantity;
+exports.pricePrecisionError = pricePrecisionError;
+exports.validatePreview = validatePreview;
+exports.createSaleSimulation = createSaleSimulation;
+exports.previewProducts = [
+    { id: "mock-diapers", name: "Diapers" },
+    { id: "mock-wipes", name: "Baby Wipes" },
+    { id: "mock-milk", name: "Milk Powder" },
+    { id: "mock-soap", name: "Hand Soap" },
+    { id: "mock-rice", name: "Rice" },
+];
+function parseDecimal(raw, grouped = false, maximumScale = 6) {
+    const value = raw.trim();
+    if (value.length > 32)
+        return null;
+    const plain = /^(?:\d+(?:\.\d*)?|\.\d+)$/;
+    const commas = /^\d{1,3}(?:,\d{3})+(?:\.\d*)?$/;
+    if (!plain.test(value) && !(grouped && commas.test(value)))
+        return null;
+    const [whole = "", fraction = ""] = value.replaceAll(",", "").split(".");
+    const significantWhole = whole.replace(/^0+/, "") || "0";
+    if (significantWhole.length > 12 || fraction.length > maximumScale)
+        return null;
+    return { units: BigInt(significantWhole + fraction), scale: fraction.length };
+}
+function decimalString({ units, scale }, minimumScale = 0) {
+    const padded = units.toString().padStart(scale + 1, "0");
+    const whole = scale ? padded.slice(0, -scale) : padded;
+    const fraction = (scale ? padded.slice(-scale) : "").replace(/0+$/, "").padEnd(minimumScale, "0");
+    return fraction ? whole + "." + fraction : whole;
+}
+function previewTotal(quantity, price) {
+    const q = parseDecimal(quantity);
+    const p = parseDecimal(price, true, 2);
+    if (!q || q.units <= BigInt(0) || !p)
+        return null;
+    return decimalString({ units: q.units * p.units, scale: q.scale + p.scale }, 2);
+}
+/** Group strings directly: never convert financial values through Number. */
+function formatPreviewPKR(value) {
+    const [whole, fraction = ""] = value.split(".");
+    return "Rs. " + whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "." + fraction.padEnd(2, "0");
+}
+/** +/- one is a preview convenience, not a final quantity increment policy. */
+function stepPreviewQuantity(value, direction) {
+    const parsed = parseDecimal(value);
+    if (!parsed || parsed.units <= BigInt(0))
+        return null;
+    const next = parsed.units + BigInt(direction) * BigInt(10) ** BigInt(parsed.scale);
+    if (next <= BigInt(0))
+        return null;
+    const result = decimalString({ units: next, scale: parsed.scale });
+    return parseDecimal(result) ? result : null;
+}
+function pricePrecisionError(value) {
+    if (/\.\d{3,}$/.test(value.trim()))
+        return "Enter a price with no more than 2 decimal places.";
+}
+function validatePreview(product, quantity, price) {
+    const errors = {};
+    if (!product || !exports.previewProducts.some((item) => item.id === product.id && item.name === product.name)) {
+        errors.product = "Choose a product from the search results.";
+    }
+    const q = parseDecimal(quantity);
+    if (!quantity.trim())
+        errors.quantity = "Enter a quantity.";
+    else if (!q)
+        errors.quantity = "Use a number with up to 12 whole-number digits and 6 decimal places for this preview.";
+    else if (q.units <= BigInt(0))
+        errors.quantity = "Enter a quantity greater than zero.";
+    const precisionError = pricePrecisionError(price);
+    if (!price.trim())
+        errors.price = "Enter a selling price in PKR.";
+    else if (precisionError)
+        errors.price = precisionError;
+    else if (!parseDecimal(price, true, 2)) {
+        errors.price = "Use a non-negative PKR amount, such as 1,200.50 (up to 12 whole-number digits and 2 decimal places in this preview).";
+    }
+    return errors;
+}
+function createSaleSimulation(product, quantity, price) {
+    if (Object.keys(validatePreview(product, quantity, price)).length || !product)
+        return null;
+    // Safe snapshot only: no transaction ID, server timestamp or committed status.
+    return {
+        kind: "simulation",
+        product: { id: product.id, name: product.name },
+        quantity: decimalString(parseDecimal(quantity)),
+        unitPrice: decimalString(parseDecimal(price, true, 2), 2),
+        total: previewTotal(quantity, price),
+    };
+}
+
+},
+"lib/mock-suggested-prices.ts": function(module, exports, require) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getMockSuggestedSellingPrice = getMockSuggestedSellingPrice;
+// One explicitly illustrative, public price guide. Not cost or a historical sale price.
+// The approved Admin and POS fixtures use different IDs; preserve both sets of IDs.
+const mockSuggestions = [
+    { adminProductId: "diapers", salespersonProductId: "mock-diapers", suggestedSellingPrice: "1250.00" },
+];
+function getMockSuggestedSellingPrice(productId) {
+    return mockSuggestions.find((product) => product.adminProductId === productId || product.salespersonProductId === productId)?.suggestedSellingPrice ?? null;
+}
+
+},
+"lib/admin/mock-inventory.ts": function(module, exports, require) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.mockInventory = void 0;
+exports.getMockStockStatus = getMockStockStatus;
+exports.getMockLowStockProducts = getMockLowStockProducts;
+exports.mockInventory = [
+    { id: "diapers", name: "Diapers", quantity: 5, lowStockThreshold: 5 },
+    { id: "milk-powder", name: "Milk Powder", quantity: 3, lowStockThreshold: 5 },
+    { id: "baby-wipes", name: "Baby Wipes", quantity: 20, lowStockThreshold: 5 },
+    { id: "hand-soap", name: "Hand Soap", quantity: 30, lowStockThreshold: 8 },
+    { id: "rice", name: "Rice", quantity: 40, lowStockThreshold: 10 },
+    { id: "shampoo", name: "Shampoo", quantity: 25, lowStockThreshold: 5 },
+    { id: "toothpaste", name: "Toothpaste", quantity: 0, lowStockThreshold: 5 },
+];
+function getMockStockStatus(product) {
+    if (product.quantity === 0)
+        return "Out of stock";
+    return product.quantity <= product.lowStockThreshold ? "Low stock" : "Available";
+}
+function getMockLowStockProducts(inventory = exports.mockInventory) {
+    return inventory.filter((product) => product.quantity <= product.lowStockThreshold);
+}
+
+},
+"lib/admin/mock-sales.ts": function(module, exports, require) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.mockSales = exports.mockSalesBusinessDate = void 0;
+exports.getMockRevenuePaise = getMockRevenuePaise;
+exports.aggregateMockSales = aggregateMockSales;
+exports.mockRevenueDecimal = mockRevenueDecimal;
+exports.formatMockRevenue = formatMockRevenue;
+const pos_preview_1 = require("@/lib/pos-preview");
+// Fixed Admin-only examples, independent of inventory and the POS simulation.
+// Whole-number quantities here do not decide the shop's final quantity policy.
+exports.mockSalesBusinessDate = {
+    iso: "2026-11-02", label: "2 November 2026", timeZone: "Asia/Karachi",
+};
+// Money is stored in whole paise; all arithmetic below uses BigInt.
+exports.mockSales = [
+    { id: "demo-sale-1", businessDate: exports.mockSalesBusinessDate.iso, productId: "diapers", productName: "Diapers", quantity: 2, unitPricePaise: 125025 },
+    { id: "demo-sale-2", businessDate: exports.mockSalesBusinessDate.iso, productId: "diapers", productName: "Diapers", quantity: 4, unitPricePaise: 124975 },
+    { id: "demo-sale-3", businessDate: exports.mockSalesBusinessDate.iso, productId: "milk-powder", productName: "Milk Powder", quantity: 2, unitPricePaise: 150025 },
+    { id: "demo-sale-4", businessDate: exports.mockSalesBusinessDate.iso, productId: "milk-powder", productName: "Milk Powder", quantity: 2, unitPricePaise: 150025 },
+    { id: "demo-sale-5", businessDate: exports.mockSalesBusinessDate.iso, productId: "baby-wipes", productName: "Baby Wipes", quantity: 10, unitPricePaise: 34995 },
+    { id: "demo-sale-6", businessDate: exports.mockSalesBusinessDate.iso, productId: "hand-soap", productName: "Hand Soap", quantity: 10, unitPricePaise: 12550 },
+    { id: "demo-sale-7", businessDate: exports.mockSalesBusinessDate.iso, productId: "rice", productName: "Rice", quantity: 5, unitPricePaise: 85000 },
+    { id: "demo-sale-8", businessDate: exports.mockSalesBusinessDate.iso, productId: "shampoo", productName: "Shampoo", quantity: 7, unitPricePaise: 45500 },
+];
+function getMockRevenuePaise(sales = exports.mockSales) {
+    return sales.reduce((total, sale) => total + BigInt(sale.unitPricePaise) * BigInt(sale.quantity), BigInt(0));
+}
+function aggregateMockSales(sales) {
+    const products = new Map();
+    for (const sale of sales) {
+        let product = products.get(sale.productId);
+        if (!product) {
+            product = { productId: sale.productId, productName: sale.productName, quantity: 0, revenuePaise: BigInt(0), unitPrices: [] };
+            products.set(sale.productId, product);
+        }
+        product.quantity += sale.quantity;
+        product.revenuePaise += BigInt(sale.unitPricePaise) * BigInt(sale.quantity);
+        const price = product.unitPrices.find((entry) => entry.unitPricePaise === sale.unitPricePaise);
+        if (price)
+            price.quantity += sale.quantity;
+        else
+            product.unitPrices.push({ unitPricePaise: sale.unitPricePaise, quantity: sale.quantity });
+    }
+    return [...products.values()];
+}
+function mockRevenueDecimal(paise) {
+    return (paise / BigInt(100)).toString() + "." + (paise % BigInt(100)).toString().padStart(2, "0");
+}
+function formatMockRevenue(paise) {
+    return (0, pos_preview_1.formatPreviewPKR)(mockRevenueDecimal(paise));
+}
+
+},
+"lib/admin/mock-historical-costs.ts": function(module, exports, require) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.fictionalHistoricalUnitCosts = void 0;
+exports.getFictionalProfitSales = getFictionalProfitSales;
+const mock_sales_1 = require("@/lib/admin/mock-sales");
+// Fictional historical unit purchase costs for the fixed demo sales only. Not real accounting records.
+// Manually chosen positive examples, independent of current/guide prices and
+// any desired profit total. Amounts are whole paise; no original sale is changed.
+exports.fictionalHistoricalUnitCosts = [
+    { saleId: "demo-sale-1", unitCostSnapshotPaise: 100000 },
+    { saleId: "demo-sale-2", unitCostSnapshotPaise: 105000 },
+    { saleId: "demo-sale-3", unitCostSnapshotPaise: 120000 },
+    { saleId: "demo-sale-4", unitCostSnapshotPaise: 125000 },
+    { saleId: "demo-sale-5", unitCostSnapshotPaise: 25000 },
+    { saleId: "demo-sale-6", unitCostSnapshotPaise: 10000 },
+    { saleId: "demo-sale-7", unitCostSnapshotPaise: 70000 },
+    { saleId: "demo-sale-8", unitCostSnapshotPaise: 35000 },
+];
+const costBySaleId = new Map(exports.fictionalHistoricalUnitCosts.map((cost) => [cost.saleId, cost.unitCostSnapshotPaise]));
+function getFictionalProfitSales(sales = mock_sales_1.mockSales) {
+    return sales.map((sale) => ({
+        ...sale, unitCostSnapshotPaise: costBySaleId.get(sale.id),
+    }));
+}
+
+},
+"lib/admin/mock-profit.ts": function(module, exports, require) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.calculateMockProfitTotals = calculateMockProfitTotals;
+exports.aggregateMockProfit = aggregateMockProfit;
+exports.profitDecimal = profitDecimal;
+exports.formatProfitMoney = formatProfitMoney;
+const mock_sales_1 = require("@/lib/admin/mock-sales");
+const pos_preview_1 = require("@/lib/pos-preview");
+const quantityScale = BigInt(1000000);
+function validPaise(value) {
+    if (typeof value === "bigint")
+        return value >= BigInt(0) ? value : null;
+    return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? BigInt(value) : null;
+}
+function quantityUnits(quantity) {
+    // Reuse the existing positive, 12-whole-digit / 6-decimal preview parser.
+    const normalized = (0, pos_preview_1.previewTotal)(String(quantity), "1");
+    if (normalized === null)
+        return null;
+    const [whole, fraction = ""] = normalized.split(".");
+    return BigInt(whole) * quantityScale + BigInt(fraction.padEnd(6, "0"));
+}
+function lineAmount(paise, units) {
+    if (paise === null || units === null)
+        return null;
+    const scaled = paise * units;
+    // No final fractional-quantity rounding policy exists. Reject sub-paise
+    // results instead of silently rounding or truncating them.
+    return scaled % quantityScale === BigInt(0) ? scaled / quantityScale : null;
+}
+function quantityText(units) {
+    const fraction = (units % quantityScale).toString().padStart(6, "0").replace(/0+$/, "");
+    return (units / quantityScale).toString() + (fraction ? "." + fraction : "");
+}
+function calculateMockProfitTotals(sales) {
+    let quantity = BigInt(0);
+    let revenuePaise = BigInt(0);
+    let costOfGoodsSoldPaise = BigInt(0);
+    let missingCostSales = 0;
+    for (const sale of sales) {
+        const units = quantityUnits(sale.quantity);
+        const cost = validPaise(sale.unitCostSnapshotPaise);
+        const revenue = lineAmount(validPaise(sale.unitPricePaise), units);
+        const costOfSale = lineAmount(cost, units);
+        if (cost === null)
+            missingCostSales++;
+        quantity = quantity === null || units === null ? null : quantity + units;
+        revenuePaise = revenuePaise === null || revenue === null ? null : revenuePaise + revenue;
+        costOfGoodsSoldPaise = costOfGoodsSoldPaise === null || costOfSale === null ? null : costOfGoodsSoldPaise + costOfSale;
+    }
+    return {
+        quantity: quantity === null ? null : quantityText(quantity),
+        revenuePaise,
+        costOfGoodsSoldPaise,
+        grossProfitPaise: revenuePaise === null || costOfGoodsSoldPaise === null ? null : revenuePaise - costOfGoodsSoldPaise,
+        missingCostSales,
+    };
+}
+function aggregateMockProfit(sales) {
+    const groups = new Map();
+    for (const sale of sales) {
+        let group = groups.get(sale.productId);
+        if (!group) {
+            group = { productId: sale.productId, productName: sale.productName, sales: [] };
+            groups.set(sale.productId, group);
+        }
+        group.sales.push(sale);
+    }
+    return [...groups.values()].map(({ productId, productName, sales }) => ({
+        productId, productName, ...calculateMockProfitTotals(sales),
+    }));
+}
+function profitDecimal(paise) {
+    return (paise < BigInt(0) ? "-" : "") + (0, mock_sales_1.mockRevenueDecimal)(paise < BigInt(0) ? -paise : paise);
+}
+function formatProfitMoney(paise) {
+    if (paise === null)
+        return "Not available";
+    return (paise < BigInt(0) ? "-" : "") + (0, mock_sales_1.formatMockRevenue)(paise < BigInt(0) ? -paise : paise);
+}
+
+},
+"lib/demo/money.ts": function(module, exports, require) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.parseDemoMoney = parseDemoMoney;
+exports.formatDemoMoney = formatDemoMoney;
+exports.demoMoneyDecimal = demoMoneyDecimal;
+/** Temporary demo input only. Never an authoritative accounting store. */
+function parseDemoMoney(raw) {
+    const value = raw.trim();
+    if (value.length > 32 || !/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2}|\d{1,3}(?:,\d{3})+(?:\.\d{0,2})?)$/.test(value))
+        return null;
+    const [whole = "", fraction = ""] = value.replaceAll(",", "").split(".");
+    const significant = whole.replace(/^0+/, "") || "0";
+    if (significant.length > 12)
+        return null;
+    return BigInt(significant) * BigInt(100) + BigInt(fraction.padEnd(2, "0"));
+}
+function formatDemoMoney(paise) {
+    const negative = paise < BigInt(0);
+    const digits = (negative ? -paise : paise).toString().padStart(3, "0");
+    return (negative ? "-Rs. " : "Rs. ") + digits.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "." + digits.slice(-2);
+}
+function demoMoneyDecimal(paise) {
+    const digits = paise.toString().padStart(3, "0");
+    return digits.slice(0, -2) + "." + digits.slice(-2);
+}
+
+},
+"lib/demo/checkout.ts": function(module, exports, require) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.calculateDemoCheckout = calculateDemoCheckout;
+/** Additive checkout preview; existing sale arithmetic and fixtures remain untouched. */
+const money_1 = require("@/lib/demo/money");
+function calculateDemoCheckout(subtotal, discount = "", cash = "") {
+    const errors = {};
+    const raw = discount.trim();
+    let basis = BigInt(0);
+    if (raw) {
+        if (!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(raw) || raw.length > 8) {
+            errors.discount = "Enter a discount from 0 to 100 with no more than 2 decimal places.";
+        }
+        else {
+            const [whole = "", fraction = ""] = raw.split(".");
+            basis = BigInt(whole || "0") * BigInt(100) + BigInt(fraction.padEnd(2, "0"));
+            if (basis > BigInt(10000))
+                errors.discount = "Enter a discount from 0 to 100.";
+        }
+    }
+    const cashPaise = cash.trim() ? (0, money_1.parseDemoMoney)(cash) : null;
+    if (cash.trim() && cashPaise === null)
+        errors.cash = "Enter a non-negative cash amount with no more than 2 decimal places.";
+    if (subtotal === null || !/^\d+\.\d{2,8}$/.test(subtotal))
+        return { value: null, errors };
+    let discountAmount = "0.00", total = subtotal;
+    // Without a discount preserve every existing exact total, including illustrative sub-paisa quantities.
+    if (!errors.discount && basis !== BigInt(0)) {
+        const subtotalPaise = /^\d+\.\d{2}$/.test(subtotal)
+            ? BigInt(subtotal.replace(".", "")) : null;
+        if (subtotalPaise === null || subtotalPaise * basis % BigInt(10000) !== BigInt(0)) {
+            errors.discount = "This discount needs fractions of a paisa. Change the discount or amount; this demo never rounds.";
+        }
+        else {
+            const deduction = subtotalPaise * basis / BigInt(10000);
+            discountAmount = (0, money_1.demoMoneyDecimal)(deduction);
+            total = (0, money_1.demoMoneyDecimal)(subtotalPaise - deduction);
+        }
+    }
+    let change = null, cashWarning = null;
+    if (cashPaise !== null && !errors.discount) {
+        if (!/^\d+\.\d{2}$/.test(total))
+            errors.cash = "Cash preview requires a total with no fractions of a paisa.";
+        else {
+            const due = BigInt(total.replace(".", ""));
+            if (cashPaise < due)
+                cashWarning = "Cash received is less than the amount due. No payment has been processed.";
+            else
+                change = (0, money_1.demoMoneyDecimal)(cashPaise - due);
+        }
+    }
+    if (Object.keys(errors).length)
+        return { value: null, errors };
+    return { errors, value: {
+            subtotal, discountPercent: (0, money_1.demoMoneyDecimal)(basis).replace(/\.?0+$/, "") || "0",
+            discountAmount, total, cashReceived: cashPaise === null ? null : (0, money_1.demoMoneyDecimal)(cashPaise), change, cashWarning,
+        } };
+}
+
+},
+"lib/demo/admin-preview.ts": function(module, exports, require) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.demoExpenseTypes = void 0;
+exports.isDemoCalendarDate = isDemoCalendarDate;
+exports.demoExpenseTotals = demoExpenseTotals;
+exports.inspectDemoReturn = inspectDemoReturn;
+const pos_preview_1 = require("@/lib/pos-preview");
+const money_1 = require("./money");
+exports.demoExpenseTypes = ["Rent", "Electricity", "Transport", "Other"];
+function isDemoCalendarDate(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value))
+        return false;
+    const [year, month, day] = value.split("-").map(Number);
+    if (year < 1 || month < 1 || month > 12 || day < 1)
+        return false;
+    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    return day <= [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+}
+function demoExpenseTotals(entries, date) {
+    if (!isDemoCalendarDate(date))
+        return { daily: null, monthly: null };
+    return entries.reduce((totals, entry) => ({
+        daily: totals.daily + (entry.date === date ? entry.amountPaise : BigInt(0)),
+        monthly: totals.monthly + (entry.date.slice(0, 7) === date.slice(0, 7) ? entry.amountPaise : BigInt(0)),
+    }), { daily: BigInt(0), monthly: BigInt(0) });
+}
+/**
+ * The original fixture has no recorded discount/refund terms. Calculate only its
+ * already recorded line amount; never infer an approved refund.
+ */
+function inspectDemoReturn(sale, quantity) {
+    if (!sale)
+        return { error: "Choose an original demo sale.", refundPaise: null };
+    if (!Number.isSafeInteger(sale.quantity) || sale.quantity <= 0 || !Number.isSafeInteger(sale.unitPricePaise) || sale.unitPricePaise < 0)
+        return { error: "This original sale has unsupported quantity or price details.", refundPaise: null };
+    const value = quantity.trim();
+    if (value.length > 32 || !/^(?:\d+(?:\.\d{0,6})?|\.\d{1,6})$/.test(value)) {
+        return { error: "Enter a positive quantity with no more than 6 decimal places.", refundPaise: null };
+    }
+    const [whole = "", fraction = ""] = value.split(".");
+    const significant = whole.replace(/^0+/, "") || "0";
+    if (significant.length > 12)
+        return { error: "Enter a smaller return quantity.", refundPaise: null };
+    const units = BigInt(significant + fraction);
+    if (units <= BigInt(0))
+        return { error: "Enter a quantity greater than zero.", refundPaise: null };
+    const sold = sale.quantity.toString().split(".");
+    const soldFraction = sold[1] ?? "";
+    const scale = Math.max(fraction.length, soldFraction.length);
+    const requestedUnits = units * BigInt(10) ** BigInt(scale - fraction.length);
+    const soldUnits = BigInt(sold[0] + soldFraction) * BigInt(10) ** BigInt(scale - soldFraction.length);
+    if (requestedUnits > soldUnits)
+        return { error: "Return quantity cannot exceed the original quantity sold.", refundPaise: null };
+    const recorded = (0, pos_preview_1.previewTotal)(value, (0, money_1.demoMoneyDecimal)(BigInt(sale.unitPricePaise)));
+    const amount = recorded === null ? null : (0, money_1.parseDemoMoney)(recorded);
+    if (amount === null)
+        return { error: "This quantity produces less than one-paisa precision. Choose a quantity that gives an exact two-decimal amount.", refundPaise: null };
+    return { originalAmountPaise: amount, returnedQuantity: value, refundPaise: null };
+}
+
+}};
+const dependencies = {"lib/pos-preview.ts":{},"lib/mock-suggested-prices.ts":{},"lib/admin/mock-inventory.ts":{},"lib/admin/mock-sales.ts":{"@/lib/pos-preview":"lib/pos-preview.ts"},"lib/admin/mock-historical-costs.ts":{"@/lib/admin/mock-sales":"lib/admin/mock-sales.ts","@/lib/admin/mock-profit":"lib/admin/mock-profit.ts"},"lib/admin/mock-profit.ts":{"@/lib/admin/mock-sales":"lib/admin/mock-sales.ts","@/lib/pos-preview":"lib/pos-preview.ts"},"lib/demo/money.ts":{},"lib/demo/checkout.ts":{"@/lib/demo/money":"lib/demo/money.ts"},"lib/demo/admin-preview.ts":{"@/lib/admin/mock-sales":"lib/admin/mock-sales.ts","@/lib/pos-preview":"lib/pos-preview.ts","./money":"lib/demo/money.ts"}};
+const cache = {};
+function load(id) { if (cache[id]) return cache[id].exports; const module = {exports:{}}; cache[id] = module; factories[id](module, module.exports, specifier => load(dependencies[id][specifier])); return module.exports; }
+return {pos: load("lib/pos-preview.ts"),suggestions: load("lib/mock-suggested-prices.ts"),inventory: load("lib/admin/mock-inventory.ts"),sales: load("lib/admin/mock-sales.ts"),costs: load("lib/admin/mock-historical-costs.ts"),profit: load("lib/admin/mock-profit.ts"),money: load("lib/demo/money.ts"),checkout: load("lib/demo/checkout.ts"),admin: load("lib/demo/admin-preview.ts")};
+})();
+const el = id => document.getElementById(id);
+const escapeText = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
+const money = core.money.formatDemoMoney;
+const price = core.pos.formatPreviewPKR;
+const date = core.sales.mockSalesBusinessDate;
+const inventory = core.inventory.mockInventory;
+const sales = core.sales.mockSales;
+const profitSales = core.costs.getFictionalProfitSales(sales);
+const profitTotals = core.profit.calculateMockProfitTotals(profitSales);
+const productSales = core.sales.aggregateMockSales(sales);
+const productProfits = core.profit.aggregateMockProfit(profitSales);
+const state = {
+  page:'home', productQuery:'', stockQuery:'', stockStatus:'All products',
+  sale:{productId:'',quantity:'1',price:'',discount:'',cash:''}, saleErrors:{}, receipt:null,
+  expenses:[], expenseId:1, editingId:null, expenseDraft:{date:date.iso,type:'Rent',description:'',amount:''}, expenseErrors:{},
+  summaryDate:date.iso, returnSaleId:'',returnQuantity:'1',returnResult:null,
+  investment:null, investmentInput:'',investmentNote:'',investmentPreviewNote:'',investmentError:'',message:'',compactReceipt:false,
+};
+function button(text, action, primary=false) { return `<button type="button" data-action="${escapeText(action)}"${primary ? ' class="primary"' : ''}>${escapeText(text)}</button>`; }
+function metric(label,value) { return `<div class="card"><dt class="metric-label">${escapeText(label)}</dt><dd class="metric-value${String(value).length>10?' small':''}">${escapeText(value)}</dd></div>`; }
+function heading(title,subtitle='') { return `<div class="page-head"><div><h1>${escapeText(title)}</h1>${subtitle?`<p class="muted">${escapeText(subtitle)}</p>`:''}</div><span class="badge">Demo Data</span></div>`; }
+function field(id,label,value,options='') { return `<div class="field"><label for="${id}">${escapeText(label)}</label><input id="${id}" value="${escapeText(value)}" ${options}></div>`; }
+function message(text) { return text ? `<p class="notice" role="status">${escapeText(text)}</p>`:''; }
+function error(id,text) { return `<p id="${id}" class="error" role="alert">${escapeText(text||'')}</p>`; }
+function status(product) { return core.inventory.getMockStockStatus(product); }
+function adminNavigation() {
+  const items=[['dashboard','Dashboard'],['products','Products'],['stock','Inventory'],['sales','Sales'],['report-home','Reports'],['investment','Total Investment']];
+  return '<p class="workspace-label">Admin workspace</p><nav class="role-nav" aria-label="Admin showcase">'+items.map(([page,label])=>'<button type="button" data-nav="'+page+'"'+((state.page===page||(page==='report-home'&&state.page==='profit'))?' aria-current="page"':'')+'>'+label+'</button>').join('')+'</nav><p class="sidebar-note help">Demo Mode<br>Preview access. No sign-in.</p>';
+}
+function salespersonNavigation() {
+  return '<p class="workspace-label">Sales workspace</p><nav class="role-nav salesperson" aria-label="Salesperson showcase">'+[['checkout','Make a Sale'],['returns','Return Item'],['expenses','Shop Expenses']].map(([page,label])=>'<button type="button" data-nav="'+page+'"'+((state.page===page||(page==='checkout'&&state.page==='receipt'))?' aria-current="page"':'')+'>'+label+'</button>').join('')+'</nav><p class="sidebar-note help">Demo Mode<br>Preview access. No sign-in.</p>';
+}
+function reportsHome() {
+  return heading('Reports','Choose the sales or profit overview for the fixed sample business date.')+'<div class="grid metrics"><section class="card"><h2>Sales Report</h2><p class="help">See products sold and exact sample revenue.</p><div class="actions" style="margin-top:20px">'+button('View Sales Report','nav:sales',true)+'</div></section><section class="card"><h2>Profit Report</h2><p class="help">See sample gross profit using clearly fictional historical costs.</p><div class="actions" style="margin-top:20px">'+button('View Profit Report','nav:profit',true)+'</div></section></div><p class="notice">This portable showcase provides simpler fixed-date reports. Use the main application for date filters and report charts.</p>';
+}
+function home() {
+  return `<section class="card entry"><div class="brand"><span>Shop</span> POS</div><h1>Welcome to Shop POS</h1><p class="muted">Choose a workspace to explore the shop demonstration.</p><div class="notice">Demo Mode. Preview access only, without signing in. All sample information is fictional and nothing is saved to shop records.</div><div class="actions">${button('Preview Admin','nav:dashboard',true)}${button('Preview Salesperson','nav:checkout')}</div><p class="help" style="margin-top:16px">Works from this file without internet. Temporary entries disappear on reload or Reset Demo.</p></section>`;
+}
+function dashboard() {
+  return heading('Admin Dashboard','Fixed sample business date: '+date.label)+`<dl class="grid metrics">${metric('Total Products',inventory.length)}${metric('Available Stock',inventory.reduce((total,item)=>total+item.quantity,0)+' units')}${metric('Low Stock Products',core.inventory.getMockLowStockProducts().length)}${metric('Total Sales',money(core.sales.getMockRevenuePaise()))}${metric('Demo Gross Profit',core.profit.formatProfitMoney(profitTotals.grossProfitPaise))}</dl><section class="card"><h2>A quick look at the sample shop</h2><p>${profitTotals.quantity} items sold across ${productSales.length} different products in ${sales.length} original demo sales.</p><p class="help" style="margin-top:10px">Gross Profit is sales revenue minus the cost of sold products. All historical purchase costs are fictional demo examples. Expenses are separate; no Net Profit is calculated.</p></section><p class="notice">New demo entries stay temporary until Reset Demo or reload. They never change these original sales, products or inventory totals.</p>`;
+}
+function inventoryRows() {
+  const query=state.stockQuery.trim().toLocaleLowerCase();
+  const rows=inventory.filter(item=>item.name.toLocaleLowerCase().includes(query)&&(state.stockStatus==='All products'||status(item)===state.stockStatus));
+  return rows.length?rows.map(item=>`<tr><th scope="row">${escapeText(item.name)}</th><td class="number">${item.quantity}</td><td class="number">${item.lowStockThreshold}</td><td class="stock-status">${status(item)}</td></tr>`).join(''):'<tr><td colspan="4" class="empty">No products match these filters.</td></tr>';
+}
+function stockPage() {
+  return heading(state.page==='products'?'Products':'Available Stock','Read-only sample inventory')+`<dl class="grid metrics">${metric('Overall stock',inventory.reduce((total,item)=>total+item.quantity,0)+' units')}${metric('Total products',inventory.length)}</dl><section class="card"><div class="toolbar"><div class="field"><label for="stock-search">Search product name</label><input id="stock-search" type="search" value="${escapeText(state.stockQuery)}" autocomplete="off"></div><div class="field"><label for="stock-filter">Stock status</label><select id="stock-filter">${['All products','Available','Low stock','Out of stock'].map(value=>`<option${state.stockStatus===value?' selected':''}>${value}</option>`).join('')}</select></div>${button('Clear','clear-stock')}</div><div class="table-region" role="region" aria-label="Sample inventory" tabindex="0"><table><caption class="sr-only">Read-only sample inventory. Overall totals do not change with filters.</caption><thead><tr><th scope="col">Product</th><th scope="col" class="number">Available quantity</th><th scope="col" class="number">Low-stock threshold</th><th scope="col">Stock status</th></tr></thead><tbody id="stock-rows">${inventoryRows()}</tbody></table></div></section>`;
+}
+function reports() {
+  const isProfit=state.page==='profit';
+  const rows=isProfit?productProfits:productSales;
+  return heading(isProfit?'Demo Profit':'Demo Sales','Fixed sample business date: '+date.label)+`<dl class="grid metrics">${metric('Total Sales',money(core.sales.getMockRevenuePaise()))}${isProfit?metric('Demo Cost of Sold Items',core.profit.formatProfitMoney(profitTotals.costOfGoodsSoldPaise))+metric('Demo Gross Profit',core.profit.formatProfitMoney(profitTotals.grossProfitPaise)):metric('Items Sold',profitTotals.quantity+' units')+metric('Different Products Sold',productSales.length)}</dl><section class="card"><h2>Product-wise ${isProfit?'profit':'sales'}</h2><div class="table-region" role="region" aria-label="Product-wise sample report" tabindex="0"><table><thead><tr><th scope="col">Product</th><th scope="col" class="number">Quantity sold</th><th scope="col" class="number">Sales revenue</th>${isProfit?'<th scope="col" class="number">Demo cost</th><th scope="col" class="number">Gross profit</th>':''}</tr></thead><tbody>${rows.map(item=>`<tr><th scope="row">${escapeText(item.productName)}</th><td class="number">${item.quantity}</td><td class="number">${core.profit.formatProfitMoney(item.revenuePaise)}</td>${isProfit?`<td class="number">${core.profit.formatProfitMoney(item.costOfGoodsSoldPaise)}</td><td class="number">${core.profit.formatProfitMoney(item.grossProfitPaise)}</td>`:''}</tr>`).join('')}</tbody></table></div><p class="help" style="margin-top:14px">${sales.length} original demo sales. ${isProfit?'All historical purchase costs are fictional examples, not real shop records. Gross Profit excludes expenses.':'This sample report does not include temporary checkout previews.'}</p></section>`;
+}
+function saleProduct() { return core.pos.previewProducts.find(item=>item.id===state.sale.productId)||null; }
+function productOptions() {
+  const matching=core.pos.previewProducts.filter(item=>item.name.toLowerCase().includes(state.productQuery.toLowerCase()));
+  const selected=saleProduct();
+  if(selected&&!matching.some(item=>item.id===selected.id)) matching.unshift(selected);
+  return '<option value="">Choose a product</option>'+matching.map(item=>`<option value="${item.id}"${state.sale.productId===item.id?' selected':''}>${escapeText(item.name)}</option>`).join('');
+}
+function checkoutSummary(value) {
+  return `<dl><div><dt>Subtotal</dt><dd>${value?price(value.subtotal):'Not available'}</dd></div><div><dt>Discount</dt><dd>${value?price(value.discountAmount):'Not available'}</dd></div><div class="final"><dt>Final Amount</dt><dd id="final-amount">${value?price(value.total):'Not available'}</dd></div>${value?.cashReceived!==null&&value?.cashReceived!==undefined?`<div style="margin-top:12px"><dt>Change to Return</dt><dd>${value.change!==null?price(value.change):'Not available'}</dd></div>`:''}</dl>${value?.cashWarning?`<p class="help warning" style="margin-top:12px">${escapeText(value.cashWarning)}</p>`:''}`;
+}
+function checkoutPage() {
+  const suggestion=core.suggestions.getMockSuggestedSellingPrice(state.sale.productId);
+  return heading('Make a Sale','One product at a time. Preview only - nothing is saved.')+`<section class="card checkout-card"><form id="checkout-form" novalidate aria-label="Demo checkout" class="checkout-layout"><div class="checkout-details"><h2>Sale details</h2><p class="help">Choose the product and enter the actual selling price.</p><div class="field"><label for="product-search">Search products</label><input id="product-search" type="search" value="${escapeText(state.productQuery)}" autocomplete="off"></div><div class="field"><label for="sale-product">Choose Product</label><select id="sale-product" aria-describedby="sale-product-error">${productOptions()}</select>${error('sale-product-error',state.saleErrors.product)}</div><div class="form-grid"><div class="field"><label for="sale-quantity">Quantity</label><div class="stepper">${button('-','quantity-minus')}<input id="sale-quantity" inputmode="decimal" value="${escapeText(state.sale.quantity)}" aria-describedby="sale-quantity-error" autocomplete="off">${button('+','quantity-plus')}</div>${error('sale-quantity-error',state.saleErrors.quantity)}</div><div class="field"><label for="sale-price">Actual Selling Price (Rs.)</label><input id="sale-price" inputmode="decimal" value="${escapeText(state.sale.price)}" aria-describedby="sale-price-error suggested-price" autocomplete="off">${error('sale-price-error',state.saleErrors.price)}<p id="suggested-price" class="help">${suggestion?'Suggested price: '+price(suggestion)+' - a guide only. Enter the actual selling price.':'Enter the agreed selling price.'}</p></div></div><section class="checkout-optional"><h3>Discount &amp; cash <span class="help">(optional)</span></h3><div class="form-grid"><div class="field"><label for="sale-discount">Discount (%) - optional</label><input id="sale-discount" inputmode="decimal" value="${escapeText(state.sale.discount)}" aria-describedby="sale-discount-error discount-hint" autocomplete="off">${error('sale-discount-error',state.saleErrors.discount)}<p id="discount-hint" class="help">0 to 100, up to 2 decimals. Blank means no discount. No rounding.</p></div><div class="field"><label for="sale-cash">Cash Received (Rs.) - optional</label><input id="sale-cash" inputmode="decimal" value="${escapeText(state.sale.cash)}" aria-describedby="sale-cash-error" autocomplete="off">${error('sale-cash-error',state.saleErrors.cash)}</div></div></section></div><section class="checkout-review" aria-labelledby="checkout-review-title"><h2 id="checkout-review-title">Sale summary</h2><p class="help" style="margin-top:4px">Review the amount before creating a preview.</p><div class="summary" id="checkout-summary" aria-live="polite"></div><div class="sale-action"><button class="primary full" type="submit">Preview Sale</button><p class="help" style="margin-top:12px">Simulation only. No payment is processed. A sample receipt is available after a valid preview.</p></div></section></form></section>`;
+}
+function updateCheckout(showAll=false) {
+  const subtotal=core.pos.previewTotal(state.sale.quantity,state.sale.price);
+  const checked=core.checkout.calculateDemoCheckout(subtotal,state.sale.discount,state.sale.cash);
+  const validation=core.pos.validatePreview(saleProduct(),state.sale.quantity,state.sale.price);
+  state.saleErrors={...checked.errors,...(showAll?validation:{price:core.pos.pricePrecisionError(state.sale.price)})};
+  for(const key of ['product','quantity','price','discount','cash']) {
+    const node=el('sale-'+key);const output=el('sale-'+key+'-error');
+    if(node) node.setAttribute('aria-invalid',String(!!state.saleErrors[key]));
+    if(output) output.textContent=state.saleErrors[key]||'';
+  }
+  el('checkout-summary').innerHTML=checkoutSummary(checked.value);
+  return {simulation:core.pos.createSaleSimulation(saleProduct(),state.sale.quantity,state.sale.price),checkout:checked.value};
+}
+function receiptPage() {
+  if(!state.receipt) return heading('Sample Receipt')+'<p class="notice">Preview a valid sale first. No completed receipt is available.</p>';
+  const {simulation:sale,checkout:summary}=state.receipt;
+  return `<div class="screen-only actions">${button('New Sale','new-sale')}${button('Back to Sale','back-sale')}${button('Print Sample Receipt','print',true)}<label class="help"><input id="compact-receipt" type="checkbox" style="width:20px;min-height:20px;vertical-align:middle"${state.compactReceipt?' checked':''}> Compact receipt layout</label></div><article class="card receipt${state.compactReceipt?' compact':''}" id="sample-receipt"><div class="shop"><div class="brand"><span>Shop</span> POS</div><h1 tabindex="-1" id="receipt-heading">SAMPLE RECEIPT - DEMO ONLY</h1><p class="help">Sample date: ${date.label}</p></div><dl><div class="receipt-row"><dt>Product</dt><dd>${escapeText(sale.product.name)}</dd></div><div class="receipt-row"><dt>Quantity</dt><dd>${escapeText(sale.quantity)}</dd></div><div class="receipt-row"><dt>Actual selling price</dt><dd>${price(sale.unitPrice)}</dd></div><div class="receipt-row"><dt>Discount (%)</dt><dd>${escapeText(summary.discountPercent)}%</dd></div></dl><div class="summary">${checkoutSummary(summary)}</div>${summary.cashReceived!==null?`<dl><div class="receipt-row"><dt>Cash Received</dt><dd>${price(summary.cashReceived)}</dd></div></dl>`:''}<p class="notice">Sample only. No sale, invoice, payment or stock change was saved. No official invoice number or tax claim.</p></article>`;
+}
+function expensesPage() {
+  const draft=state.expenseDraft,totals=core.admin.demoExpenseTotals(state.expenses,state.summaryDate);
+  return heading('Shop Expenses','Demo expenses only - not saved to shop records. Starting sample date: '+date.label)+`<div class="stack"><section class="card form-width" style="width:100%"><h2>${state.editingId===null?'Enter a Demo Expense':'Correct Demo Expense'}</h2><form id="expense-form" novalidate aria-label="Demo expense entry"><div class="form-grid"><div class="field"><label for="expense-date">Expense Date</label><input id="expense-date" type="date" value="${escapeText(draft.date)}" aria-invalid="${!!state.expenseErrors.date}" aria-describedby="expense-date-error">${error('expense-date-error',state.expenseErrors.date)}</div><div class="field"><label for="expense-type">Expense type</label><select id="expense-type">${core.admin.demoExpenseTypes.map(type=>`<option${draft.type===type?' selected':''}>${type}</option>`).join('')}</select></div></div>${field('expense-description','Note (optional)',draft.description,'maxlength="160" autocomplete="off"')}<div class="field"><label for="expense-amount">Amount (Rs.)</label><input id="expense-amount" inputmode="decimal" value="${escapeText(draft.amount)}" aria-invalid="${!!state.expenseErrors.amount}" aria-describedby="expense-amount-error" autocomplete="off">${error('expense-amount-error',state.expenseErrors.amount)}</div><div class="actions"><button type="submit" class="primary">${state.editingId===null?'Add Demo Expense':'Update Demo Expense'}</button>${state.editingId!==null?button('Cancel Correction','cancel-expense'):''}</div></form>${message(state.message)}</section><section><h2 style="margin-bottom:14px">Demo Expense Summary</h2><div class="field" style="max-width:300px"><label for="expense-summary-date">Summary date</label><input id="expense-summary-date" type="date" value="${escapeText(state.summaryDate)}"><p class="help">Daily total for this date; monthly total for its calendar month.</p></div><dl class="grid metrics">${metric('Daily Demo Expenses',totals.daily===null?'Not available':money(totals.daily))}${metric('Monthly Demo Expenses',totals.monthly===null?'Not available':money(totals.monthly))}</dl><p class="help">Totals include only temporary entries on this page. Nothing is saved to shop records.</p></section><section class="card"><div class="page-head"><h2>Temporary Entries</h2>${button('Reset Demo Expenses','reset-expenses')}</div>${state.expenses.length?`<div class="table-region" role="region" aria-label="Temporary expenses" tabindex="0"><table><thead><tr><th scope="col">Date</th><th scope="col">Type / description</th><th scope="col" class="number">Amount</th><th scope="col">Actions</th></tr></thead><tbody>${state.expenses.map(entry=>`<tr><td>${escapeText(entry.date)}</td><td>${escapeText(entry.type)}${entry.description?'<br>'+escapeText(entry.description):''}</td><td class="number">${money(entry.amountPaise)}</td><td><div class="actions"><button type="button" data-edit-expense="${entry.id}" aria-label="Correct ${escapeText(entry.type)} expense">Correct</button><button type="button" data-remove-expense="${entry.id}" aria-label="Remove ${escapeText(entry.type)} expense">Remove</button></div></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">No demo expenses entered.</p>'}</section></div>`;
+}
+function returnsPage() {
+  const sale=sales.find(item=>item.id===state.returnSaleId),result=state.returnResult;
+  return heading('Return Item','Return preview only - no refund or stock change is saved.')+`<div class="stack form-width"><section class="card"><h2>Review a Demo Return</h2><form id="return-form" novalidate aria-label="Demo return review"><div class="field"><label for="return-sale">Original demo sale</label><select id="return-sale" aria-describedby="return-error"><option value="">Choose a demo sale</option>${sales.map((item,index)=>`<option value="${item.id}"${state.returnSaleId===item.id?' selected':''}>Sale ${index+1} - ${escapeText(item.productName)} - ${item.quantity} units at ${money(BigInt(item.unitPricePaise))}</option>`).join('')}</select></div>${sale?`<dl class="summary"><div class="receipt-row"><dt>Product in this sale</dt><dd>${escapeText(sale.productName)}</dd></div><div class="receipt-row"><dt>Original quantity sold</dt><dd>${sale.quantity}</dd></div><div class="receipt-row"><dt>Recorded selling price</dt><dd>${money(BigInt(sale.unitPricePaise))}</dd></div></dl>`:''}<div class="field"><label for="return-quantity">Quantity to return</label><input id="return-quantity" inputmode="decimal" value="${escapeText(state.returnQuantity)}" aria-describedby="return-error" autocomplete="off">${error('return-error',result?.error)}</div><div class="actions"><button type="submit" class="primary">Review Return Preview</button>${button('Reset Return Preview','reset-return')}</div></form><p class="help" style="margin-top:14px">Original sample sales: ${date.label}. No return history is created.</p></section>${result&&!result.error&&sale?`<section class="card" id="return-review"><h2 id="return-review-heading" tabindex="-1">Return Review - Demo Only</h2><dl class="summary"><div class="receipt-row"><dt>Product</dt><dd>${escapeText(sale.productName)}</dd></div><div class="receipt-row"><dt>Proposed quantity</dt><dd>${escapeText(result.returnedQuantity)}</dd></div><div class="receipt-row"><dt>Recorded price x selected quantity</dt><dd>${money(result.originalAmountPaise)}</dd></div><div class="receipt-row"><dt>Refund amount</dt><dd>Not available</dd></div></dl><p class="notice warning"><strong>Refund amount not available for this demo sale.</strong><br>Original discount and refund terms are missing. The recorded amount above is a reference only, not an approved refund.</p><p class="notice" role="status">Return preview only - no refund or stock change was saved.</p></section>`:''}</div>`;
+}
+function investmentPage() {
+  return heading('Total Investment','The amount the owner says they have invested in the business.')+`<section class="card form-width"><h2>Owner-Entered Investment</h2><dl class="summary"><dt>Total Investment (Demo)</dt><dd id="investment-total" class="metric-value">${state.investment===null?'Not entered':money(state.investment)}</dd>${state.investmentPreviewNote?'<dt style="margin-top:16px">Owner note</dt><dd style="margin:4px 0 0;overflow-wrap:anywhere">'+escapeText(state.investmentPreviewNote)+'</dd>':''}</dl><form id="investment-form" novalidate aria-label="Demo investment entry"><div class="field"><label for="investment-amount">Amount Invested (Rs.)</label><input id="investment-amount" inputmode="decimal" value="${escapeText(state.investmentInput)}" aria-invalid="${!!state.investmentError}" aria-describedby="investment-error" autocomplete="off">${error('investment-error',state.investmentError)}<p class="help">Optional owner-entered amount. Not revenue, stock value or Gross Profit.</p></div>${field('investment-note','Note (optional)',state.investmentNote,'maxlength="160" autocomplete="off"')}<div class="actions"><button class="primary" type="submit">Show Demo Investment</button>${button('Reset Demo Investment','reset-investment')}</div></form>${message(state.message)}<p class="help" style="margin-top:16px">Temporary demo information only. The production definition of investment needs owner agreement. No ROI, asset value or Net Profit is calculated.</p></section>`;
+}
+function render(focus=true) {
+  const salesperson=['checkout','receipt','expenses','returns'].includes(state.page),admin=state.page!=='home'&&!salesperson;
+  document.title=(state.page==='home'?'Shop POS':state.page==='checkout'?'Make a Sale':state.page==='receipt'?'Sample Receipt':state.page[0].toUpperCase()+state.page.slice(1))+' | Offline Demo Showcase';
+  const themeSelect='<label class="theme-label" for="showcase-theme">Theme<select id="showcase-theme" aria-label="Theme"><option>Light</option><option>Dark</option><option>System</option></select></label>';
+  el('header-actions').innerHTML=(state.page==='home'?'<span class="help">Standalone showcase</span>':button('Back to Login','nav:home')+button('Reset Demo','reset-all'))+themeSelect;
+  el('showcase-theme').value=state.theme||'Light';
+  el('showcase-workspace').classList.toggle('entry-workspace',state.page==='home');
+  el('showcase-sidebar').hidden=state.page==='home';
+  el('showcase-sidebar').innerHTML=admin?adminNavigation():salesperson?salespersonNavigation():'';
+  const screens={home,dashboard,products:stockPage,stock:stockPage,sales:reports,profit:reports,'report-home':reportsHome,checkout:checkoutPage,receipt:receiptPage,expenses:expensesPage,returns:returnsPage,investment:investmentPage};
+  el('main').innerHTML=screens[state.page]();
+  if(state.page==='checkout')updateCheckout();
+  if(focus)el('main').focus();
+}
+function navigate(page) { state.page=page;state.message='';render(); }
+function clearExpenseDraft() { state.expenseDraft={date:date.iso,type:'Rent',description:'',amount:''};state.editingId=null;state.expenseErrors={}; }
+function resetDemo() {
+  state.expenses=[];state.expenseId=1;clearExpenseDraft();state.summaryDate=date.iso;
+  state.investment=null;state.investmentInput='';state.investmentNote='';state.investmentPreviewNote='';state.investmentError='';
+  state.sale={productId:'',quantity:'1',price:'',discount:'',cash:''};state.saleErrors={};state.receipt=null;state.productQuery='';state.compactReceipt=false;
+  state.returnSaleId='';state.returnQuantity='1';state.returnResult=null;state.stockQuery='';state.stockStatus='All products';
+  state.message='Temporary demo entries reset. Original sample records are unchanged.';render();
+}
+function handleAction(action) {
+  if(action.startsWith('nav:')) return navigate(action.slice(4));
+  if(action==='reset-all') return resetDemo();
+  if(action==='clear-stock') {state.stockQuery='';state.stockStatus='All products';render();el('stock-search').focus();}
+  if(action==='quantity-minus'||action==='quantity-plus') {
+    const next=core.pos.stepPreviewQuantity(state.sale.quantity,action==='quantity-plus'?1:-1);
+    if(next!==null){state.sale.quantity=next;el('sale-quantity').value=next;updateCheckout();}
+  }
+  if(action==='new-sale'){state.sale={productId:'',quantity:'1',price:'',discount:'',cash:''};state.saleErrors={};state.receipt=null;state.productQuery='';navigate('checkout');el('sale-product').focus();}
+  if(action==='back-sale'){navigate('checkout');el('sale-product').focus();}
+  if(action==='print'&&state.receipt) window.print();
+  if(action==='cancel-expense'){clearExpenseDraft();render();el('expense-date').focus();}
+  if(action==='reset-expenses'){state.expenses=[];clearExpenseDraft();state.summaryDate=date.iso;state.message='Demo expenses reset. No shop records changed.';render();el('expense-date').focus();}
+  if(action==='reset-return'){state.returnSaleId='';state.returnQuantity='1';state.returnResult=null;render();el('return-sale').focus();}
+  if(action==='reset-investment'){state.investment=null;state.investmentInput='';state.investmentError='';state.message='Demo investment reset. No accounting record changed.';render();el('investment-amount').focus();}
+}
+document.addEventListener('click',event=>{
+  const target=event.target.closest('button');if(!target)return;
+  if(target.dataset.nav) return navigate(target.dataset.nav);
+  if(target.dataset.action) return handleAction(target.dataset.action);
+  if(target.dataset.editExpense){const entry=state.expenses.find(item=>item.id===Number(target.dataset.editExpense));if(entry){state.expenseDraft={date:entry.date,type:entry.type,description:entry.description,amount:core.money.demoMoneyDecimal(entry.amountPaise)};state.editingId=entry.id;state.expenseErrors={};state.message='';render();el('expense-date').focus();}}
+  if(target.dataset.removeExpense){const id=Number(target.dataset.removeExpense);state.expenses=state.expenses.filter(item=>item.id!==id);if(state.editingId===id)clearExpenseDraft();state.message='Removed from this temporary preview only.';render();}
+});
+document.addEventListener('input',event=>{
+  const {id,value}=event.target;
+  if(id==='stock-search'){state.stockQuery=value;el('stock-rows').innerHTML=inventoryRows();}
+  if(id==='product-search'){state.productQuery=value;el('sale-product').innerHTML=productOptions();}
+  const saleKeys={'sale-quantity':'quantity','sale-price':'price','sale-discount':'discount','sale-cash':'cash'};
+  if(saleKeys[id]){state.sale[saleKeys[id]]=value;state.receipt=null;updateCheckout();}
+  const expenseKeys={'expense-date':'date','expense-type':'type','expense-description':'description','expense-amount':'amount'};
+  if(expenseKeys[id])state.expenseDraft[expenseKeys[id]]=value;
+  if(id==='return-quantity'){state.returnQuantity=value;state.returnResult=null;el('return-error').textContent='';el('return-review')?.remove();}
+  if(id==='investment-amount')state.investmentInput=value;
+  if(id==='investment-note')state.investmentNote=value;
+});
+document.addEventListener('change',event=>{
+  const {id,value}=event.target;
+  if(id==='showcase-theme'){state.theme=value;document.documentElement.classList.toggle('dark',value==='Dark'||(value==='System'&&window.matchMedia('(prefers-color-scheme: dark)').matches));}
+  if(id==='stock-filter'){state.stockStatus=value;el('stock-rows').innerHTML=inventoryRows();}
+  if(id==='sale-product'){state.sale.productId=value;state.receipt=null;const guide=core.suggestions.getMockSuggestedSellingPrice(value);el('suggested-price').textContent=guide?'Suggested price: '+price(guide)+' - a guide only. Enter the actual selling price.':'Enter the agreed selling price.';updateCheckout();}
+  if(id==='expense-type')state.expenseDraft.type=value;
+  if(id==='expense-summary-date'){state.summaryDate=value;render(false);el('expense-summary-date').focus();}
+  if(id==='return-sale'){state.returnSaleId=value;state.returnResult=null;render(false);el('return-sale').focus();}
+  if(id==='compact-receipt'){state.compactReceipt=event.target.checked;el('sample-receipt').classList.toggle('compact',state.compactReceipt);}
+});
+document.addEventListener('submit',event=>{
+  event.preventDefault();
+  if(event.target.id==='checkout-form'){
+    const result=updateCheckout(true);
+    if(!result.simulation||!result.checkout){const first=Object.keys(state.saleErrors).find(key=>state.saleErrors[key]);if(first)el('sale-'+first).focus();return;}
+    state.receipt={simulation:result.simulation,checkout:result.checkout};navigate('receipt');el('receipt-heading').focus();
+  }
+  if(event.target.id==='expense-form'){
+    const amount=core.money.parseDemoMoney(state.expenseDraft.amount);
+    state.expenseErrors={...(!core.admin.isDemoCalendarDate(state.expenseDraft.date)?{date:'Enter a valid expense date.'}:{}),...(amount===null?{amount:'Enter a non-negative PKR amount with no more than 2 decimal places.'}:{})};
+    if(Object.keys(state.expenseErrors).length){render(false);el(state.expenseErrors.date?'expense-date':'expense-amount').focus();return;}
+    const entry={id:state.editingId??state.expenseId++,date:state.expenseDraft.date,type:state.expenseDraft.type,description:state.expenseDraft.description.trim(),amountPaise:amount};
+    state.expenses=state.editingId===null?[...state.expenses,entry]:state.expenses.map(item=>item.id===state.editingId?entry:item);
+    state.message=state.editingId===null?'Added to this temporary preview only.':'Updated in this temporary preview only.';clearExpenseDraft();render();el('expense-date').focus();
+  }
+  if(event.target.id==='return-form'){
+    state.returnResult=core.admin.inspectDemoReturn(sales.find(item=>item.id===state.returnSaleId),state.returnQuantity);render(false);
+    if(state.returnResult.error)el(state.returnSaleId?'return-quantity':'return-sale').focus();else el('return-review-heading').focus();
+  }
+  if(event.target.id==='investment-form'){
+    const amount=core.money.parseDemoMoney(state.investmentInput);state.investmentError=amount===null?'Enter a non-negative PKR amount with no more than 2 decimal places.':'';
+    if(amount!==null){state.investment=amount;state.investmentPreviewNote=state.investmentNote.trim();state.message='Investment shown in this temporary preview only.';}render(false);el('investment-amount').focus();
+  }
+});
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',event=>{if(state.theme==='System')document.documentElement.classList.toggle('dark',event.matches);});
+render(false);
+</script>
+</body>
+</html>

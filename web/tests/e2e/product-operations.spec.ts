@@ -17,10 +17,10 @@ for (const theme of ["light", "dark"] as const) {
     const desktop = testInfo.project.name === "chromium";
     await page.setViewportSize({ width: desktop ? 1440 : 375, height: 900 });
     await page.goto("/admin/products/baby-wipes/edit");
-    await expect(page.getByRole("button", { name: "Save Changes (Demo)", exact: true })).toBeEnabled();
-    await expect(page.getByLabel("Product name *", { exact: true })).toHaveValue("Baby Wipes");
-    await expect(page.getByLabel("New Purchase Cost (Demo)", { exact: true })).toHaveValue("");
-    await expect(page.getByLabel("Suggested Selling Price (Rs.)", { exact: true })).toHaveValue("");
+    await expect(page.getByRole("button", { name: "Save Changes", exact: true })).toBeEnabled();
+    await expect(page.getByLabel("Product Name *", { exact: true })).toHaveValue("Baby Wipes");
+    await expect(page.getByLabel("Buying Price (Rs.)", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("Selling Price (Rs.)", { exact: true })).toHaveValue("");
     await expect(page.getByLabel("Correct Quantity", { exact: true })).toHaveCount(0);
     const operations = page.getByRole("region", { name: "Product operations preview", exact: true });
     const disclosure = operations.locator("summary");
@@ -65,7 +65,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(confirmation).toHaveCount(0);
     await reason.fill("3 damaged items");
     // Ordinary Save Changes does not preview a stock correction or a status change.
-    await page.getByRole("button", { name: "Save Changes (Demo)", exact: true }).click();
+    await page.getByRole("button", { name: "Save Changes", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Demo only — changes were not saved." })).toBeVisible();
     await expect(confirmation).toHaveCount(0);
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -120,7 +120,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(operations.getByTestId("correction-current-quantity")).toHaveText("0");
     await page.getByRole("link", { name: "Cancel", exact: true }).click();
     await expect(page).toHaveURL("/admin/products");
-    await expect(page.getByRole("table", { name: "Mock products" }).getByRole("rowheader")).toHaveCount(7);
+    await expect(page.getByRole("region", { name: "Product list", exact: true }).getByRole("article")).toHaveCount(7);
     await page.goto("/admin/dashboard");
     for (const [label, value] of [["Total Products", "7"], ["Available Stock", "123"], ["Low Stock Products", "3"], ["Today's Sales Revenue (PKR)", "25690.00"]]) {
       await expect(page.getByRole("group", { name: label, exact: true }).locator("data")).toHaveAttribute("value", value);

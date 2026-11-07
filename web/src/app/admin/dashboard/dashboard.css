@@ -1,0 +1,17 @@
+/* Compact owner-approved Dashboard; other page structures remain unchanged. */
+.dashboard-section + .dashboard-section { margin-top: 22px; }
+.dashboard-section-title { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 15px; font-weight: 650; }
+.dashboard-section-title svg { width: 18px; height: 18px; color: var(--primary); }
+.dashboard-metric { min-height: 96px; display: flex; align-items: center; gap: 14px; position: relative; }
+.dashboard-metric dt { font-size: 13px; line-height: 20px; color: var(--muted-foreground); font-weight: 500; }
+.dashboard-value { font-size: 24px; line-height: 30px; font-weight: 700; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.dashboard-metric-icon { display: grid; flex-shrink: 0; width: 44px; height: 44px; place-items: center; border-radius: 9px; background: var(--surface-subtle); color: var(--muted-foreground); }
+.dashboard-metric[data-tone="sales"] { background: #edf7f1; border-color: #badac9; }
+.dashboard-metric[data-tone="sales"] .dashboard-metric-icon { background: #d9efdf; color: #176742; }
+.dashboard-metric[data-tone="warning"] .dashboard-metric-icon { background: #fff2d9; color: #925000; }
+.dashboard-metric[data-tone="investment"] .dashboard-metric-icon { background: #eeebfa; color: #67509a; }
+.dashboard-metric:hover { border-color: var(--input); }
+.dark .dashboard-metric[data-tone="sales"] { background: #1c3430; border-color: #386459; }
+.dark .dashboard-metric[data-tone="sales"] .dashboard-metric-icon { background: #244b3e; color: #86e9b8; }
+.dark .dashboard-metric[data-tone="warning"] .dashboard-metric-icon { background: #3b352a; color: #f4c36c; }
+.dark .dashboard-metric[data-tone="investment"] .dashboard-metric-icon { background: #34334c; color: #c6bcfa; }

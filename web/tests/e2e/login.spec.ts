@@ -34,16 +34,15 @@ for (const theme of ["light", "dark"] as const) {
       await page.addInitScript((value) => localStorage.setItem("pos-theme", value), theme);
       await page.goto("/login");
       await expect(page).toHaveTitle("Login | Shop POS");
-      await expect(page.getByRole("heading", { name: "Login", exact: true })).toBeVisible();
-      await expect(page.getByText("Shop POS", { exact: true })).toBeVisible();
-      await expect(page.getByText("UI preview only", { exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Shop POS", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Shop POS", exact: true })).toBeVisible();
+      await expect(page.getByText("UI Preview", { exact: true })).toBeVisible();
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-      const username = page.getByLabel("Username", { exact: true });
       const password = page.getByLabel("Password", { exact: true });
-      const submit = page.getByRole("button", { name: "Sign In", exact: true });
+      const submit = page.getByRole("button", { name: "Open Shop", exact: true });
       await expect(submit).toBeEnabled();
       await expect(password).toHaveAttribute("type", "password");
-      for (const field of [username, password]) {
+      for (const field of [password]) {
         expect(await field.evaluate((element) => {
           const input = element as HTMLInputElement;
           const style = getComputedStyle(input);
@@ -53,11 +52,11 @@ for (const theme of ["light", "dark"] as const) {
           return context.measureText(input.placeholder).width <= input.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
         })).toBe(true);
       }
-      const bounds = await Promise.all([username, password, submit].map((control) => control.boundingBox()));
+      const bounds = await Promise.all([password, submit].map((control) => control.boundingBox()));
       for (const box of bounds) expect(box).not.toBeNull();
       expect(Math.abs(bounds[0]!.x - bounds[1]!.x)).toBeLessThanOrEqual(1);
-      expect(Math.abs(bounds[0]!.width - bounds[2]!.width)).toBeLessThanOrEqual(1);
-      expect(bounds[2]!.height).toBeGreaterThanOrEqual(56);
+      expect(Math.abs(bounds[0]!.width - bounds[1]!.width)).toBeLessThanOrEqual(1);
+      expect(bounds[1]!.height).toBeGreaterThanOrEqual(56);
       const card = await page.locator("main > div").boundingBox();
       expect(Math.abs(card!.x + card!.width / 2 - width / 2)).toBeLessThanOrEqual(1);
       const controls = await page.locator("main input,main button,main a,header select").evaluateAll((items) => items.map((item) => {
@@ -80,17 +79,14 @@ for (const theme of ["light", "dark"] as const) {
     await page.setViewportSize({ width: 320, height: 900 });
     await page.emulateMedia({ colorScheme: theme });
     await page.goto("/login");
-    const username = page.getByLabel("Username", { exact: true });
     const password = page.getByLabel("Password", { exact: true });
-    const submit = page.getByRole("button", { name: "Sign In", exact: true });
+    const submit = page.getByRole("button", { name: "Open Shop", exact: true });
     await submit.click();
-    await expect(username).toBeFocused();
-    await expect(username).toHaveAccessibleDescription("Enter a username.");
+    await expect(password).toBeFocused();
     await expect(password).toHaveAccessibleDescription("Enter a password.");
     await expect(page.getByText("Check the form", { exact: true })).toBeVisible();
     await expectReadableContrast(page);
     await page.screenshot({ path: testInfo.outputPath("login-validation-" + theme + ".png"), fullPage: true, scale: "css" });
-    await username.fill("preview-user-only");
     await submit.click();
     await expect(password).toBeFocused();
     await password.fill("not-a-real-password");
@@ -103,7 +99,6 @@ for (const theme of ["light", "dark"] as const) {
     const loading = page.getByRole("button", { name: "Previewing…", exact: true });
     await expect(loading).toBeDisabled();
     await expect(loading).toHaveAttribute("aria-busy", "true");
-    await expect(username).toHaveValue("");
     await expect(password).toHaveValue("");
     await expect(page.getByText("Loading preview only. No sign-in request is sent.", { exact: true })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("login-loading-" + theme + ".png"), fullPage: true, scale: "css" });
@@ -123,7 +118,6 @@ for (const theme of ["light", "dark"] as const) {
     expect(await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key !== "pos-theme"))).toEqual([]);
     expect(await page.context().cookies()).toEqual([]);
     await page.reload();
-    await expect(username).toHaveValue("");
     await expect(password).toHaveValue("");
   });
 }
@@ -135,10 +129,9 @@ test("Login keyboard order, visible focus and password toggle", async ({ page })
   await page.keyboard.press("Enter");
   await expect(page.locator("#main-content")).toBeFocused();
   for (const control of [
-    page.getByLabel("Username", { exact: true }),
     page.getByLabel("Password", { exact: true }),
     page.getByRole("button", { name: "Show password", exact: true }),
-    page.getByRole("button", { name: "Sign In", exact: true }),
+    page.getByRole("button", { name: "Open Shop", exact: true }),
   ]) {
     await page.keyboard.press("Tab");
     await expect(control).toBeFocused();
@@ -176,9 +169,8 @@ test("Login stays a disabled safe preview without JavaScript", async ({ browser,
   try {
     await page.goto(baseURL + "/login");
     await expect(page).toHaveTitle("Login | Shop POS");
-    await expect(page.getByLabel("Username", { exact: true })).toBeDisabled();
     await expect(page.getByLabel("Password", { exact: true })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Sign In", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Open Shop", exact: true })).toBeDisabled();
     await expect(page.getByText("JavaScript is required to try the form preview.", { exact: false })).toBeVisible();
     await expect(page.locator("form input[name]")).toHaveCount(0);
     expect(requests.every((url) => !new URL(url).search)).toBe(true);
@@ -190,8 +182,7 @@ test("Login supports 200 percent scale, reduced motion and short viewports", asy
   await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
   await page.goto("/login");
   await page.addStyleTag({ content: "html { zoom: 2; }" });
-  await page.getByRole("button", { name: "Sign In", exact: true }).click();
-  await expect(page.getByLabel("Username", { exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Open Shop", exact: true }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Show password", exact: true }).click();
   await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute("type", "text");
@@ -207,11 +198,11 @@ test("Login server status is compact and never claims an auth result", async ({ 
   const indicator = page.locator("[data-connectivity-state]");
   await expect(indicator).toHaveAttribute("data-connectivity-state", "disconnected");
   await expect(page.getByText("Cannot reach shop server", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sign In", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Open Shop", exact: true })).toBeEnabled();
   await expect(page.locator("form").getByRole("alert")).toHaveCount(0);
   connected = true;
   await page.getByRole("button", { name: "Check shop server connection" }).click();
   await expect(indicator).toHaveAttribute("data-connectivity-state", "connected");
   expect((await indicator.boundingBox())!.height).toBeLessThanOrEqual(44);
-  await expect(page.getByText("UI preview only", { exact: true })).toBeVisible();
+  await expect(page.getByText("UI Preview", { exact: true })).toBeVisible();
 });

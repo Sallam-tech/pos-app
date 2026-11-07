@@ -1,44 +1,28 @@
 import { expect, test } from "@playwright/test";
 
-test("production page and health endpoint work with public requests blocked", async ({
-  page,
-  baseURL,
-}) => {
-  const externalRequests: string[] = [];
-  const browserErrors: string[] = [];
-  page.on("pageerror", (error) => browserErrors.push(error.message));
-
+test("root opens Login and the local health endpoint works without public internet", async ({ page, baseURL }) => {
+  const external: string[] = [], errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
   await page.route("**/*", (route) => {
-    const url = new URL(route.request().url());
-    if (url.origin === baseURL) {
-      return route.continue();
-    }
-    externalRequests.push(url.href);
+    if (new URL(route.request().url()).origin === baseURL) return route.continue();
+    external.push(route.request().url());
     return route.abort();
   });
-
   const response = await page.goto("/");
   expect(response?.status()).toBe(200);
-  await expect(page).toHaveTitle("Shop POS | Foundation");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Project foundation" }),
-  ).toBeVisible();
-  const healthLink = page.getByRole("link", { name: "Check server health" });
-  await expect(healthLink).toHaveAttribute("href", "/api/health");
-
-  // Catch a missing Tailwind/shadcn style pipeline and small-screen overflow.
-  await expect(healthLink).toHaveCSS("display", "inline-flex");
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-
+  await expect(page).toHaveURL("/login");
+  await expect(page).toHaveTitle("Login | Shop POS");
+  await expect(page.getByRole("heading", { name: "Shop POS", exact: true })).toBeVisible();
+  const admin = page.getByRole("link", { name: "Preview Admin", exact: true });
+  await expect(admin).toHaveAttribute("href", "/admin/dashboard");
+  expect(await admin.evaluate((element) => getComputedStyle(element).display)).toMatch(/^(inline-)?flex$/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.reload();
-  await healthLink.click();
-  await expect(page).toHaveURL(/\/api\/health$/);
-  const health = await page.evaluate(() => JSON.parse(document.body.innerText));
-  expect(health).toEqual({ status: "ok", service: "pos-web" });
-  expect(externalRequests).toEqual([]);
-  expect(browserErrors).toEqual([]);
+  await expect(page).toHaveURL("/login");
+  await expect(admin).toBeVisible();
+  const health = await page.request.get("/api/health");
+  expect(health.status()).toBe(200);
+  expect(await health.json()).toEqual({ status: "ok", service: "pos-web" });
+  expect(external).toEqual([]);
+  expect(errors).toEqual([]);
 });

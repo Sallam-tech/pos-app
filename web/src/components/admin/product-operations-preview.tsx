@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -21,6 +21,13 @@ function StockCorrectionPreview({ product, ready }: { product: MockInventoryProd
   const [confirmed, setConfirmed] = useState(false);
   const quantityRef = useRef<HTMLInputElement>(null);
   const reasonRef = useRef<HTMLInputElement>(null);
+  const disclosureRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (window.location.hash === "#stock-correction" && disclosureRef.current) {
+      disclosureRef.current.open = true;
+      disclosureRef.current.querySelector("summary")?.focus();
+    }
+  }, []);
   const difference = stockCorrectionDifference(String(product.quantity), quantity);
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -36,7 +43,7 @@ function StockCorrectionPreview({ product, ready }: { product: MockInventoryProd
     if (difference !== null && difference !== "0") setConfirmed(true);
   }
 
-  return <details className="rounded-lg border bg-card text-card-foreground" onToggle={(event) => {
+  return <details ref={disclosureRef} id="stock-correction" className="summary-panel text-card-foreground" onToggle={(event) => {
     setOpen(event.currentTarget.open);
     setConfirmed(false);
   }}>
@@ -44,7 +51,7 @@ function StockCorrectionPreview({ product, ready }: { product: MockInventoryProd
     {open && <div className="border-t p-4 sm:p-6">
       <p className="mb-4 text-sm text-muted-foreground">Correct a stock count. This does not receive purchased stock.</p>
       <dl className="mb-4"><dt className="text-sm font-semibold">Current Available Quantity</dt><dd className="numeric mt-1" data-testid="correction-current-quantity">{product.quantity}</dd></dl>
-      <form onSubmit={submit} noValidate aria-label="Stock correction demo">
+      <form data-unsaved-changes={Boolean(quantity || reason)} onSubmit={submit} noValidate aria-label="Stock correction demo">
         <fieldset disabled={!ready} className="grid min-w-0 gap-4">
           <legend className="sr-only">Stock count correction</legend>
           <Field id="correction-quantity" label="Correct Quantity" error={errors.quantity}
@@ -91,7 +98,7 @@ function ProductStatusPreview({ product, ready }: { product: MockInventoryProduc
   const [notice, setNotice] = useState<string | null>(null);
   const action = previewActive ? "Stop Selling (Demo)" : "Resume Selling (Demo)";
 
-  return <section aria-labelledby="product-status-title" className="rounded-lg border bg-card p-4 text-card-foreground sm:p-6">
+  return <section aria-labelledby="product-status-title" className="summary-panel p-5 text-card-foreground sm:p-6">
     <h2 id="product-status-title" className="section-title">Product Status</h2>
     <p className="mt-2 text-sm text-muted-foreground">Active means offered for sale. Inactive stops new sales.</p>
     <div className="mt-4 flex flex-wrap items-center justify-between gap-3">

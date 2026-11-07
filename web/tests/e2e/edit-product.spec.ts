@@ -17,10 +17,10 @@ for (const theme of ["light", "dark"] as const) {
     const desktop = testInfo.project.name === "chromium";
     await page.setViewportSize({ width: desktop ? 1440 : 375, height: 900 });
     await page.goto("/admin/products/new");
-    const name = page.getByLabel("Product name *", { exact: true });
-    await page.getByLabel("Purchase Cost (Rs.) *", { exact: true }).fill("1000.00");
-    await page.getByLabel("Initial quantity *", { exact: true }).fill("0");
-    await page.getByLabel("Low-stock threshold *", { exact: true }).fill("0");
+    const name = page.getByLabel("Product Name *", { exact: true });
+    await page.getByLabel("Buying Price (Rs.) *", { exact: true }).fill("1000.00");
+    await page.getByLabel("Stock Quantity *", { exact: true }).fill("0");
+    await page.getByLabel("Low Stock Alert *", { exact: true }).fill("0");
     const addConfirmation = page.getByRole("status").filter({ hasText: "Demo complete" });
     for (const invalid of ["", "  ", "0", "000"]) {
       await name.fill(invalid);
@@ -35,14 +35,14 @@ for (const theme of ["light", "dark"] as const) {
       await name.press("Enter");
       await expect(addConfirmation.locator("strong")).toHaveText(valid);
     }
-    await page.getByLabel("Suggested Selling Price (Rs.)", { exact: true }).fill("abc");
+    await page.getByLabel("Selling Price (Rs.)", { exact: true }).fill("abc");
     await expect(addConfirmation).toHaveCount(0);
     await page.getByRole("button", { name: "Save Product", exact: true }).click();
-    await expect(page.getByLabel("Suggested Selling Price (Rs.)", { exact: true })).toHaveValue("abc");
+    await expect(page.getByLabel("Selling Price (Rs.)", { exact: true })).toHaveValue("abc");
     await expect(addConfirmation).toHaveCount(0);
     await page.getByRole("link", { name: "Cancel", exact: true }).click();
     await expect(page).toHaveURL("/admin/products");
-    await page.getByRole("searchbox", { name: "Search by product name" }).fill("milk");
+    await page.getByRole("searchbox", { name: "Find product by name or code" }).fill("milk");
     const milk = page.getByRole("link", { name: "Edit Milk Powder", exact: true });
     await expect(milk).toHaveAttribute("href", "/admin/products/milk-powder/edit");
     await milk.focus();
@@ -51,24 +51,24 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page).toHaveURL("/admin/products/milk-powder/edit");
     await expect(page).toHaveTitle("Edit Product | Shop POS");
     await expect(name).toHaveValue("Milk Powder");
-    await expect(page.getByLabel("Suggested Selling Price (Rs.)", { exact: true })).toHaveValue("");
-    await expect(page.getByText("Available quantity (read-only)").locator("..").locator("dd")).toHaveText("3");
+    await expect(page.getByLabel("Selling Price (Rs.)", { exact: true })).toHaveValue("");
+    await expect(page.getByTestId("edit-stock-quantity")).toHaveText("3");
     await page.getByRole("link", { name: "Cancel", exact: true }).click();
     await page.getByRole("link", { name: "Edit Diapers", exact: true }).click();
     await expect(page).toHaveURL("/admin/products/diapers/edit");
     await expect(name).toHaveValue("Diapers");
     await expect(page.getByText("Demo Data", { exact: true })).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-    await expect(page.getByText("Available quantity (read-only)").locator("..").locator("dd")).toHaveText("5");
-    await expect(page.getByText("Current purchase cost not available in demo data", { exact: true })).toBeVisible();
-    await expect(page.getByRole("textbox")).toHaveCount(5);
-    await expect(page.getByLabel("Purchase Cost (Rs.) *", { exact: true })).toHaveCount(0);
-    await expect(page.getByLabel("Initial quantity *", { exact: true })).toHaveCount(0);
-    const suggestion = page.getByLabel("Suggested Selling Price (Rs.)", { exact: true });
-    const threshold = page.getByLabel("Low-stock threshold *", { exact: true });
+    await expect(page.getByTestId("edit-stock-quantity")).toHaveText("5");
+    await expect(page.getByText(/Current buying price not available in demo data/)).toBeVisible();
+    await expect(page.getByRole("textbox")).toHaveCount(4);
+    await expect(page.getByLabel("Buying Price (Rs.) *", { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("Stock Quantity *", { exact: true })).toHaveCount(0);
+    const suggestion = page.getByLabel("Selling Price (Rs.)", { exact: true });
+    const threshold = page.getByLabel("Low Stock Alert *", { exact: true });
     await expect(suggestion).toHaveValue("1250.00");
     await expect(threshold).toHaveValue("5");
-    const save = page.getByRole("button", { name: "Save Changes (Demo)", exact: true });
+    const save = page.getByRole("button", { name: "Save Changes", exact: true });
     const confirmation = page.getByRole("status").filter({ hasText: /Demo only — (?:changes were not saved|purchase cost was not updated)\./ });
     await expect(save).toBeEnabled();
     await expectReadableContrast(page);
@@ -78,7 +78,7 @@ for (const theme of ["light", "dark"] as const) {
     if (desktop && theme === "light") await page.screenshot({ path: testInfo.outputPath("edit-product-desktop.png"), fullPage: true });
     await save.click();
     await expect(confirmation).toBeFocused();
-    const proposal = page.getByLabel("New Purchase Cost (Demo)", { exact: true });
+    const proposal = page.getByLabel("Buying Price (Rs.)", { exact: true });
     await expect(proposal).toHaveValue("");
     for (const value of ["000", "0.00", "-1", "abc", "100.999"]) {
       await proposal.fill(value);
@@ -88,13 +88,13 @@ for (const theme of ["light", "dark"] as const) {
       await expect(proposal).toBeFocused();
       await expect(proposal).toHaveAttribute("aria-invalid", "true");
       await expect(confirmation).toHaveCount(0);
-      if (["000", "0.00"].includes(value)) await expect(page.getByText("Enter a purchase cost greater than Rs. 0.00.", { exact: true })).toBeVisible();
+      if (["000", "0.00"].includes(value)) await expect(page.getByText("Enter a buying price greater than Rs. 0.00.", { exact: true })).toBeVisible();
     }
     await proposal.fill("1100.50");
     await save.click();
-    await expect(confirmation).toContainText("Demo only — purchase cost was not updated.");
-    await expect(page.getByText("Current purchase cost not available in demo data", { exact: true })).toBeVisible();
-    await expect(page.getByText("Available quantity (read-only)").locator("..").locator("dd")).toHaveText("5");
+    await expect(confirmation).toContainText("Demo only — buying price was not updated.");
+    await expect(page.getByText(/Current buying price not available in demo data/)).toBeVisible();
+    await expect(page.getByTestId("edit-stock-quantity")).toHaveText("5");
     await proposal.fill("");
     await expect(confirmation).toHaveCount(0);
     await save.click();
@@ -116,6 +116,7 @@ for (const theme of ["light", "dark"] as const) {
     await threshold.fill("0");
     await save.click();
     await expect(confirmation).toBeFocused();
+    await page.getByText("More Details (Optional)", { exact: true }).click();
     await page.getByLabel("Category", { exact: true }).fill("Demo category");
     await expect(confirmation).toHaveCount(0);
     await save.click();
@@ -145,7 +146,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByRole("form")).toHaveCount(0);
     await page.getByRole("link", { name: "Back to Products", exact: true }).click();
     await expect(page).toHaveURL("/admin/products");
-    await expect(page.getByRole("table", { name: "Mock products" }).getByRole("rowheader")).toHaveCount(7);
+    await expect(page.getByRole("region", { name: "Product list", exact: true }).getByRole("article")).toHaveCount(7);
     expect(await page.evaluate(() => ({ local: Object.keys(localStorage), session: Object.keys(sessionStorage) }))).toEqual({ local: ["pos-theme"], session: [] });
     expect(unexpected).toEqual([]);
     expect(errors).toEqual([]);

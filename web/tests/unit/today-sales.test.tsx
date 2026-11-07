@@ -8,8 +8,8 @@ import { formatMockBusinessDate, formatMockReportMonth, selectMockSalesPeriod } 
 
 function expectTotals(overall: string, filtered: string) {
   const totals = screen.getByLabelText("Revenue totals");
-  expect(within(totals).getByText("Total Sales Revenue").nextElementSibling).toHaveTextContent(overall);
-  expect(within(totals).getByText("Selected Products Revenue").nextElementSibling).toHaveTextContent(filtered);
+  expect(within(totals).getByText("Total Sales").nextElementSibling).toHaveTextContent(overall);
+  expect(within(screen.getByLabelText("Selected products revenue")).getByText("Selected Products Revenue").nextElementSibling).toHaveTextContent(filtered);
 }
 
 describe("exact read-only mock sales revenue", () => {
@@ -65,7 +65,7 @@ describe("Sales Report card and simple product summary", () => {
     const card = screen.getByRole("group", { name: "Today's Sales Revenue (PKR)" });
     expect(within(card).getByRole("link", { name: "Today's Sales Revenue (PKR)" })).toHaveAttribute("href", "/admin/sales/today");
     expect(within(card).getByText("Rs. 25,690.00")).toHaveAttribute("value", "25690.00");
-    expect(within(screen.getByRole("group", { name: "Today's Profit" })).getByRole("link")).toHaveAttribute("href", "/admin/profit/today");
+    expect(within(screen.getByRole("group", { name: "Today's Gross Profit" })).getByRole("link")).toHaveAttribute("href", "/admin/profit/today");
   });
 
   it("shows fixed-date demo context, six simple summary rows and no selling prices until disclosure", () => {
@@ -77,8 +77,8 @@ describe("Sales Report card and simple product summary", () => {
     const region = screen.getByRole("region", { name: "Product-wise revenue" });
     expect(region).toHaveAccessibleDescription(/Read-only mock revenue/);
     expect(within(region).queryByText(/purchase cost|margin|profit/i)).not.toBeInTheDocument();
-    expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
-      "Product Name", "Quantity Sold", "Total Revenue (PKR)", "Sale details",
+    expect(screen.getAllByRole("columnheader").map((header) => header.getAttribute("aria-label") ?? header.textContent)).toEqual([
+      "Product", "Qty", "Total Sales",
     ]);
     expect(screen.getAllByRole("rowheader")).toHaveLength(6);
     for (const product of aggregateMockSales(mockSales)) {
@@ -92,9 +92,9 @@ describe("Sales Report card and simple product summary", () => {
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
     expect(screen.getByRole("combobox", { name: "Reporting period" })).toHaveValue("today");
     expect(screen.queryByLabelText("Month and year")).not.toBeInTheDocument();
-    expect(screen.getByText("All products", { exact: true })).toBeVisible();
+    expect(screen.getByLabelText("Selected products revenue")).not.toBeVisible();
     expectTotals("Rs. 25,690.00", "Rs. 25,690.00");
-    expect(screen.getByRole("link", { name: "Back to Dashboard" })).toHaveAttribute("href", "/admin/dashboard");
+    expect(screen.getByRole("link", { name: "Back to Reports" })).toHaveAttribute("href", "/admin/reports");
   });
 
   it("searches product names and clears search without resetting the reporting period or mutating sales", () => {
@@ -104,7 +104,7 @@ describe("Sales Report card and simple product summary", () => {
     fireEvent.change(period, { target: { value: "monthly" } });
     const search = screen.getByRole("searchbox", { name: "Search by product name" });
     fireEvent.change(search, { target: { value: "  MILK  " } });
-    expect(screen.getAllByRole("rowheader").map((header) => header.textContent)).toEqual(["Milk Powder"]);
+    expect(screen.getAllByRole("rowheader").map((header) => header.getAttribute("aria-label") ?? header.textContent)).toEqual(["Milk Powder"]);
     expectTotals("Rs. 25,690.00", "Rs. 6,001.00");
     fireEvent.change(search, { target: { value: "no-such-product" } });
     expect(screen.queryByRole("table")).not.toBeInTheDocument();

@@ -141,7 +141,7 @@ describe("separate, non-persistent product status preview", () => {
     const quantity = await openCorrection();
     fireEvent.change(quantity, { target: { value: "17" } });
     fireEvent.change(screen.getByLabelText("Reason for Correction"), { target: { value: "3 damaged items" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save Changes (Demo)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
     expect(screen.getByText(/Demo only — changes were not saved/)).toBeVisible();
     expect(screen.queryByTestId("correction-confirmation")).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

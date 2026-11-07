@@ -1,0 +1,27 @@
+/* Reports only; all other approved module layouts and palettes remain unchanged. */
+.reports-workspace {
+  --background: #f1f5f3;
+  --surface: #ffffff;
+  --surface-subtle: #edf2ef;
+  --muted: var(--surface-subtle);
+  --card: var(--surface);
+  --border: #d5e1da;
+  --report-bar: #2c5b9b;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--background);
+}
+[data-theme="dark"] .reports-workspace {
+  --background: #141c26;
+  --surface: #1c2733;
+  --surface-subtle: #263442;
+  --muted: var(--surface-subtle);
+  --border: #405064;
+  --report-bar: #8bb4ef;
+}
+.reports-workspace .retail-table th,
+.reports-workspace .retail-table td { padding: 8px 12px; }
+.reports-workspace .retail-table thead th { height: 40px; font-size: 12px; }
+.reports-workspace .report-summary > div { min-width: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+@media (min-width: 768px) { .reports-workspace { padding: 20px; } }

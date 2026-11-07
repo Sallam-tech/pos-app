@@ -1,7 +1,6 @@
+import { PageHeading } from "@/components/shell/page-heading";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Table, TableCell, TableHead, TableRegion } from "@/components/ui/table";
 import { getMockLowStockProducts, getMockStockStatus } from "@/lib/admin/mock-inventory";
@@ -13,10 +12,9 @@ export default function LowStockPage() {
   return <>
     <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
       <div>
-        <div className="flex flex-wrap items-center gap-3"><h1 className="page-title">Low Stock Products</h1><Badge>Demo Data</Badge></div>
+        <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/inventory/low-stock"}>Low Stock Products</PageHeading><Badge>Demo Data</Badge></div>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">Simulated quantities, not live inventory.</p>
       </div>
-      <Button asChild variant="outline"><Link href="/admin/dashboard">Back to Admin Dashboard</Link></Button>
     </div>
     <section aria-labelledby="low-stock-list-title" aria-describedby="low-stock-mock-notice">
       <h2 id="low-stock-list-title" className="mb-3 text-sm font-semibold text-muted-foreground">Low-stock list ({products.length})</h2>

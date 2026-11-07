@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
-type FieldErrors = { username?: string; password?: string };
+type FieldErrors = { password?: string };
 type PreviewState = "idle" | "loading" | "unavailable";
 const subscribe = () => () => {};
 const clientReady = () => true;
@@ -16,12 +16,19 @@ export function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [state, setState] = useState<PreviewState>("idle");
-  const username = useRef<HTMLInputElement>(null);
   const password = useRef<HTMLInputElement>(null);
   const feedback = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const busy = useRef(false);
   const invalidCount = Object.values(errors).filter(Boolean).length;
+
+  useEffect(() => {
+    // Clear browser-restored preview text on opening and back/forward restoration.
+    const clearPreviewPassword = () => { if (password.current) password.current.value = ""; };
+    clearPreviewPassword();
+    window.addEventListener("pageshow", clearPreviewPassword);
+    return () => window.removeEventListener("pageshow", clearPreviewPassword);
+  }, []);
 
   useEffect(() => () => {
     if (timer.current !== null) clearTimeout(timer.current);
@@ -40,17 +47,15 @@ export function LoginForm() {
     if (!ready || busy.current) return;
     // Only presence is checked. No identity, password policy or auth outcome is evaluated.
     const next: FieldErrors = {};
-    if (!username.current?.value.trim()) next.username = "Enter a username.";
     if (!password.current?.value) next.password = "Enter a password.";
     setErrors(next);
     setState("idle");
-    if (next.username || next.password) {
-      (next.username ? username : password).current?.focus();
+    if (next.password) {
+      password.current?.focus();
       return;
     }
     busy.current = true;
     // Discard preview input immediately; never serialize, send, log or persist it.
-    if (username.current) username.current.value = "";
     if (password.current) password.current.value = "";
     setShowPassword(false);
     setState("loading");
@@ -69,11 +74,6 @@ export function LoginForm() {
         <p className="font-semibold">Check the form</p>
         <p>{invalidCount === 1 ? "Complete the required field below." : "Complete both required fields below."}</p>
       </div>}
-      <Field id="login-username" label="Username" error={errors.username}>
-        <Input ref={username} id="login-username" required autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false}
-          placeholder="Made-up username" aria-describedby={errors.username ? "login-username-error" : undefined}
-          aria-invalid={Boolean(errors.username)} onChange={() => clearError("username")} />
-      </Field>
       <Field id="login-password" label="Password" error={errors.password}>
         <div className="relative">
           <Input ref={password} id="login-password" type={showPassword ? "text" : "password"} required autoComplete="off"
@@ -85,7 +85,7 @@ export function LoginForm() {
         </div>
       </Field>
       <Button type="submit" size="lg" className="w-full" loading={state === "loading"} aria-describedby="login-preview-description">
-        {state === "loading" ? "Previewing…" : "Sign In"}
+        {state === "loading" ? "Previewing…" : "Open Shop"}
       </Button>
     </fieldset>
     <div role="status" aria-live="polite" aria-atomic="true">

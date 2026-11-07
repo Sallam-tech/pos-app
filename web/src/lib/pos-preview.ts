@@ -1,3 +1,5 @@
+import { additionalCheckoutProducts } from "@/lib/demo/checkout-products";
+
 /**
  * Presentation-only fixtures and exact decimal arithmetic for the /pos preview.
  * These limits and permissive examples are NOT approved shop/domain policies.
@@ -71,7 +73,7 @@ export function pricePrecisionError(value: string): string | undefined {
 
 export function validatePreview(product: PreviewProduct | null, quantity: string, price: string): PreviewErrors {
   const errors: PreviewErrors = {};
-  if (!product || !previewProducts.some((item) => item.id === product.id && item.name === product.name)) {
+  if (!product || ![...previewProducts, ...additionalCheckoutProducts].some((item) => item.id === product.id && item.name === product.name)) {
     errors.product = "Choose a product from the search results.";
   }
   const q = parseDecimal(quantity);

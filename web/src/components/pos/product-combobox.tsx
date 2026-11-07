@@ -3,21 +3,26 @@
 import { useRef, useState, type Ref } from "react";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
+import { matchesProductIdentity } from "@/lib/product-identity-preview";
+import { additionalCheckoutProducts } from "@/lib/demo/checkout-products";
 import { cn } from "@/lib/utils";
 import { previewProducts, type PreviewProduct } from "@/lib/pos-preview";
 
-export function ProductCombobox({ value, onChange, inputRef, invalid, describedBy }: {
+export function ProductCombobox({ value, onChange, inputRef, invalid, describedBy, onQueryChange }: {
   value: PreviewProduct | null;
   onChange: (product: PreviewProduct | null) => void;
   inputRef: Ref<HTMLInputElement>;
   invalid: boolean;
   describedBy?: string;
+  onQueryChange?: (query: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
+  const [active, setActive] = useState(-1);
   const optionRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const results = previewProducts.filter((product) => product.name.toLowerCase().includes((value ? "" : query).trim().toLowerCase()));
+  const results = [...previewProducts, ...additionalCheckoutProducts].filter((product) => matchesProductIdentity(product, value ? "" : query));
+
+  const highlighted = active >= 0 && active < results.length ? active : (query.trim() && results.length === 1 ? 0 : -1);
 
   function choose(product: PreviewProduct) {
     setQuery(product.name);
@@ -40,28 +45,29 @@ export function ProductCombobox({ value, onChange, inputRef, invalid, describedB
       aria-autocomplete="list"
       aria-expanded={open}
       aria-controls="sale-products"
-      aria-activedescendant={open && results[active] ? "sale-option-" + results[active].id : undefined}
+      aria-activedescendant={open && results[highlighted] ? "sale-option-" + results[highlighted].id : undefined}
       aria-required="true"
       aria-invalid={invalid || undefined}
       aria-describedby={describedBy}
       autoComplete="off"
-      placeholder="Search mock products"
+      placeholder="Search by product name or code"
       value={query}
-      onFocus={() => { setOpen(true); setActive(0); }}
+      onFocus={() => { setOpen(Boolean(query.trim())); setActive(-1); }}
       onClick={() => setOpen(true)}
-      onChange={(event) => { setQuery(event.target.value); onChange(null); setOpen(true); setActive(0); }}
+      onChange={(event) => { setQuery(event.target.value); onQueryChange?.(event.target.value); onChange(null); setOpen(true); setActive(-1); }}
       onKeyDown={(event) => {
+        if (event.key === "Enter" && (event.repeat || event.nativeEvent.isComposing)) { event.preventDefault(); return; }
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
-          const next = event.key === "ArrowDown" ? (open ? Math.min(active + 1, results.length - 1) : 0) : (open ? Math.max(0, active - 1) : results.length - 1);
+          const next = event.key === "ArrowDown" ? (open ? Math.min(highlighted + 1, results.length - 1) : 0) : (open ? (highlighted < 0 ? results.length - 1 : Math.max(0, highlighted - 1)) : results.length - 1);
           setOpen(true);
           move(Math.max(0, next));
         } else if (open && (event.key === "Home" || event.key === "End") && results.length) {
           event.preventDefault();
           move(event.key === "Home" ? 0 : results.length - 1);
-        } else if (open && event.key === "Enter" && results[active]) {
+        } else if (event.key === "Enter") {
           event.preventDefault();
-          choose(results[active]);
+          if (open && results[highlighted]) choose(results[highlighted]);
         } else if (event.key === "Escape" && open) {
           event.preventDefault();
           event.stopPropagation();
@@ -75,7 +81,7 @@ export function ProductCombobox({ value, onChange, inputRef, invalid, describedB
           <button type="button" role="option" id={"sale-option-" + product.id}
             ref={(element) => { optionRefs.current[index] = element; }}
             aria-selected={value?.id === product.id} tabIndex={-1}
-            className={cn("flex min-h-11 w-full items-center justify-between gap-2 rounded-sm px-3 py-2 text-left", active === index && "bg-accent")}
+            className={cn("flex min-h-11 w-full items-center justify-between gap-2 rounded-sm px-3 py-2 text-left", highlighted === index && "bg-accent")}
             onPointerDown={(event) => event.preventDefault()}
             onPointerMove={() => setActive(index)}
             onClick={() => choose(product)}

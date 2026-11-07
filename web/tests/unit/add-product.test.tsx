@@ -13,25 +13,25 @@ const valid = {
 };
 function fillRequired() {
   for (const [label, value] of [
-    ["Product name *", valid.name], ["Purchase Cost (Rs.) *", valid.purchaseCost],
-    ["Initial quantity *", valid.initialQuantity], ["Low-stock threshold *", valid.lowStockThreshold],
+    ["Product Name *", valid.name], ["Buying Price (Rs.) *", valid.purchaseCost],
+    ["Stock Quantity *", valid.initialQuantity], ["Low Stock Alert *", valid.lowStockThreshold],
   ]) fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 
 describe("Admin Add Product preview", () => {
-  it("offers Add Product navigation, six SRS-based fields and Cancel", () => {
+  it("offers Add Product navigation, existing SRS fields, optional identity and Cancel", () => {
     const { unmount } = render(<ProductsPage />);
     expect(screen.getByRole("link", { name: "Add Product" })).toHaveAttribute("href", "/admin/products/new");
     unmount();
     render(<AddProductPage />);
     expect(screen.getByRole("heading", { name: "Add Product", level: 1 })).toBeVisible();
     expect(screen.getByText("Demo Data")).toBeVisible();
-    expect(screen.getAllByRole("textbox")).toHaveLength(6);
-    expect(screen.getByLabelText("Purchase Cost (Rs.) *")).toBeRequired();
-    expect(screen.getByLabelText("Suggested Selling Price (Rs.)")).not.toBeRequired();
+    expect(screen.getAllByRole("textbox")).toHaveLength(7);
+    expect(screen.getByLabelText("Buying Price (Rs.) *")).toBeRequired();
+    expect(screen.getByLabelText("Selling Price (Rs.)")).not.toBeRequired();
     expect(screen.getByLabelText("Category")).not.toBeRequired();
     expect(screen.getByRole("link", { name: "Cancel" })).toHaveAttribute("href", "/admin/products");
-    expect(screen.getByText(/public UI preview/)).toBeVisible();
+    expect(screen.getByText(/Demo only. No product or stock will be saved/)).toBeVisible();
     expect(screen.queryByLabelText(/SKU|barcode|unit$/i)).not.toBeInTheDocument();
   });
 
@@ -39,9 +39,9 @@ describe("Admin Add Product preview", () => {
     render(<AddProductPage />);
     fireEvent.click(screen.getByRole("button", { name: "Save Product" }));
     expect(screen.getAllByRole("alert")).toHaveLength(4);
-    expect(screen.getByLabelText("Product name *")).toHaveFocus();
-    expect(screen.getByLabelText("Product name *")).toHaveAccessibleDescription("Enter a valid product name.");
-    expect(screen.getByLabelText("Purchase Cost (Rs.) *")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("Product Name *")).toHaveFocus();
+    expect(screen.getByLabelText("Product Name *")).toHaveAccessibleDescription("Enter a valid product name.");
+    expect(screen.getByLabelText("Buying Price (Rs.) *")).toHaveAttribute("aria-invalid", "true");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
@@ -50,13 +50,13 @@ describe("Admin Add Product preview", () => {
     const sales = JSON.stringify(mockSales);
     render(<AddProductPage />);
     fillRequired();
-    expect(screen.getByLabelText("Suggested Selling Price (Rs.)")).toHaveValue("");
+    expect(screen.getByLabelText("Selling Price (Rs.)")).toHaveValue("");
     fireEvent.submit(screen.getByRole("form"));
     expect(screen.getByRole("status")).toHaveFocus();
     expect(screen.getByRole("status")).toHaveTextContent("Demo complete for Demo new product. No product or stock was saved.");
     expect(screen.getByRole("status")).toHaveTextContent("This entry is not available in POS.");
-    expect(screen.getByLabelText("Purchase Cost (Rs.) *")).toHaveValue("1000.00");
-    expect(screen.getByLabelText("Suggested Selling Price (Rs.)")).toHaveValue("");
+    expect(screen.getByLabelText("Buying Price (Rs.) *")).toHaveValue("1000.00");
+    expect(screen.getByLabelText("Selling Price (Rs.)")).toHaveValue("");
     expect(JSON.stringify(mockInventory)).toBe(inventory);
     expect(JSON.stringify(mockSales)).toBe(sales);
     expect(mockInventory).toHaveLength(7);
@@ -70,7 +70,7 @@ describe("Admin Add Product preview", () => {
   it.each(["purchaseCost", "suggestedSellingPrice"] as const)("rejects over-precise %s without rounding or confirmation", (field) => {
     render(<AddProductPage />);
     fillRequired();
-    const input = screen.getByLabelText(field === "purchaseCost" ? "Purchase Cost (Rs.) *" : "Suggested Selling Price (Rs.)");
+    const input = screen.getByLabelText(field === "purchaseCost" ? "Buying Price (Rs.) *" : "Selling Price (Rs.)");
     fireEvent.change(input, { target: { value: "100.999" } });
     fireEvent.blur(input);
     expect(input).toHaveValue("100.999");
@@ -88,11 +88,11 @@ describe("Admin Add Product preview", () => {
   it("does not copy prices or publish draft suggestions and clears confirmation on editing", () => {
     render(<AddProductPage />);
     fillRequired();
-    fireEvent.change(screen.getByLabelText("Suggested Selling Price (Rs.)"), { target: { value: "999.99" } });
+    fireEvent.change(screen.getByLabelText("Selling Price (Rs.)"), { target: { value: "999.99" } });
     fireEvent.submit(screen.getByRole("form"));
     expect(screen.getByRole("status")).toBeVisible();
-    expect(screen.getByLabelText("Purchase Cost (Rs.) *")).toHaveValue("1000.00");
-    fireEvent.change(screen.getByLabelText("Product name *"), { target: { value: "" } });
+    expect(screen.getByLabelText("Buying Price (Rs.) *")).toHaveValue("1000.00");
+    fireEvent.change(screen.getByLabelText("Product Name *"), { target: { value: "" } });
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(getMockSuggestedSellingPrice("diapers")).toBe("1250.00");
     expect(getMockSuggestedSellingPrice("mock-diapers")).toBe("1250.00");
@@ -151,7 +151,7 @@ it("blocks zero purchase cost in the form and clears its prior valid confirmatio
   fillRequired();
   fireEvent.submit(screen.getByRole("form"));
   expect(screen.getByRole("status")).toBeVisible();
-  const cost = screen.getByLabelText("Purchase Cost (Rs.) *");
+  const cost = screen.getByLabelText("Buying Price (Rs.) *");
   for (const value of ["000", "0.00", "-1", "abc"]) {
     fireEvent.change(cost, { target: { value } });
     expect(screen.queryByRole("status")).not.toBeInTheDocument();

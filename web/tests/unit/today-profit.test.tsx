@@ -10,8 +10,9 @@ import type { ProfitSale } from "@/lib/admin/mock-profit";
 
 function expectTotals(overall: string, selected: string) {
   const totals = screen.getByLabelText("Gross profit totals");
-  for (const [name, value] of [["Total Gross Profit", overall], ["Selected Products Gross Profit", selected]]) {
-    expect(within(totals).getByText(name).nextElementSibling?.firstElementChild).toHaveTextContent(value);
+  const filtered = screen.getByLabelText("Selected products gross profit");
+  for (const [name, value] of [["Gross Profit", overall], ["Selected Products Gross Profit", selected]]) {
+    expect(within(name === "Gross Profit" ? totals : filtered).getByText(name).nextElementSibling?.firstElementChild).toHaveTextContent(value);
   }
 }
 const table = () => screen.getByRole("table", { name: "Mock product-wise gross profit" });
@@ -19,7 +20,7 @@ const table = () => screen.getByRole("table", { name: "Mock product-wise gross p
 describe("read-only Admin profit report", () => {
   it("links the calculated fictional Dashboard profit without restoring the old placeholder", () => {
     render(<DashboardPage />);
-    const card = screen.getByRole("group", { name: "Today's Profit" });
+    const card = screen.getByRole("group", { name: "Today's Gross Profit" });
     expect(within(card).getByRole("link")).toHaveAttribute("href", "/admin/profit/today");
     expect(within(card).getByRole("link")).toHaveAccessibleDescription(/Example purchase costs for demo sales/);
     expect(within(card).getByText("Rs. 5,140.00")).toBeVisible();
@@ -33,7 +34,7 @@ describe("read-only Admin profit report", () => {
     expect(screen.getByText("Demo Data")).toBeVisible();
     expect(screen.getByText("2 November 2026")).toHaveAttribute("datetime", "2026-11-02");
     expect(screen.getByText(/Fixed demo Today:/)).toHaveTextContent("Asia/Karachi");
-    expect(screen.getByRole("link", { name: "Back to Dashboard" })).toHaveAttribute("href", "/admin/dashboard");
+    expect(screen.getByRole("link", { name: "Back to Reports" })).toHaveAttribute("href", "/admin/reports");
     expectTotals("Rs. 5,140.00", "Rs. 5,140.00");
     expect(within(table()).getAllByRole("rowheader")).toHaveLength(6);
     const diapers = within(table()).getByRole("rowheader", { name: "Diapers" }).closest("tr")!;
@@ -53,7 +54,7 @@ describe("read-only Admin profit report", () => {
     fireEvent.change(search, { target: { value: "not-a-product" } });
     expect(screen.getByText("No products match your search in this period.")).toBeVisible();
     expectTotals("Rs. 5,140.00", "Rs. 0.00");
-    expect(screen.getByText("Matching product names")).toBeVisible();
+    expect(screen.getByText(/Matching product names/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
     expect(search).toHaveFocus();
     expect(search).toHaveValue("");
@@ -117,7 +118,7 @@ describe("read-only Admin profit report", () => {
     const source = vi.spyOn(historicalCosts, "getFictionalProfitSales").mockReturnValue([...mockSales]);
     try {
       render(<DashboardPage />);
-      const card = screen.getByRole("group", { name: "Today's Profit" });
+      const card = screen.getByRole("group", { name: "Today's Gross Profit" });
       expect(within(card).getByText("Unavailable")).toBeVisible();
       expect(card.querySelector("data")).toBeNull();
       expect(within(card).getByRole("link")).toHaveAttribute("href", "/admin/profit/today");
@@ -126,10 +127,10 @@ describe("read-only Admin profit report", () => {
 
   it("does not expose purchase costs or profit on the unchanged POS", () => {
     render(<RecordSaleForm />);
-    const product = screen.getByRole("combobox", { name: "Product" });
+    const product = screen.getByRole("combobox", { name: "Find Product" });
     fireEvent.change(product, { target: { value: "Diapers" } });
     fireEvent.keyDown(product, { key: "Enter" });
-    expect(screen.getByText("Suggested: Rs. 1,250.00")).toBeVisible();
+    expect(screen.getByText(/Suggested: Rs. 1,250.00/)).toBeVisible();
     expect(document.body.textContent).not.toMatch(/purchase cost|gross profit|historical cost|margin|remaining stock/i);
     expect(document.body.innerHTML).not.toMatch(/unitCostSnapshotPaise|costOfGoodsSoldPaise|grossProfitPaise/);
   });

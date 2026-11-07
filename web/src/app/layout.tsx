@@ -5,8 +5,8 @@ import { themeInitializationScript } from "@/lib/theme";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Shop POS | Foundation",
-  description: "Local retail POS application foundation.",
+  title: "Shop POS",
+  description: "Shop POS local retail demo.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

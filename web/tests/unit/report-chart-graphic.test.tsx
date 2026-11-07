@@ -11,29 +11,32 @@ const point = (id: string, label: string, value: bigint | null): ChartRow => ({ 
 const renderTime = (rows: ChartRow[]) => render(<ReportChartGraphic title="Profit Over Time" rows={rows} scaleRows={rows} measure="money" variant="time" grouping="daily" />);
 
 describe("plain-language report comparisons", () => {
-  it("keeps ranked product names and exact quantities visible with proportional comparisons and no axes", () => {
+  it("keeps names and exact values accessible with vertical bars and a readable axis", () => {
     const rows = productChartRows(sales, "sales");
     render(<SimpleBarChart title="Most sold" rows={rows} ranked />);
-    const list = screen.getByRole("list", { name: "Most sold values" });
     const entries = screen.getAllByRole("listitem");
     expect(entries).toHaveLength(5);
-    expect(entries[0]).toHaveTextContent("Baby Wipes10 units");
-    expect(entries[1]).toHaveTextContent("Hand Soap10 units");
-    expect(entries[4]).toHaveTextContent("Rice5 units");
-    for (const entry of entries) expect(entry).toBeVisible();
-    expect(list.querySelector('[data-comparison-bar="baby-wipes"]')).toHaveStyle({ left: 0, width: "100%" });
-    expect(list.querySelector('[data-comparison-bar="rice"]')).toHaveStyle({ left: 0, width: "50%" });
-    expect(document.querySelector("svg,[data-axis]")).toBeNull();
+    expect(entries[0]).toHaveTextContent("Baby Wipes: 10 units");
+    expect(entries[1]).toHaveTextContent("Hand Soap: 10 units");
+    expect(entries[4]).toHaveTextContent("Rice: 5 units");
+    const graphic = screen.getByRole("img", { name: "Most sold chart" });
+    const largest = Number(graphic.querySelector('[data-comparison-bar="baby-wipes"]')!.getAttribute("height"));
+    const rice = Number(graphic.querySelector('[data-comparison-bar="rice"]')!.getAttribute("height"));
+    expect(largest / rice).toBeCloseTo(2);
+    expect(graphic.querySelector('[data-axis="quantity"]')).not.toBeNull();
   });
 
-  it("compares both signs from zero and explicitly labels a loss", () => {
+  it("extends a loss below the zero baseline and exposes its exact negative amount", () => {
     const rows = [point("gain", "Gain", BigInt(1000)), point("loss", "Loss example", BigInt(-100))];
     render(<ReportChartGraphic title="Profit by product" rows={rows} scaleRows={rows} measure="money" variant="bar" grouping="daily" />);
-    expect(screen.getByText("-Rs. 1.00 (Loss)")).toBeVisible();
-    const baseline = document.querySelector("[data-zero-baseline]");
-    expect(baseline).toHaveClass("left-1/2");
-    expect(document.querySelector('[data-comparison-bar="gain"]')).toHaveStyle({ left: "50%", width: "50%" });
-    expect(document.querySelector('[data-comparison-bar="loss"]')).toHaveStyle({ right: "50%", width: "5%" });
+    const graphic = screen.getByRole("img");
+    const baseline = Number(graphic.querySelector("[data-zero-baseline]")!.getAttribute("y1"));
+    const gain = graphic.querySelector('[data-comparison-bar="gain"]')!;
+    const loss = graphic.querySelector('[data-comparison-bar="loss"]')!;
+    expect(Number(gain.getAttribute("y"))).toBeLessThan(baseline);
+    expect(Number(loss.getAttribute("y"))).toBe(baseline);
+    expect(Number(loss.getAttribute("height"))).toBeGreaterThan(0);
+    expect(screen.getByRole("list")).toHaveTextContent("Loss example: -Rs. 1.00 (Loss)");
   });
 
   it("shows the sole recorded date and exact profit as a compact summary without a chart", () => {
@@ -110,16 +113,17 @@ describe("plain-language report comparisons", () => {
   it("keeps large exact values readable without unsafe conversions or truncated labels", () => {
     const row = point("test", "Large fictional example", BigInt(10) ** BigInt(100));
     render(<ReportChartGraphic title="Large values" rows={[row]} scaleRows={[row]} measure="money" variant="bar" grouping="daily" />);
-    expect(screen.getByText(row.display)).toBeVisible();
-    expect(document.querySelector("[data-comparison-bar]")).toHaveStyle({ width: "100%" });
+    for (const label of screen.getAllByText(row.display)) expect(label).toBeVisible();
+    expect(Number(document.querySelector("[data-comparison-bar]")!.getAttribute("height"))).toBeGreaterThan(0);
   });
 
   it("shows full long product names and genuine zero comparisons without fake full-width bars", () => {
     const name = "A long test product name with many words for comparison label wrapping";
     const row = { id: "test-only", label: name, value: BigInt(0), display: "0 units" };
     render(<ReportChartGraphic title="Product names" rows={[row]} scaleRows={[row]} measure="quantity" variant="bar" grouping="daily" />);
-    expect(screen.getByText(name)).toBeVisible();
+    expect(screen.getByLabelText(name + ": 0 units")).toBeInTheDocument();
     expect(screen.getByText("0 units")).toBeVisible();
-    expect(document.querySelector("[data-comparison-bar]")).toHaveStyle({ width: "0%" });
+    expect(document.querySelector("[data-comparison-bar]")).toBeNull();
+    expect(document.querySelector("[data-zero-value]")).not.toBeNull();
   });
 });

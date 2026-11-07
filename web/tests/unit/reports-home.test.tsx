@@ -12,10 +12,10 @@ describe("simple Admin Reports home", () => {
     expect(within(options).getAllByRole("group")).toHaveLength(2);
     const sales = within(options).getByRole("group", { name: "Sales Report" });
     const profit = within(options).getByRole("group", { name: "Profit Report" });
-    expect(within(sales).getByText("See sales, items sold and simple charts.")).toBeVisible();
-    expect(within(sales).getByRole("link", { name: "View Sales Charts" })).toHaveAttribute("href", "/admin/reports/sales");
-    expect(within(profit).getByText("See profit and which products earned the most.")).toBeVisible();
-    expect(within(profit).getByRole("link", { name: "View Profit Charts" })).toHaveAttribute("href", "/admin/reports/profit");
+    expect(within(sales).getByText("View sales, items sold and product details.")).toBeVisible();
+    expect(within(sales).getByRole("link", { name: "View Sales Report" })).toHaveAttribute("href", "/admin/reports/sales");
+    expect(within(profit).getByText("View profit, buying costs and products.")).toBeVisible();
+    expect(within(profit).getByRole("link", { name: "View Profit Report" })).toHaveAttribute("href", "/admin/reports/profit");
     expect(screen.getAllByRole("link")).toHaveLength(2);
   });
 

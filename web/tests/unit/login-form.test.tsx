@@ -3,132 +3,74 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginForm } from "@/components/login/login-form";
 
-describe("Login UI preview", () => {
+describe("password-only Login UI preview", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
-
-  function inputs() {
-    return {
-      username: screen.getByLabelText("Username"),
-      password: screen.getByLabelText("Password", { exact: true }),
-      form: screen.getByRole("form", { name: "Login UI preview" }),
-    };
-  }
-
-  it("labels required fields and never gives them native credential serialization names", () => {
+  const password = () => screen.getByLabelText("Password", { exact: true });
+  const form = () => screen.getByRole("form", { name: "Login UI preview" });
+  it("has one required password, no username/role selection and no native credential serialization", () => {
     render(<LoginForm />);
-    const { username, password } = inputs();
-    expect(username).toBeRequired();
-    expect(password).toBeRequired();
-    expect(password).toHaveAttribute("type", "password");
-    expect(username).not.toHaveAttribute("name");
-    expect(password).not.toHaveAttribute("name");
-    expect(screen.getByRole("button", { name: "Sign In" })).toBeEnabled();
+    expect(password()).toBeRequired(); expect(password()).toHaveAttribute("type", "password");
+    expect(password()).not.toHaveAttribute("name");
+    expect(screen.queryByLabelText("Username")).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Shop" })).toBeEnabled();
   });
-
-  it("announces missing fields, associates messages and focuses the first invalid field", () => {
-    render(<LoginForm />);
-    const { username, password, form } = inputs();
-    fireEvent.submit(form);
+  it("starts empty, discourages autocomplete, clears restored text and never restores credentials", () => {
+    const view = render(<LoginForm />);
+    expect(password()).toHaveValue("");
+    expect(password()).toHaveAttribute("autocomplete", "off");
+    expect(form()).toHaveAttribute("autocomplete", "off");
+    fireEvent.change(password(), { target: { value: "temporary-only" } });
+    fireEvent(window, new Event("pageshow"));
+    expect(password()).toHaveValue("");
+    view.unmount(); render(<LoginForm />);
+    expect(password()).toHaveValue("");
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+  it("announces and focuses the missing password without entering a loading state", () => {
+    render(<LoginForm />); fireEvent.submit(form());
+    expect(password()).toHaveFocus(); expect(password()).toBeInvalid();
+    expect(password()).toHaveAccessibleDescription("Enter a password.");
     expect(screen.getByText("Check the form")).toBeVisible();
-    expect(username).toHaveFocus();
-    expect(username).toBeInvalid();
-    expect(username).toHaveAccessibleDescription("Enter a username.");
-    expect(password).toHaveAccessibleDescription("Enter a password.");
-    act(() => vi.advanceTimersByTime(700));
     expect(screen.queryByRole("button", { name: "Previewing…" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Sign-in is unavailable in this UI preview.")).not.toBeInTheDocument();
   });
-
-  it("treats a blank username as missing without imposing password-format policy", () => {
-    render(<LoginForm />);
-    const { username, password, form } = inputs();
-    fireEvent.change(username, { target: { value: "   " } });
-    fireEvent.change(password, { target: { value: "x" } });
-    fireEvent.submit(form);
-    expect(username).toHaveFocus();
-    expect(username).toHaveAccessibleDescription("Enter a username.");
-    expect(password).not.toHaveAccessibleDescription();
+  it.each(["lettersallowed", "123456789012", "!@#$%^&*()_+", "مبینہ پاس ورڈ"])("does not compare or impose a character-type policy on %j", (value) => {
+    render(<LoginForm />); fireEvent.change(password(), { target: { value } }); fireEvent.submit(form());
+    expect(password()).toHaveValue(""); act(() => vi.advanceTimersByTime(700));
+    expect(screen.getByRole("alert")).toHaveTextContent("No credentials were checked.");
   });
-
-  it("focuses password when only that field is missing", () => {
-    render(<LoginForm />);
-    const { username, password, form } = inputs();
-    fireEvent.change(username, { target: { value: "preview-only" } });
-    fireEvent.submit(form);
-    expect(password).toHaveFocus();
-    expect(username).toHaveAttribute("aria-invalid", "false");
-    expect(screen.getByText("Complete the required field below.")).toBeVisible();
-  });
-
-  it("shows and hides the same password without submitting", () => {
-    render(<LoginForm />);
-    const { password } = inputs();
-    fireEvent.change(password, { target: { value: "made-up-preview" } });
+  it("shows and hides the same input without submitting and clears field errors when edited", () => {
+    render(<LoginForm />); fireEvent.submit(form());
+    fireEvent.change(password(), { target: { value: "made-up-preview" } });
+    expect(password()).not.toBeInvalid();
     fireEvent.click(screen.getByRole("button", { name: "Show password" }));
-    expect(password).toHaveAttribute("type", "text");
-    expect(password).toHaveValue("made-up-preview");
+    expect(password()).toHaveAttribute("type", "text"); expect(password()).toHaveValue("made-up-preview");
     fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
-    expect(password).toHaveAttribute("type", "password");
-    expect(screen.queryByText("Check the form")).not.toBeInTheDocument();
-    expect(vi.getTimerCount()).toBe(0);
+    expect(password()).toHaveAttribute("type", "password"); expect(screen.queryByRole("button", { name: "Previewing…" })).not.toBeInTheDocument();
   });
-
-  it("clears a field error as it is edited", () => {
-    render(<LoginForm />);
-    const { username, password, form } = inputs();
-    fireEvent.submit(form);
-    fireEvent.change(username, { target: { value: "preview-only" } });
-    expect(username).not.toBeInvalid();
-    expect(screen.queryByText("Enter a username.")).not.toBeInTheDocument();
-    fireEvent.change(password, { target: { value: "preview-only" } });
-    expect(screen.queryByText("Check the form")).not.toBeInTheDocument();
-  });
-
-  it("discards input, guards repeat submits and ends with an honest focused preview error", () => {
-    const request = vi.spyOn(globalThis, "fetch");
-    const storage = vi.spyOn(Storage.prototype, "setItem");
-    render(<LoginForm />);
-    const { username, password, form } = inputs();
-    fireEvent.change(username, { target: { value: "preview-only" } });
-    fireEvent.change(password, { target: { value: "made-up-preview" } });
-    fireEvent.submit(form);
-    fireEvent.submit(form);
-    expect(username).toHaveValue("");
-    expect(password).toHaveValue("");
-    expect(username).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Previewing…" })).toBeDisabled();
+  it("discards text, guards repeated submissions and reports unavailable authentication without storage or requests", () => {
+    const request = vi.spyOn(globalThis, "fetch"); const storage = vi.spyOn(Storage.prototype, "setItem");
+    render(<LoginForm />); fireEvent.change(password(), { target: { value: "made-up-preview" } });
+    fireEvent.submit(form()); fireEvent.submit(form());
+    expect(password()).toHaveValue(""); expect(password()).toBeDisabled();
     expect(screen.getByRole("button", { name: "Previewing…" })).toHaveAttribute("aria-busy", "true");
     expect(screen.getByRole("status")).toHaveTextContent("No sign-in request is sent.");
-    expect(vi.getTimerCount()).toBe(1);
-    act(() => vi.advanceTimersByTime(700));
-    expect(screen.getByRole("alert")).toHaveFocus();
-    expect(screen.getByRole("alert")).toHaveTextContent("Sign-in is unavailable in this UI preview.");
-    expect(screen.getByRole("alert")).toHaveTextContent("No credentials were checked.");
-    expect(screen.getByRole("button", { name: "Sign In" })).toBeEnabled();
-    expect(request).not.toHaveBeenCalled();
-    expect(storage).not.toHaveBeenCalled();
-    fireEvent.change(username, { target: { value: "another-preview" } });
+    expect(vi.getTimerCount()).toBe(1); act(() => vi.advanceTimersByTime(700));
+    expect(screen.getByRole("alert")).toHaveFocus(); expect(screen.getByRole("alert")).toHaveTextContent("Sign-in is unavailable");
+    expect(screen.getByRole("button", { name: "Open Shop" })).toBeEnabled();
+    expect(request).not.toHaveBeenCalled(); expect(storage).not.toHaveBeenCalled();
+    fireEvent.change(password(), { target: { value: "another-preview" } });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
-
-  it("cancels the loading preview when unmounted", () => {
-    const { unmount } = render(<LoginForm />);
-    const { username, password, form } = inputs();
-    fireEvent.change(username, { target: { value: "preview-only" } });
-    fireEvent.change(password, { target: { value: "preview-only" } });
-    fireEvent.submit(form);
-    expect(vi.getTimerCount()).toBe(1);
-    unmount();
-    expect(vi.getTimerCount()).toBe(0);
+  it("cancels pending feedback on unmount", () => {
+    const view = render(<LoginForm />); fireEvent.change(password(), { target: { value: "preview-only" } });
+    fireEvent.submit(form()); expect(vi.getTimerCount()).toBe(1); view.unmount(); expect(screen.queryByRole("button", { name: "Previewing…" })).not.toBeInTheDocument();
   });
-
-  it("keeps the server-rendered form disabled until its submit handler is hydrated", () => {
-    const html = renderToStaticMarkup(<LoginForm />);
-    const container = document.createElement("div");
-    container.innerHTML = html;
+  it("keeps the server form disabled until the submit handler is hydrated", () => {
+    const container = document.createElement("div"); container.innerHTML = renderToStaticMarkup(<LoginForm />);
     expect(container.querySelector("fieldset")).toHaveAttribute("disabled");
-    expect(container).toHaveTextContent("JavaScript is required to try the form preview.");
+    expect(container).toHaveTextContent("JavaScript is required");
     expect(container.querySelectorAll("input[name]")).toHaveLength(0);
   });
 });

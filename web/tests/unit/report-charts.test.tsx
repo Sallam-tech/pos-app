@@ -1,103 +1,132 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ReportChartsPreview } from "@/components/admin/report-charts-preview";
 import { SimpleBarChart } from "@/components/admin/simple-bar-chart";
 import { getFictionalProfitSales } from "@/lib/admin/mock-historical-costs";
 import { mockSales } from "@/lib/admin/mock-sales";
-import { type ChartKind } from "@/lib/admin/report-chart-data";
-import SalesChartsPage, { metadata as salesMetadata } from "@/app/admin/reports/sales/page";
-import ProfitChartsPage, { metadata as profitMetadata } from "@/app/admin/reports/profit/page";
+import type { ChartKind } from "@/lib/admin/report-chart-data";
+import SalesReportPage, { metadata as salesMetadata } from "@/app/admin/reports/sales/page";
+import ProfitReportPage, { metadata as profitMetadata } from "@/app/admin/reports/profit/page";
+import LegacySalesPage from "@/app/admin/sales/today/page";
+import LegacyProfitPage from "@/app/admin/profit/today/page";
 
 const sales = getFictionalProfitSales();
-const chart = (kind: ChartKind) => screen.getByRole("region", { name: kind === "sales" ? "Which Products Sold the Most?" : "Which Products Earned the Most Profit?" });
-const summary = () => screen.getByLabelText(/^(Sales|Profit) summary$/);
-const value = (label: string) => within(summary()).getByText(label, { exact: true }).parentElement!.querySelector("dd")!;
+const chart = (kind: ChartKind) => screen.getByRole("region", { name: kind === "sales" ? "Sales by Product" : "Profit by Product" });
+const summary = (kind: ChartKind) => screen.getByLabelText(kind === "sales" ? "Revenue totals" : "Gross profit totals");
+const value = (kind: ChartKind, label: string) => within(summary(kind)).getByText(label, { exact: true }).parentElement!.querySelector("dd")!;
 
-describe("simple Sales and Profit Charts pages", () => {
-  it("connects both routes to shared fixtures, with meaningful titles and detail links", () => {
-    expect(salesMetadata.title).toBe("Sales Charts | Shop POS");
-    expect(profitMetadata.title).toBe("Profit Charts | Shop POS");
-    const { unmount } = render(<SalesChartsPage />);
-    expect(value("Total Sales (Rs.)")).toHaveTextContent("Rs. 25,690.00");
-    expect(screen.getByRole("link", { name: "View Detailed Sales Report" })).toHaveAttribute("href", "/admin/sales/today");
+describe("unified Sales and Profit Reports", () => {
+  it("reuses exactly the canonical reports at both legacy URLs, with report titles and same-page Details controls", () => {
+    expect(LegacySalesPage).toBe(SalesReportPage);
+    expect(LegacyProfitPage).toBe(ProfitReportPage);
+    expect(salesMetadata.title).toBe("Sales Report | Shop POS");
+    expect(profitMetadata.title).toBe("Profit Report | Shop POS");
+    const { unmount } = render(<SalesReportPage />);
+    expect(value("sales", "Total Sales")).toHaveTextContent("Rs. 25,690.00");
+    expect(screen.getByRole("button", { name: "View Sales Details" })).toHaveAttribute("aria-controls", "sales-details");
+    expect(screen.queryByRole("link", { name: /View Detailed/ })).not.toBeInTheDocument();
     unmount();
-    render(<ProfitChartsPage />);
-    expect(value("Gross Profit (Rs.)")).toHaveTextContent("Rs. 5,140.00");
-    expect(screen.getByRole("link", { name: "View Detailed Profit Report" })).toHaveAttribute("href", "/admin/profit/today");
+    render(<ProfitReportPage />);
+    expect(value("profit", "Gross Profit")).toHaveTextContent("Rs. 5,140.00");
+    expect(screen.getByRole("button", { name: "View Profit Details" })).toHaveAttribute("aria-controls", "profit-details");
   });
 
-  it.each(["sales", "profit"] as const)("shows three exact %s summaries, two readable charts, top five/all and a genuine single-date notice", (kind) => {
+  it.each(["sales", "profit"] as const)("shows three %s summary cards, six vertical comparisons and all details in one page", (kind) => {
     render(<ReportChartsPreview kind={kind} sales={sales} />);
-    expect(summary().querySelectorAll("dt")).toHaveLength(3);
-    expect(screen.getAllByRole("region")).toHaveLength(2);
+    expect(summary(kind).querySelectorAll("dt")).toHaveLength(3);
+    expect(screen.getByRole("combobox", { name: "Reporting period" })).toHaveValue("today");
     expect(screen.getByText("Demo Data")).toBeVisible();
     expect(screen.getByRole("link", { name: "Back to Reports" })).toHaveAttribute("href", "/admin/reports");
+    const comparison = chart(kind);
+    expect(within(comparison).getAllByRole("listitem")).toHaveLength(6);
+    expect(comparison.querySelectorAll("rect[data-comparison-bar]")).toHaveLength(6);
+    expect(comparison.querySelector('[data-axis="PKR"]')).not.toBeNull();
+    expect(screen.getAllByRole("rowheader")).toHaveLength(6);
     if (kind === "sales") {
-      expect(value("Items Sold")).toHaveTextContent("42 units");
-      expect(value("Different Products Sold")).toHaveTextContent("6");
+      expect(value(kind, "Items Sold")).toHaveTextContent("42");
+      expect(value(kind, "Products Sold")).toHaveTextContent("6");
+      expect(within(comparison).getAllByRole("listitem").map((entry) => entry.textContent)).toEqual([
+        "Diapers: Rs. 7,499.50", "Milk Powder: Rs. 6,001.00", "Rice: Rs. 4,250.00",
+        "Baby Wipes: Rs. 3,499.50", "Shampoo: Rs. 3,185.00", "Hand Soap: Rs. 1,255.00",
+      ]);
     } else {
-      expect(value("Cost of Sold Items (Rs.)")).toHaveTextContent("Rs. 20,550.00");
-      expect(value("Highest Profit Product")).toHaveTextContent("Diapers - Rs. 1,299.50");
+      expect(value(kind, "Cost of Sold Items")).toHaveTextContent("Rs. 20,550.00");
+      expect(value(kind, "Highest Profit Product")).toHaveTextContent("DiapersRs. 1,299.50");
       expect(screen.getByText(/Purchase costs are fictional demo examples/)).toBeVisible();
     }
-    expect(within(chart(kind)).getAllByRole("listitem")).toHaveLength(5);
-    fireEvent.click(within(chart(kind)).getByRole("button", { name: "Show All" }));
-    expect(within(chart(kind)).getAllByRole("listitem")).toHaveLength(6);
-    fireEvent.click(within(chart(kind)).getByRole("button", { name: "Show Top 5" }));
-    expect(within(chart(kind)).getAllByRole("listitem")).toHaveLength(5);
-    expect(screen.getByText("More sales dates are needed to compare " + kind + " over time.")).toBeVisible();
-    fireEvent.change(screen.getByLabelText("Show by"), { target: { value: "monthly" } });
-    expect(within(screen.getByRole("region", { name: kind === "sales" ? "Sales Over Time" : "Profit Over Time" })).getByRole("listitem")).toHaveTextContent("November 2026");
-    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    fireEvent.click(within(comparison).getByRole("button", { name: "Show Top 5" }));
+    expect(within(comparison).getAllByRole("listitem")).toHaveLength(5);
+    expect(screen.getAllByRole("rowheader")).toHaveLength(6);
+    fireEvent.click(within(comparison).getByRole("button", { name: "Show All" }));
+    expect(within(comparison).getAllByRole("listitem")).toHaveLength(6);
+    expect(screen.queryByRole("img", { name: /Over Time trend/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Show by")).not.toBeInTheDocument();
   });
 
-  it.each(["sales", "profit"] as const)("applies one %s period to every summary and chart, separating empty and invalid results", (kind) => {
+  it.each(["sales", "profit"] as const)("uses the same %s date and search filters for the chart and details while keeping overall totals separate", (kind) => {
     render(<ReportChartsPreview kind={kind} sales={sales} />);
+    const totalLabel = kind === "sales" ? "Total Sales" : "Gross Profit";
+    const normalTotal = kind === "sales" ? "Rs. 25,690.00" : "Rs. 5,140.00";
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "  DIAPERS  " } });
+    expect(screen.getAllByRole("rowheader")).toHaveLength(1);
+    expect(within(chart(kind)).getAllByRole("listitem")).toHaveLength(1);
+    expect(value(kind, totalLabel)).toHaveTextContent(normalTotal);
+    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(screen.getByRole("searchbox")).toHaveFocus();
     fireEvent.change(screen.getByLabelText("Reporting period"), { target: { value: "monthly" } });
     fireEvent.change(screen.getByLabelText("Month and year"), { target: { value: "2026-10" } });
-    expect(value(kind === "sales" ? "Total Sales (Rs.)" : "Gross Profit (Rs.)")).toHaveTextContent("Rs. 0.00");
-    expect(within(chart(kind)).queryAllByRole("listitem")).toHaveLength(0);
-    expect(screen.getAllByText("No sales for this period.")).toHaveLength(2);
+    expect(value(kind, totalLabel)).toHaveTextContent("Rs. 0.00");
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(within(chart(kind)).queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByText(kind === "sales" ? "No sales found for this period." : "No sales for this period.")).toBeVisible();
     fireEvent.change(screen.getByLabelText("Month and year"), { target: { value: "" } });
     expect(screen.getByRole("alert")).toHaveTextContent("Choose a valid month and year.");
-    expect(value(kind === "sales" ? "Total Sales (Rs.)" : "Gross Profit (Rs.)")).toHaveTextContent("\u2014");
-    expect(screen.queryByRole("list")).not.toBeInTheDocument();
+    for (const dd of summary(kind).querySelectorAll("dd")) expect(dd).toHaveTextContent("—");
     fireEvent.change(screen.getByLabelText("Reporting period"), { target: { value: "custom" } });
     fireEvent.change(screen.getByLabelText("From Date"), { target: { value: "2026-11-03" } });
     expect(screen.getByRole("alert")).toHaveTextContent("From Date must be on or before To Date.");
     expect(screen.getByLabelText("From Date")).toHaveAttribute("aria-invalid", "true");
-    for (const dd of summary().querySelectorAll("dd")) expect(dd).toHaveTextContent("\u2014");
+    for (const dd of summary(kind).querySelectorAll("dd")) expect(dd).toHaveTextContent("—");
     fireEvent.change(screen.getByLabelText("From Date"), { target: { value: "2026-11-02" } });
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(value(kind === "sales" ? "Total Sales (Rs.)" : "Gross Profit (Rs.)")).toHaveTextContent(kind === "sales" ? "Rs. 25,690.00" : "Rs. 5,140.00");
-    expect(within(chart(kind)).getAllByRole("listitem")).toHaveLength(5);
-    expect(screen.getByText("From: 02 Nov 2026 to 02 Nov 2026 (Asia/Karachi)")).toBeVisible();
+    expect(value(kind, totalLabel)).toHaveTextContent(normalTotal);
+    expect(within(chart(kind)).getAllByRole("listitem")).toHaveLength(6);
+    expect(screen.getAllByRole("rowheader")).toHaveLength(6);
   });
 
-  it.each([undefined, -1, 0.1])("does not rank incomplete profit or invent a highest-profit product for cost %s", (cost) => {
+  it.each(["sales", "profit"] as const)("scrolls to and focuses %s details without clearing the current period or search", (kind) => {
+    render(<ReportChartsPreview kind={kind} sales={sales} />);
+    fireEvent.change(screen.getByLabelText("Reporting period"), { target: { value: "monthly" } });
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "diapers" } });
+    const heading = screen.getByRole("heading", { name: kind === "sales" ? "Sales Details" : "Profit Details" });
+    heading.scrollIntoView = vi.fn();
+    fireEvent.click(screen.getByRole("button", { name: kind === "sales" ? "View Sales Details" : "View Profit Details" }));
+    expect(heading).toHaveFocus();
+    expect(heading.scrollIntoView).toHaveBeenCalledWith({ block: "start" });
+    expect(screen.getByLabelText("Reporting period")).toHaveValue("monthly");
+    expect(screen.getByRole("searchbox")).toHaveValue("diapers");
+  });
+
+  it.each([undefined, -1, 0.1])("preserves unavailable totals, rankings and product costs for invalid historical cost %s", (cost) => {
     render(<ReportChartsPreview kind="profit" sales={[{ ...sales[0], unitCostSnapshotPaise: cost }, sales[1]]} />);
-    expect(value("Gross Profit (Rs.)")).toHaveTextContent("Not available");
-    expect(value("Cost of Sold Items (Rs.)")).toHaveTextContent("Not available");
-    expect(value("Highest Profit Product")).toHaveTextContent("Not available");
-    expect(within(chart("profit")).queryByRole("list")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("not treated as zero");
-    expect(screen.getByRole("region", { name: "Profit Over Time" })).toHaveTextContent("Not available");
+    for (const label of ["Gross Profit", "Cost of Sold Items", "Highest Profit Product"]) expect(value("profit", label)).toHaveTextContent("Not available");
+    expect(chart("profit").querySelector("rect")).toBeNull();
+    expect(screen.getByText(/Missing or unsupported values are not treated as zero/)).toBeVisible();
+    expect(within(screen.getByRole("table")).getAllByText("Not available")).toHaveLength(2);
   });
 
-  it("uses sale snapshots for exact losses and displays zero for break-even", () => {
+  it("draws exact losses below zero, labels them and keeps break-even at zero", () => {
     render(<ReportChartsPreview kind="profit" sales={[
       { ...sales[0], productId: "loss", productName: "Loss example", quantity: 1, unitPricePaise: 99, unitCostSnapshotPaise: 100 },
       { ...sales[1], quantity: 1, unitPricePaise: 100, unitCostSnapshotPaise: 100 },
     ]} />);
-    expect(value("Gross Profit (Rs.)")).toHaveTextContent("-Rs. 0.01");
-    const list = within(chart("profit")).getAllByRole("listitem");
-    expect(list[0]).toHaveTextContent("DiapersRs. 0.00");
-    expect(list[1]).toHaveTextContent("Loss example-Rs. 0.01 (Loss)");
+    expect(value("profit", "Gross Profit")).toHaveTextContent("-Rs. 0.01");
     const comparison = chart("profit");
-    expect(comparison.querySelector("[data-zero-baseline]")).toHaveClass("left-1/2");
-    expect(comparison.querySelector('[data-comparison-bar="loss"]')).toHaveStyle({ right: "50%", width: "50%" });
-    expect(within(comparison).getByText("-Rs. 0.01 (Loss)")).toBeVisible();
-    expect(within(comparison).queryByRole("img")).not.toBeInTheDocument();
+    const baseline = Number(comparison.querySelector("[data-zero-baseline]")!.getAttribute("y1"));
+    const loss = comparison.querySelector('[data-comparison-bar="loss"]')!;
+    expect(Number(loss.getAttribute("y"))).toBe(baseline);
+    expect(Number(loss.getAttribute("height"))).toBeGreaterThan(0);
+    expect(comparison.querySelector('[data-zero-value="diapers"]')).not.toBeNull();
+    expect(within(screen.getByRole("table")).getByText("-Rs. 0.01 (Loss)")).toBeVisible();
   });
 
   it("keeps hundreds of products bounded and accessible when Show All is selected", () => {
@@ -118,29 +147,27 @@ describe("simple Sales and Profit Charts pages", () => {
     expect(screen.queryByRole("button", { name: "Next" })).not.toBeInTheDocument();
   });
 
-  it("sales charts do not expose purchase costs or profits from raw sales", () => {
+  it("shows every original sale and no buying-cost or profit fields in the Sales Report", () => {
     render(<ReportChartsPreview kind="sales" sales={mockSales} />);
-    expect(screen.queryByText(/gross profit|purchase cost|cost of sold/i)).not.toBeInTheDocument();
-  });
-  it.each(["sales", "profit"] as const)("shows a trend only when the selected %s period and grouping contain two valid dates", (kind) => {
-    // Isolated test-only dates; the application fixtures remain unchanged.
-    const dated = [{ ...sales[0], businessDate: "2026-11-01" }, { ...sales[1], businessDate: "2026-11-02" }];
-    render(<ReportChartsPreview kind={kind} sales={dated} />);
-    const history = () => screen.getByRole("region", { name: kind === "sales" ? "Sales Over Time" : "Profit Over Time" });
-    expect(within(history()).queryByRole("img")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Reporting period"), { target: { value: "monthly" } });
-    expect(within(history()).getByRole("img").querySelectorAll("[data-chart-point]")).toHaveLength(2);
-    expect(within(history()).getAllByRole("listitem")).toHaveLength(2);
-    fireEvent.change(screen.getByLabelText("Show by"), { target: { value: "monthly" } });
-    expect(within(history()).queryByRole("img")).not.toBeInTheDocument();
-    expect(within(history()).getByRole("listitem")).toHaveTextContent("November 2026");
-    expect(within(history()).getByText(kind === "sales" ? "Rs. 7,499.50" : "Rs. 1,299.50")).toBeVisible();
-    fireEvent.change(screen.getByLabelText("Show by"), { target: { value: "daily" } });
-    expect(within(history()).getByRole("img")).toBeVisible();
-    fireEvent.change(screen.getByLabelText("Reporting period"), { target: { value: "custom" } });
-    expect(within(history()).queryByRole("img")).not.toBeInTheDocument();
-    expect(within(history()).getByText(kind === "sales" ? "Rs. 4,999.00" : "Rs. 799.00")).toBeVisible();
-    expect(within(history()).getAllByRole("listitem")).toHaveLength(1);
+    for (const button of screen.getAllByRole("button", { name: /^View sales for/ })) fireEvent.click(button);
+    const regions = screen.getAllByRole("region", { name: /^Individual sales for/ });
+    expect(regions.flatMap((region) => within(region).getAllByRole("rowheader").map((row) => row.textContent))).toEqual(mockSales.map((sale) => sale.id));
+    expect(document.body.textContent).not.toMatch(/gross profit|purchase cost|cost of sold/i);
   });
 
+  it.each(["sales", "profit"] as const)("retains genuine multi-period %s comparison without manufacturing single-date trends", (kind) => {
+    const dated = [{ ...sales[0], businessDate: "2026-11-01" }, { ...sales[1], businessDate: "2026-11-02" }];
+    render(<ReportChartsPreview kind={kind} sales={dated} />);
+    expect(screen.queryByText(kind === "sales" ? "Sales over time" : "Profit over time")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Reporting period"), { target: { value: "monthly" } });
+    fireEvent.click(screen.getByText(kind === "sales" ? "Sales over time" : "Profit over time"));
+    const history = screen.getByRole("region", { name: kind === "sales" ? "Sales Over Time" : "Profit Over Time" });
+    expect(within(history).getByRole("img").querySelectorAll("[data-chart-point]")).toHaveLength(2);
+    fireEvent.change(screen.getByLabelText("Show by"), { target: { value: "monthly" } });
+    expect(within(history).queryByRole("img")).not.toBeInTheDocument();
+    expect(within(history).getByRole("listitem")).toHaveTextContent("November 2026");
+    fireEvent.change(screen.getByLabelText("Reporting period"), { target: { value: "today" } });
+    expect(screen.queryByRole("img", { name: /Over Time trend/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Show by")).not.toBeInTheDocument();
+  });
 });

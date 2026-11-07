@@ -13,16 +13,17 @@ describe("Admin dashboard overview preview", () => {
     expect(screen.queryByText(/Authentication and business workflows/)).not.toBeInTheDocument();
   });
 
-  it("associates exactly five labeled summary groups with visible mock-data context", () => {
+  it("associates exactly eight labeled summary groups with visible mock-data context", () => {
     render(<DashboardPage />);
     const overview = screen.getByRole("region", { name: "Shop overview" });
     expect(overview).toHaveAccessibleDescription("Mock data only. These figures are examples, not live shop records.");
     const groups = within(overview).getAllByRole("group");
-    expect(groups).toHaveLength(5);
+    expect(groups).toHaveLength(8);
     for (const group of groups) {
       expect(group).toHaveAccessibleName();
       expect(group).toHaveAccessibleDescription(/Mock data only/);
-      expect(within(group).getByText("Mock data", { exact: true })).toBeVisible();
+      expect(within(group).getByRole("link")).toHaveAccessibleName();
+      expect(screen.getByText("Demo Data", { exact: true })).toBeVisible();
     }
   });
 
@@ -39,13 +40,13 @@ describe("Admin dashboard overview preview", () => {
       const group = within(overview).getByRole("group", { name });
       expect(within(group).getByText(display, { exact: true })).toHaveAttribute("value", value);
     }
-    const profit = within(overview).getByRole("group", { name: "Today's Profit" });
+    const profit = within(overview).getByRole("group", { name: "Today's Gross Profit" });
     expect(within(profit).getByText("Rs. 5,140.00")).toBeVisible();
     expect(profit.querySelector("data")).toHaveAttribute("value", "5140.00");
     expect(within(profit).getByText("Example purchase costs for demo sales.")).toBeVisible();
     expect(within(profit).getByRole("link")).toHaveAttribute("href", "/admin/profit/today");
     expect(screen.queryByText("Rs. 4,860.00")).not.toBeInTheDocument();
-    expect(within(overview).getAllByRole("link")).toHaveLength(5);
+    expect(within(overview).getAllByRole("link")).toHaveLength(8);
     expect(within(overview).queryByRole("button")).not.toBeInTheDocument();
     expect(within(overview).queryByRole("table")).not.toBeInTheDocument();
     expect(within(overview).queryByRole("textbox")).not.toBeInTheDocument();

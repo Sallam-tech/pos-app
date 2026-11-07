@@ -9,12 +9,12 @@ import type { ChartGrouping, ChartRow } from "@/lib/admin/report-chart-data";
 
 const pageSize = 10;
 
-export function SimpleBarChart({ title, rows, ranked = false, controls, unavailable = false, measure = "quantity", variant = "bar", grouping = "daily" }: {
-  title: string; rows: readonly ChartRow[]; ranked?: boolean; controls?: ReactNode; unavailable?: boolean;
+export function SimpleBarChart({ title, rows, ranked = false, controls, description, initialShowAll = false, unavailable = false, unavailableMessage = "Not available. Some values are missing or unsupported, so products cannot be compared.", emptyMessage = "No sales for this period.", measure = "quantity", variant = "bar", grouping = "daily" }: {
+  title: string; rows: readonly ChartRow[]; ranked?: boolean; controls?: ReactNode; description?: string; initialShowAll?: boolean; unavailable?: boolean; unavailableMessage?: string; emptyMessage?: string;
   measure?: ChartMeasure; variant?: "bar" | "time"; grouping?: ChartGrouping;
 }) {
   const id = useId();
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(initialShowAll);
   const [page, setPage] = useState(0);
   const available = ranked && !showAll ? rows.slice(0, 5) : rows;
   const pageCount = Math.max(1, Math.ceil(available.length / pageSize));
@@ -23,13 +23,13 @@ export function SimpleBarChart({ title, rows, ranked = false, controls, unavaila
 
   return <Card role="region" aria-labelledby={id} className="flex flex-col">
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <CardTitle id={id}>{title}</CardTitle>
+      <div><CardTitle id={id}>{title}</CardTitle>{description && <p className="mt-1 text-sm leading-5 text-muted-foreground">{description}</p>}</div>
       {controls}
-      {ranked && !unavailable && rows.length > 5 && <Button variant="outline" aria-pressed={showAll}
+      {ranked && !unavailable && rows.length > 5 && <Button variant="outline" size="sm" aria-pressed={showAll}
         onClick={() => { setShowAll(!showAll); setPage(0); }}>{showAll ? "Show Top 5" : "Show All"}</Button>}
     </div>
-    {unavailable ? <p className="text-sm leading-6 text-muted-foreground">Not available. Some values are missing or unsupported, so products cannot be compared.</p>
-      : rows.length === 0 ? <p className="text-sm text-muted-foreground">No sales for this period.</p>
+    {unavailable ? <p className="text-sm leading-6 text-muted-foreground">{unavailableMessage}</p>
+      : rows.length === 0 ? <p className="text-sm text-muted-foreground">{emptyMessage}</p>
       : <>
         <ReportChartGraphic title={title} rows={visible} scaleRows={rows} measure={measure} variant={variant} grouping={grouping} />
         {ranked && <p className="mt-4 text-xs leading-5 text-muted-foreground">{showAll ? "All products" : "Top 5 products"}</p>}

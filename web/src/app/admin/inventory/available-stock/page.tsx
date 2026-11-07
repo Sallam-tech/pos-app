@@ -1,21 +1,21 @@
+import { PageHeading } from "@/components/shell/page-heading";
 import type { Metadata } from "next";
-import Link from "next/link";
+import "./inventory.css";
 import { AvailableStockPreview } from "@/components/admin/available-stock-preview";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icon";
 import { mockInventory } from "@/lib/admin/mock-inventory";
 
-export const metadata: Metadata = { title: "Available Stock | Shop POS" };
+export const metadata: Metadata = { title: "Inventory | Shop POS" };
 
 export default function AvailableStockPage() {
-  return <>
-    <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+  return <div className="inventory-workspace">
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div>
-        <div className="flex flex-wrap items-center gap-3"><h1 className="page-title">Available Stock</h1><Badge>Demo Data</Badge></div>
-        <p className="mt-1 text-sm leading-6 text-muted-foreground">Simulated quantities, not live inventory.</p>
+        <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/inventory/available-stock"} className="page-title flex items-center gap-2"><Icon name="layers" className="size-6 text-success" />Inventory</PageHeading><Badge>Demo Data</Badge></div>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">View and manage product stock (simulated, not live inventory).</p>
       </div>
-      <Button asChild variant="outline"><Link href="/admin/dashboard">Back to Admin Dashboard</Link></Button>
     </div>
     <AvailableStockPreview products={mockInventory} />
-  </>;
+  </div>;
 }

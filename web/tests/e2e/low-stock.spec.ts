@@ -21,7 +21,7 @@ for (const theme of ["light", "dark"] as const) {
     const overview = page.getByRole("region", { name: "Shop overview" });
     const card = overview.getByRole("group", { name: "Low Stock Products", exact: true });
     const link = card.getByRole("link", { name: "Low Stock Products", exact: true });
-    await expect(overview.getByRole("link")).toHaveCount(5);
+    await expect(overview.getByRole("link")).toHaveCount(8);
     await expect(link).toHaveAttribute("href", "/admin/inventory/low-stock");
     const products = getMockLowStockProducts();
     await expect(card.locator("data")).toHaveAttribute("value", String(products.length));
@@ -66,13 +66,14 @@ for (const theme of ["light", "dark"] as const) {
     const sidebar = page.getByRole("complementary", { name: "Admin sidebar" });
     await expect(sidebar).toBeVisible();
     await expect(sidebar.getByText("Inventory")).toHaveAttribute("aria-current", "location");
-    await expect(sidebar.getByText("Inventory")).toHaveClass(/bg-muted/);
+    await expect(sidebar.getByRole("link", { name: "Inventory", exact: true })).toHaveClass(/nav-active/);
+    await expect(sidebar.getByRole("link", { name: "Inventory", exact: true })).toHaveAttribute("href", "/admin/inventory/available-stock");
     const toothpaste = table.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "Toothpaste", exact: true }) });
     await expect(toothpaste.getByRole("cell")).toHaveText(["0", "5", "Out of stock"]);
     await expect(toothpaste.getByText("Out of stock", { exact: true })).toHaveClass(/text-danger/);
     await expect(sidebar.getByRole("link", { name: "Dashboard", exact: true })).not.toHaveAttribute("aria-current", "page");
-    const back = page.getByRole("link", { name: "Back to Admin Dashboard", exact: true });
-    await expect(back).toHaveAttribute("href", "/admin/dashboard");
+    const back = page.getByRole("link", { name: "Back to Inventory", exact: true });
+    await expect(back).toHaveAttribute("href", "/admin/inventory/available-stock");
     await expectReadableContrast(page);
     if (testInfo.project.name === "chromium" && theme === "dark") {
       await page.screenshot({ path: testInfo.outputPath("low-stock-" + theme + "-1440.png"), fullPage: true, scale: "css" });
@@ -94,6 +95,8 @@ for (const theme of ["light", "dark"] as const) {
     await expect.poll(() => scrollRegion.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
     await back.focus();
     await page.keyboard.press("Enter");
+    await expect(page).toHaveURL("/admin/inventory/available-stock");
+    await page.getByRole("link", { name: "Back to Dashboard", exact: true }).click();
     await expect(page).toHaveURL("/admin/dashboard");
     // A click on the card's label area, outside its small View list hint, also works.
     await card.click({ position: { x: 20, y: 20 } });

@@ -46,12 +46,12 @@ describe("Low Stock Products card and list", () => {
     const overview = screen.getByRole("region", { name: "Shop overview" });
     const card = within(overview).getByRole("group", { name: "Low Stock Products" });
     const link = within(card).getByRole("link", { name: "Low Stock Products" });
-    expect(within(overview).getAllByRole("link")).toHaveLength(4);
+    expect(within(overview).getAllByRole("link")).toHaveLength(8);
     expect(within(overview).getByRole("link", { name: "Total Products" })).toHaveAttribute("href", "/admin/products");
     expect(link).toHaveAttribute("href", "/admin/inventory/low-stock");
     expect(link).toHaveAccessibleDescription(/Mock data only/);
     expect(link).not.toHaveAttribute("tabindex", "-1");
-    expect(within(link).getByText("View list")).toBeVisible();
+    expect(link).toHaveAccessibleName("Low Stock Products");
     expect(within(overview).queryByRole("button")).not.toBeInTheDocument();
   });
 
@@ -88,7 +88,7 @@ describe("Low Stock Products card and list", () => {
     expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
       "Product name", "Remaining quantity", "Low-stock threshold", "Status",
     ]);
-    expect(screen.getByRole("link", { name: "Back to Admin Dashboard" })).toHaveAttribute("href", "/admin/dashboard");
+    expect(screen.getByRole("link", { name: "Back to Inventory" })).toHaveAttribute("href", "/admin/inventory/available-stock");
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });

@@ -17,8 +17,8 @@ const valid = {
 };
 function fillAdd() {
   for (const [label, value] of [
-    ["Product name *", valid.name], ["Purchase Cost (Rs.) *", valid.purchaseCost],
-    ["Initial quantity *", valid.initialQuantity], ["Low-stock threshold *", valid.lowStockThreshold],
+    ["Product Name *", valid.name], ["Buying Price (Rs.) *", valid.purchaseCost],
+    ["Stock Quantity *", valid.initialQuantity], ["Low Stock Alert *", valid.lowStockThreshold],
   ]) fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 async function renderEdit(id = "diapers") {
@@ -30,7 +30,7 @@ describe("product names and latest-only demo confirmations", () => {
     expect(validation.validateProductPreview({ ...valid, name }).name).toBe("Enter a valid product name.");
     render(<AddProductPage />);
     fillAdd();
-    fireEvent.change(screen.getByLabelText("Product name *"), { target: { value: name } });
+    fireEvent.change(screen.getByLabelText("Product Name *"), { target: { value: name } });
     fireEvent.submit(screen.getByRole("form"));
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
@@ -38,13 +38,13 @@ describe("product names and latest-only demo confirmations", () => {
     expect(validation.validateProductPreview({ ...valid, name })).toEqual({});
     render(<AddProductPage />);
     fillAdd();
-    fireEvent.change(screen.getByLabelText("Product name *"), { target: { value: "  " + name + "  " } });
+    fireEvent.change(screen.getByLabelText("Product Name *"), { target: { value: "  " + name + "  " } });
     fireEvent.submit(screen.getByRole("form"));
     expect(screen.getByRole("status").querySelector("strong")?.textContent).toBe(name);
   });
   it.each([
-    ["Product name *", "0"], ["Category", "Drinks"], ["Purchase Cost (Rs.) *", "-1"],
-    ["Suggested Selling Price (Rs.)", "0.001"], ["Initial quantity *", "abc"], ["Low-stock threshold *", "-1"],
+    ["Product Name *", "0"], ["Category", "Drinks"], ["Buying Price (Rs.) *", "-1"],
+    ["Selling Price (Rs.)", "0.001"], ["Stock Quantity *", "abc"], ["Low Stock Alert *", "-1"],
   ])("immediately clears Add confirmation when %s changes", (label, value) => {
     render(<AddProductPage />);
     fillAdd();
@@ -64,8 +64,8 @@ describe("product names and latest-only demo confirmations", () => {
     try {
       fireEvent.submit(screen.getByRole("form"));
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
-      expect(screen.getByLabelText("Product name *")).toHaveFocus();
-      expect(screen.getByLabelText("Product name *")).toHaveValue(valid.name);
+      expect(screen.getByLabelText("Product Name *")).toHaveFocus();
+      expect(screen.getByLabelText("Product Name *")).toHaveValue(valid.name);
     } finally { validator.mockRestore(); }
   });
 });
@@ -73,7 +73,7 @@ describe("product names and latest-only demo confirmations", () => {
 describe("safe stable-ID Edit Product preview", () => {
   it("links every product to its own ID instead of matching display names", () => {
     render(<ProductsPage />);
-    const table = screen.getByRole("table", { name: "Mock products" });
+    const table = screen.getByRole("region", { name: "Product list" });
     for (const product of mockInventory) {
       expect(within(table).getByRole("link", { name: "Edit " + product.name })).toHaveAttribute("href", "/admin/products/" + product.id + "/edit");
     }
@@ -81,17 +81,17 @@ describe("safe stable-ID Edit Product preview", () => {
   });
   it.each(mockInventory)("prefills $name while keeping quantity and absent purchase cost read-only", async (product) => {
     await renderEdit(product.id);
-    expect(screen.getByLabelText("Product name *")).toHaveValue(product.name);
+    expect(screen.getByLabelText("Product Name *")).toHaveValue(product.name);
     expect(screen.getByLabelText("Category")).toHaveValue("");
-    expect(screen.getByLabelText("Suggested Selling Price (Rs.)")).toHaveValue(getMockSuggestedSellingPrice(product.id) ?? "");
-    expect(screen.getByLabelText("Low-stock threshold *")).toHaveValue(String(product.lowStockThreshold));
-    expect(screen.getAllByRole("textbox")).toHaveLength(5);
-    expect(screen.getByLabelText("New Purchase Cost (Demo)")).toHaveValue("");
-    expect(screen.getByLabelText("New Purchase Cost (Demo)")).not.toBeRequired();
-    expect(screen.getByText("Available quantity (read-only)").nextElementSibling).toHaveTextContent(String(product.quantity));
-    expect(screen.getByText("Current purchase cost not available in demo data")).toBeVisible();
-    expect(screen.queryByLabelText("Purchase Cost (Rs.) *")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Initial quantity *")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Selling Price (Rs.)")).toHaveValue(getMockSuggestedSellingPrice(product.id) ?? "");
+    expect(screen.getByLabelText("Low Stock Alert *")).toHaveValue(String(product.lowStockThreshold));
+    expect(screen.getAllByRole("textbox")).toHaveLength(6);
+    expect(screen.getByLabelText("Buying Price (Rs.)")).toHaveValue("");
+    expect(screen.getByLabelText("Buying Price (Rs.)")).not.toBeRequired();
+    expect(screen.getByText("Stock Quantity (read-only)").nextElementSibling).toHaveTextContent(String(product.quantity));
+    expect(screen.getByText(/Current buying price not available in demo data/)).toBeVisible();
+    expect(screen.queryByLabelText("Buying Price (Rs.) *")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Stock Quantity *")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Cancel" })).toHaveAttribute("href", "/admin/products");
   });
   it("handles unknown IDs without falling back to another product", async () => {
@@ -106,14 +106,14 @@ describe("safe stable-ID Edit Product preview", () => {
     const inventory = JSON.stringify(mockInventory);
     const sales = JSON.stringify(mockSales);
     await renderEdit();
-    const name = screen.getByLabelText("Product name *");
+    const name = screen.getByLabelText("Product Name *");
     fireEvent.change(name, { target: { value: "000" } });
     fireEvent.submit(screen.getByRole("form"));
     expect(name).toHaveFocus();
     expect(screen.getByText("Enter a valid product name.")).toBeVisible();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     fireEvent.change(name, { target: { value: "Diapers - Demo" } });
-    const suggestion = screen.getByLabelText("Suggested Selling Price (Rs.)");
+    const suggestion = screen.getByLabelText("Selling Price (Rs.)");
     for (const value of ["-1", "abc", "100.999"]) {
       fireEvent.change(suggestion, { target: { value } });
       fireEvent.submit(screen.getByRole("form"));
@@ -122,7 +122,7 @@ describe("safe stable-ID Edit Product preview", () => {
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
     }
     fireEvent.change(suggestion, { target: { value: "0.01" } });
-    fireEvent.change(screen.getByLabelText("Low-stock threshold *"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Low Stock Alert *"), { target: { value: "0" } });
     fireEvent.submit(screen.getByRole("form"));
     expect(screen.getByRole("status")).toHaveFocus();
     expect(screen.getByRole("status")).toHaveTextContent("Demo only — changes were not saved.");
@@ -137,8 +137,8 @@ describe("safe stable-ID Edit Product preview", () => {
     expect(aggregateMockSales(mockSales).find((p) => p.productId === "diapers")?.revenuePaise).toBe(BigInt(749950));
   });
   it.each([
-    ["Product name *", "0"], ["Category", "Demo"], ["Suggested Selling Price (Rs.)", ""], ["Low-stock threshold *", "-1"],
-    ["New Purchase Cost (Demo)", "000"],
+    ["Product Name *", "0"], ["Category", "Demo"], ["Selling Price (Rs.)", ""], ["Low Stock Alert *", "-1"],
+    ["Buying Price (Rs.)", "000"],
   ])("clears Edit confirmation immediately when %s changes", async (label, value) => {
     await renderEdit();
     fireEvent.submit(screen.getByRole("form"));
@@ -151,16 +151,16 @@ describe("safe stable-ID Edit Product preview", () => {
 describe("demo-only purchase-cost proposal", () => {
   it.each(["0", "00", "000", "0.0", "0.00", "-1", "abc", "100.999"])("rejects proposed cost %s without rounding, saving or changing current cost", async (value) => {
     await renderEdit();
-    const proposal = screen.getByLabelText("New Purchase Cost (Demo)");
+    const proposal = screen.getByLabelText("Buying Price (Rs.)");
     fireEvent.change(proposal, { target: { value } });
     fireEvent.submit(screen.getByRole("form"));
     expect(proposal).toHaveFocus();
     expect(proposal).toHaveValue(value);
     expect(proposal).toHaveAttribute("aria-invalid", "true");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    expect(screen.getByText("Current purchase cost not available in demo data")).toBeVisible();
+    expect(screen.getByText(/Current buying price not available in demo data/)).toBeVisible();
     if (["0", "00", "000", "0.0", "0.00"].includes(value)) {
-      expect(screen.getByText("Enter a purchase cost greater than Rs. 0.00.")).toBeVisible();
+      expect(screen.getByText("Enter a buying price greater than Rs. 0.00.")).toBeVisible();
     }
   });
 
@@ -168,15 +168,15 @@ describe("demo-only purchase-cost proposal", () => {
     const inventory = JSON.stringify(mockInventory);
     const sales = JSON.stringify(mockSales);
     await renderEdit();
-    const proposal = screen.getByLabelText("New Purchase Cost (Demo)");
+    const proposal = screen.getByLabelText("Buying Price (Rs.)");
     expect(proposal).toHaveValue("");
     fireEvent.change(proposal, { target: { value: "1100.50" } });
     fireEvent.submit(screen.getByRole("form"));
     expect(screen.getByRole("status")).toHaveFocus();
-    expect(screen.getByRole("status")).toHaveTextContent("Demo only — purchase cost was not updated.");
+    expect(screen.getByRole("status")).toHaveTextContent("Demo only — buying price was not updated.");
     expect(screen.getByRole("status")).toHaveTextContent("No product changes were saved");
-    expect(screen.getByText("Current purchase cost not available in demo data")).toBeVisible();
-    expect(screen.getByText("Available quantity (read-only)").nextElementSibling).toHaveTextContent("5");
+    expect(screen.getByText(/Current buying price not available in demo data/)).toBeVisible();
+    expect(screen.getByText("Stock Quantity (read-only)").nextElementSibling).toHaveTextContent("5");
     expect(JSON.stringify(mockInventory)).toBe(inventory);
     expect(JSON.stringify(mockSales)).toBe(sales);
     expect(getMockSuggestedSellingPrice("diapers")).toBe("1250.00");

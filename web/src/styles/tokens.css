@@ -1,24 +1,28 @@
 /* UI specification §3. Border is decorative; input outlines meet 3:1 contrast. */
 :root {
   color-scheme: light;
-  --background: #f6f7f9;
+  --background: #f1f5f3;
   --surface: #ffffff;
-  --surface-subtle: #eff2f6;
-  --foreground: #17212c;
-  --muted-foreground: #536273;
-  --border: #d9e1e9;
-  --input: #7a8795;
-  --primary: #176f56;
+  --surface-subtle: #eaf0ed;
+  --foreground: #17212f;
+  --muted-foreground: #526174;
+  --border: #d5e3da;
+  --input: #799184;
+  --primary: #078354;
+  --primary-hover: #055d42;
   --primary-foreground: #ffffff;
-  --success: #166444;
+  --success: #146345;
   --warning: #9c5c00;
   --danger: #b42332;
   --danger-foreground: #ffffff;
   --focus: #166dd6;
+  --nav-active: #e5f2ec;
+  --nav-active-foreground: #076f50;
+  --shadow-panel: 0 1px 2px rgb(23 33 47 / 4%);
   --shadow-dialog: 0 12px 30px rgb(17 33 48 / 10%);
-  --radius: 12px;
-  --radius-control: 8px;
-  --radius-dialog: 16px;
+  --radius: 10px;
+  --radius-control: 6px;
+  --radius-dialog: 12px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -26,26 +30,30 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-12: 48px;
-  --content-width: 1440px;
-  --sidebar-width: 240px;
+  --content-width: 1360px;
+  --sidebar-width: 224px;
 }
 
 .dark {
   color-scheme: dark;
-  --background: #0f141b;
-  --surface: #18212b;
-  --surface-subtle: #222d39;
+  --background: #141c26;
+  --surface: #1c2733;
+  --surface-subtle: #263442;
   --foreground: #f3f6fa;
   --muted-foreground: #b1bfce;
-  --border: #394653;
+  --border: #405064;
   --input: #8797a7;
-  --primary: #49d5a0;
+  --primary: #63d6ac;
+  --primary-hover: #80e0bd;
   --primary-foreground: #071a15;
   --success: #74e0af;
   --warning: #f4c36c;
   --danger: #ff9099;
   --danger-foreground: #0f141b;
   --focus: #a7c7ff;
+  --nav-active: #203e36;
+  --nav-active-foreground: #74e0af;
+  --shadow-panel: 0 2px 5px rgb(0 0 0 / 15%);
   --shadow-dialog: 0 14px 36px rgb(0 0 0 / 35%);
 }
 

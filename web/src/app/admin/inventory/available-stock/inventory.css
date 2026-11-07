@@ -1,0 +1,25 @@
+/* Inventory overview only; shared shell and other modules keep their existing palette. */
+.inventory-workspace {
+  --background: #f1f5f3;
+  --surface: #ffffff;
+  --surface-subtle: #edf2ef;
+  --border: #d8e0e0;
+  --muted: var(--surface-subtle);
+  min-width: 0;
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--background);
+}
+[data-theme="dark"] .inventory-workspace {
+  --background: #141c26;
+  --surface: #1c2733;
+  --surface-subtle: #263442;
+  --border: #405064;
+}
+.inventory-workspace .retail-table th,
+.inventory-workspace .retail-table td {
+  height: 44px;
+  padding: 8px 12px;
+}
+.inventory-workspace .retail-table thead th { font-size: 12px; }
+@media (min-width: 768px) { .inventory-workspace { padding: 20px; } }

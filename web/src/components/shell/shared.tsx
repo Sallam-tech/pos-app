@@ -1,12 +1,15 @@
-import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { SafeNavigationLink } from "@/components/shell/safe-navigation-link";
+import { ShopName } from "@/components/settings/shop-identity";
+import { DemoExitLink } from "@/components/demo/demo-navigation";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 
 export function Brand() {
-  return <div className="flex items-center gap-3">
-    <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground"><Icon name="store" className="size-6" /></span>
-    <span className="text-lg font-bold tracking-tight">Shop POS</span>
+  return <div className="flex min-w-0 items-center gap-3">
+    <span className="grid size-9 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground"><Icon name="store" className="size-5" /></span>
+    <ShopName className="min-w-0 break-words text-lg font-bold tracking-[-0.025em] [overflow-wrap:anywhere]" />
   </div>;
 }
 export function PreviewNotice() {
@@ -26,8 +29,15 @@ export function PageHeader({ title, description, breadcrumb, children }: { title
   </div>;
 }
 export function PreviewLink() {
-  return <Link href="/login" className="inline-flex min-h-11 min-w-11 items-center rounded-md px-3 text-sm font-semibold text-primary underline underline-offset-4">All previews</Link>;
+  return <DemoExitLink />;
 }
 export function PreviewFooter() {
   return <p className="mt-8 text-xs leading-5 text-muted-foreground">Shop-local UI preview · Authentication and business workflows are not available.</p>;
+}
+
+/** Navigation only; real session termination belongs to the authentication phase. */
+export function BackToLoginLink() {
+  return <Button asChild variant="outline" size="sm" className="shrink-0 whitespace-nowrap text-white">
+    <SafeNavigationLink href="/login" prefetch={false}><Icon name="arrow" className="rotate-180" />Back to Login</SafeNavigationLink>
+  </Button>;
 }
