@@ -77,8 +77,13 @@ export function SettingsPreview() {
       </Card>
       <PasswordSecurityPreview />
       <Card className="p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-semibold">Automatic Backup</h2><span className="text-xs text-muted-foreground">Setup pending</span></div>
-        <p className="mt-2 text-sm leading-5 text-muted-foreground">Daily backup and restore options will become available with the local database.</p>
+        <h2 className="text-base font-semibold">Backup &amp; Restore</h2>
+        <dl className="mt-3 grid gap-2 text-sm">
+          {[["Automatic Backup", "Planned / Not configured"], ["Last Local Backup", "Not configured"], ["Last Cloud Backup", "Not configured"], ["Cloud Provider", "Supabase — Not connected"]].map(([label, value]) =>
+            <div key={label} className="flex flex-wrap justify-between gap-x-4 gap-y-1"><dt className="text-muted-foreground">{label}</dt><dd className="font-medium">{value}</dd></div>)}
+        </dl>
+        <div className="mt-4 flex flex-wrap gap-3"><Button size="sm" disabled aria-describedby="backup-setup-note">Backup Now</Button><Button size="sm" variant="outline" disabled aria-describedby="backup-setup-note">Restore Backup</Button></div>
+        <p id="backup-setup-note" className="mt-3 text-xs leading-5 text-muted-foreground">Available after secure local database setup. No backups or restores run in this preview.</p>
       </Card>
     </div>
     <p className="mt-3 text-xs leading-5 text-muted-foreground">Demo settings are saved in this browser only, not shared across devices. Currency stays PKR (Rs.).</p>

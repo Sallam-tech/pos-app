@@ -33,7 +33,7 @@ function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNaviga
       <li><Link href="/admin/reports" aria-current={isReports ? (pathname === "/admin/reports" ? "page" : "location") : undefined} onClick={onNavigate}
         className={"app-nav-link " + (isReports ? activeClasses : "text-muted-foreground")}><Icon name="chart" />Reports</Link></li>
       <li className="mt-2 border-t pt-2"><Link href="/admin/investment" aria-current={pathname === "/admin/investment" ? "page" : undefined} onClick={onNavigate}
-        className={"app-nav-link " + (pathname === "/admin/investment" ? activeClasses : "text-muted-foreground")}><Icon name="wallet" />Total Investment</Link></li>
+        className={"app-nav-link " + (pathname === "/admin/investment" ? activeClasses : "text-muted-foreground")}><Icon name="wallet" />Stock Value</Link></li>
       <li><Link href="/admin/daily-closing" aria-current={pathname === "/admin/daily-closing" ? "page" : undefined} onClick={onNavigate} className={"app-nav-link " + (pathname === "/admin/daily-closing" ? activeClasses : "text-muted-foreground")}><Icon name="calendar" />Daily Closing</Link></li>
       <li><Link href="/admin/settings" aria-current={pathname === "/admin/settings" ? "page" : undefined} onClick={onNavigate} className={"app-nav-link " + (pathname === "/admin/settings" ? activeClasses : "text-muted-foreground")}><Icon name="settings" />Settings</Link></li>
     </ul>

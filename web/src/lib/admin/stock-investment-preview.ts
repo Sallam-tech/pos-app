@@ -80,6 +80,7 @@ export function calculateInvestmentOverview(
 }
 
 export const incompletePurchaseInformation = "Not available — purchase information incomplete";
+export const missingBuyingCostsMessage = "Not available — buying costs not recorded";
 
 export function getDemoInvestmentOverview() {
   // Original products have neither current buying costs nor a complete purchase ledger.

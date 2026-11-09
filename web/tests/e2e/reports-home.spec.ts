@@ -30,7 +30,7 @@ for (const theme of ["light", "dark"] as const) test("Reports home and direct re
   await opener.click();
   const drawer = page.getByRole("dialog", { name: "Admin navigation", exact: true });
   const mobile = drawer.getByRole("navigation", { name: "Mobile navigation", exact: true });
-  await expect(mobile.getByRole("link")).toHaveText(["Dashboard", "Products", "Inventory", "Reports", "Total Investment"]);
+  await expect(mobile.getByRole("link")).toHaveText(["Dashboard", "Products", "Inventory", "Reports", "Stock Value", "Daily Closing", "Settings"]);
   await mobile.getByRole("link", { name: "Reports", exact: true }).press("Enter");
   await expect(drawer).toBeHidden();
   await opener.click();

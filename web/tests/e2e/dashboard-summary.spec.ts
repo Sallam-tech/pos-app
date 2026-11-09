@@ -34,7 +34,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByText(/Advisory only/)).toHaveClass("sr-only");
     const overview = page.getByRole("region", { name: "Shop overview" });
     await expect(overview).toHaveAccessibleDescription("Mock data only. These figures are examples, not live shop records.");
-    await expect(overview.getByRole("group")).toHaveCount(8);
+    await expect(overview.getByRole("group")).toHaveCount(7);
     await expect(page.locator("[data-connectivity-state]")).toHaveAttribute("data-connectivity-state", "connected");
 
     for (const width of [1440, 1280, 1024, 768, 375, 320]) {
@@ -67,7 +67,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.locator("table:visible")).toHaveCount(0);
       await expect(overview.locator("button,input,select,canvas,table")).toHaveCount(0);
       if (width === 1440) {
-        for (const section of ["Sales & Profit", "Inventory Overview", "Investment Overview"]) {
+        for (const section of ["Sales & Profit", "Inventory Overview", "Stock Overview"]) {
           const row = overview.getByRole("region", { name: section, exact: true });
           const cardTops = await row.getByRole("group").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top));
           expect(Math.max(...cardTops) - Math.min(...cardTops)).toBeLessThan(1);
@@ -133,5 +133,5 @@ test("Dashboard summary System theme follows OS and persists", async ({ page }) 
   await page.reload();
   await expect(page.getByLabel("Theme", { exact: true })).toHaveValue("system");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect(page.getByRole("region", { name: "Shop overview" }).getByRole("group")).toHaveCount(8);
+  await expect(page.getByRole("region", { name: "Shop overview" }).getByRole("group")).toHaveCount(7);
 });

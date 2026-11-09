@@ -33,3 +33,15 @@ export function netProfitAfterExpenses(
   if (new Set(inPeriod.map((entry) => entry.id)).size !== inPeriod.length) return null;
   return gross.grossProfitPaise - inPeriod.reduce((sum, entry) => sum + entry.amountPaise, BigInt(0));
 }
+
+/** Category-free operating-expense entry; legacy categorized records remain readable. */
+export function validateSimpleExpenseEntry(amount: string, reason: string) {
+  const price = parseDemoMoney(amount);
+  return {
+    amountPaise: price,
+    errors: {
+      ...(price === null || price <= BigInt(0) ? { amount: "Enter a positive PKR amount with no more than 2 decimal places (up to 12 whole-number digits)." } : {}),
+      ...(!reason.trim() || reason.trim().length > 160 ? { reason: "Enter a short reason (up to 160 characters)." } : {}),
+    },
+  };
+}

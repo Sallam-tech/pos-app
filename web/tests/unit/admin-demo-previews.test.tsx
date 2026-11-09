@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
-import ExpensesPage from "@/app/pos/expenses/page";
+import { AdminExpensesPreview as ExpensesPage } from "@/components/demo/admin-expenses-preview";
 import ReturnsPage from "@/app/pos/returns/page";
 import InvestmentPage from "@/app/admin/investment/page";
 import { mockSales } from "@/lib/admin/mock-sales";
@@ -10,9 +10,8 @@ beforeEach(() => {
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value(this: HTMLDialogElement) { this.open = true; } });
   Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value(this: HTMLDialogElement) { this.open = false; } });
 });
-function enterExpense(amount: string, date = "2026-11-02", type = "Rent") {
-  fireEvent.change(screen.getByLabelText("Expense Date", { exact: true }), { target: { value: date } });
-  fireEvent.change(screen.getByLabelText("Expense Type"), { target: { value: type } });
+function enterExpense(amount: string, reason = "Cleaning") {
+  fireEvent.change(screen.getByLabelText("Reason"), { target: { value: reason } });
   fireEvent.change(screen.getByLabelText("Amount (Rs.)"), { target: { value: amount } });
   fireEvent.click(screen.getByRole("button", { name: "Add Expense" }));
 }
@@ -24,8 +23,9 @@ describe("role-placed temporary demo previews", () => {
     expect(preview.props.sales).toHaveLength(8);
     for (const sale of preview.props.sales) expect(Object.keys(sale)).toEqual(["id", "productName", "quantity", "unitPricePaise"]);
     render(page);
-    expect(screen.getByRole("heading", { level: 1, name: "Return Item" })).toBeVisible();
-    expect(screen.getByLabelText("Product / original sale").querySelectorAll("option")).toHaveLength(9);
+    expect(screen.getByRole("heading", { level: 1, name: "Return & Refund" })).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Find Original Sale"), { target: { value: "demo-sale" } });
+    expect(screen.getAllByRole("button", { name: /^Select demo-sale-/ })).toHaveLength(8);
     expect(screen.queryByText(/purchase cost|gross profit|investment|remaining stock|Demo Tools/i)).not.toBeInTheDocument();
   });
   it("validates real calendar dates without timezone conversion", () => {
@@ -45,43 +45,44 @@ describe("role-placed temporary demo previews", () => {
     expect(demoExpenseTotals(entries, "")).toEqual({ daily: null, monthly: null });
   });
   it("adds, corrects, removes and resets temporary expenses through the Summary dialog", () => {
-    const original = JSON.stringify(mockSales); render(<ExpensesPage />);
+    const original = JSON.stringify(mockSales); render(<ExpensesPage businessDate={{ iso: "2026-11-02", label: "2 November 2026" }} />);
     expect(screen.queryByRole("table")).toBeNull();
-    enterExpense("100.10"); enterExpense("0.20", "2026-11-03", "Transport");
+    enterExpense("100.10"); enterExpense("0.20", "Transport");
     expect(screen.queryByRole("table")).toBeNull();
     const summary = () => screen.getByRole("dialog", { name: "Expense Summary" });
     fireEvent.click(screen.getByRole("button", { name: "View Expense Summary" }));
     fireEvent.change(within(summary()).getByLabelText("Selected Date"), { target: { value: "2026-11-02" } });
-    expect(within(summary()).getByText("Daily Expenses").nextElementSibling).toHaveTextContent("Rs. 100.10");
+    expect(within(summary()).getByText("Daily Expenses").nextElementSibling).toHaveTextContent("Rs. 100.30");
     expect(within(summary()).getByText("Monthly Expenses").nextElementSibling).toHaveTextContent("Rs. 100.30");
-    fireEvent.click(screen.getByRole("button", { name: "Correct Rent expense on 2026-11-02" }));
+    fireEvent.click(screen.getByRole("button", { name: "Correct expense: Cleaning" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByLabelText("Amount (Rs.)")).toHaveValue("100.10");
     fireEvent.change(screen.getByLabelText("Amount (Rs.)"), { target: { value: "200.20" } });
     fireEvent.click(screen.getByRole("button", { name: "Update Expense" }));
     fireEvent.click(screen.getByRole("button", { name: "View Expense Summary" }));
     expect(within(summary()).getByText("Monthly Expenses").nextElementSibling).toHaveTextContent("Rs. 200.40");
-    fireEvent.change(within(summary()).getByLabelText("Selected Date"), { target: { value: "2026-11-03" } });
-    fireEvent.click(screen.getByRole("button", { name: "Remove Transport expense on 2026-11-03" }));
-    expect(within(summary()).queryByRole("table")).toBeNull();
+    fireEvent.change(within(summary()).getByLabelText("Selected Date"), { target: { value: "2026-11-02" } });
+    fireEvent.click(screen.getByRole("button", { name: "Remove expense: Transport" }));
+    expect(within(summary()).getAllByRole("row")).toHaveLength(2);
     expect(within(summary()).getByText("Monthly Expenses").nextElementSibling).toHaveTextContent("Rs. 200.20");
     fireEvent.click(screen.getByRole("button", { name: "Reset Demo Expenses" }));
     expect(screen.queryByRole("table")).toBeNull(); expect(JSON.stringify(mockSales)).toBe(original);
   });
   it.each(["0", "-1", "0.001", "100.999", "1e3", ""])("rejects unsafe expense amount %s and focuses its error", (amount) => {
-    render(<ExpensesPage />); enterExpense(amount);
+    render(<ExpensesPage businessDate={{ iso: "2026-11-02", label: "2 November 2026" }} />); enterExpense(amount);
     expect(screen.getByRole("alert")).toHaveTextContent("Enter a positive PKR amount");
     expect(screen.getByLabelText("Amount (Rs.)")).toHaveFocus(); expect(screen.queryByRole("table")).toBeNull();
   });
-  it("rejects an empty date and clears temporary state on leaving", () => {
-    const view = render(<ExpensesPage />); enterExpense("1", "");
-    expect(screen.getByRole("alert")).toHaveTextContent("Enter a valid expense date."); expect(screen.getByLabelText("Expense Date", { exact: true })).toHaveFocus();
-    view.unmount(); render(<ExpensesPage />); fireEvent.click(screen.getByRole("button", { name: "View Expense Summary" }));
+  it("rejects an empty reason and clears temporary state on leaving", () => {
+    const view = render(<ExpensesPage businessDate={{ iso: "2026-11-02", label: "2 November 2026" }} />); enterExpense("1", "");
+    expect(screen.getByRole("alert")).toHaveTextContent("short reason"); expect(screen.getByLabelText("Reason")).toHaveFocus();
+    view.unmount(); render(<ExpensesPage businessDate={{ iso: "2026-11-02", label: "2 November 2026" }} />); fireEvent.click(screen.getByRole("button", { name: "View Expense Summary" }));
     expect(screen.getByText("No expenses recorded for this date.")).toBeVisible();
   });
   it("shows incomplete purchase information without arbitrary owner investment entry", () => {
     render(<InvestmentPage />);
-    expect(screen.getAllByText("Not available — purchase information incomplete")).toHaveLength(2);
+    expect(screen.getByText("Not available — buying costs not recorded")).toBeVisible();
+    fireEvent.click(screen.getByText("View Product Details"));
     expect(screen.queryByRole("form")).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.getAllByRole("rowheader")).toHaveLength(7);
@@ -97,25 +98,19 @@ describe("role-placed temporary demo previews", () => {
     expect(inspectDemoReturn({ ...mockSales[0], quantity: 1.5 }, "1").error).toMatch(/unsupported/);
     expect(JSON.stringify(mockSales)).toBe(original);
   });
-  it("shows an honest focused return review, unavailable refund and reset", () => {
-    render(<ReturnsPage />);
-    const submit = screen.getByRole("button", { name: "Review Return" });
-    fireEvent.click(submit); expect(screen.getByRole("alert")).toHaveTextContent("Choose an original demo sale.");
-    expect(screen.getByLabelText("Product / original sale")).toHaveFocus();
-    fireEvent.change(screen.getByLabelText("Product / original sale"), { target: { value: "demo-sale-1" } });
-    fireEvent.change(screen.getByLabelText("Return Quantity"), { target: { value: "3" } }); fireEvent.click(submit);
-    expect(screen.getByRole("alert")).toHaveTextContent("cannot exceed");
-    expect(screen.getByLabelText("Return Quantity")).toHaveFocus();
-    fireEvent.change(screen.getByLabelText("Return Quantity"), { target: { value: "2" } });
-    fireEvent.change(screen.getByLabelText("Item Condition (optional)"), { target: { value: "good" } }); fireEvent.click(submit);
-    expect(screen.getByRole("heading", { name: "Return Review - Demo Only" })).toHaveFocus();
-    expect(screen.getByText("Refund amount not available for this demo sale.")).toBeVisible();
-    expect(screen.getByText("Recorded price x selected quantity").nextElementSibling).toHaveTextContent("Rs. 2,500.50");
-    expect(screen.getByRole("status")).toHaveTextContent("no refund or stock change was saved");
-    expect(screen.getByText(/Original discount and refund terms are missing/)).toBeVisible();
-    expect(screen.queryByRole("button", { name: /confirm refund/i })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Reset Return Preview" }));
-    expect(screen.queryByRole("heading", { name: "Return Review - Demo Only" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Product / original sale")).toHaveValue("");
+  it("shows an honest read-only cash-refund review and resets without changing original sales", () => {
+    render(<ReturnsPage />); const submit = screen.getByRole("button", { name: "Review Refund" });
+    fireEvent.click(submit); expect(screen.getByRole("alert")).toHaveTextContent("Choose an original sale"); expect(screen.getByLabelText("Find Original Sale")).toHaveFocus();
+    fireEvent.change(screen.getByLabelText("Find Original Sale"), { target: { value: "demo-sale-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Select demo-sale-1 — Diapers" }));
+    fireEvent.change(screen.getByLabelText("Return Quantity — Diapers, item 1"), { target: { value: "3" } }); fireEvent.click(submit);
+    expect(screen.getByRole("alert")).toHaveTextContent("cannot exceed"); expect(screen.getByLabelText("Return Quantity — Diapers, item 1")).toHaveFocus();
+    fireEvent.change(screen.getByLabelText("Return Quantity — Diapers, item 1"), { target: { value: "2" } }); submit.focus(); fireEvent.click(submit);
+    const review = screen.getByRole("dialog", { name: "Refund Review — Demo Only" });
+    expect(review).toHaveTextContent("Refund amount unavailable"); expect(review).toHaveTextContent("missing or inconsistent");
+    expect(within(review).queryByRole("button", { name: /confirm|pay/i })).toBeNull();
+    fireEvent.click(within(review).getByRole("button", { name: "Done" })); expect(submit).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(screen.queryByRole("dialog")).toBeNull(); expect(screen.getByLabelText("Find Original Sale")).toHaveValue("");
   });
 });

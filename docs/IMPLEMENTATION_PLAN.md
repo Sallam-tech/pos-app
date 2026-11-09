@@ -1,6 +1,16 @@
 # POS Implementation Plan
 
-## Current owner-authorized UI revision - 6 November 2026
+## Client-approved frontend FROZEN — 9 November 2026
+
+The client has approved the current frontend; the owner authorizes one local checkpoint with subject chore: freeze approved POS frontend before backend development. This status supersedes older pending-visual-review statements below. All optional visual changes are frozen. Necessary future backend data wiring, connections and error/validation states must preserve the approved screens and flows.
+
+Approved Admin UI covers Dashboard, Products/Inventory, Sales/Profit Reports, Stock Value, expense review, Daily Closing and Settings. Approved Salesperson UI covers Make a Sale with per-item discounts and receipts, Sales History, Shop Expenses and partial/full Return & Refund previews. The six closing cards plus Counter Cash Summary and compact disabled Backup & Restore UI are included. Financial fixtures and historical purchase/profit contracts remain preserved.
+
+Previously reported checks: 175 unit/component tests, 17 browser tests, TypeScript, ESLint and production build passed. This checkpoint task reuses that evidence and changes no feature; it only updates documentation and reviews/commits Git changes. See [the existing report](development/FINAL_FRONTEND_REFINEMENTS_REPORT.md) and [project memory](PROJECT_MEMORY.md).
+
+The application remains a demo. SQLite persistence, planned private Supabase encrypted backup/restore, secure remote Admin access and Windows EXE packaging await separately approved backend architecture/database design. Earlier PostgreSQL/cloud-mirror plans remain historical proposals. Client logo integration is deferred until the final stage. No push or backend work is authorized here.
+
+## Historical owner-authorized UI revision - 6 November 2026
 
 **Latest status: main application and standalone showcase implemented and verified. New visual design awaits owner review.** This section supersedes earlier publication-time statements about the current screen scope, Demo Tools placement and visual acceptance. Historical requirements, decisions and reports below remain intact. The master Phase 1-9 sequence is unchanged; the work is a separately authorized mock demonstration, not production Phases 4-9.
 
@@ -539,3 +549,12 @@ Admin and Salesperson top headers match the navy sidebar in every theme. Exit De
 Password management is an unavailable secure-service preview: 8-128 characters, arbitrary letters/numbers/symbols and longer passwords recommended. Login starts empty, clears restored preview text, performs no automatic role selection/login and does not persist credentials. Browser-managed autofill/save prompts cannot be reliably disabled.
 
 Verification: 272 focused unit/component cases; 12 targeted desktop/mobile browser cases; scoped ESLint, TypeScript and one production build passed. Browser checks covered 17 parent routes, role boundaries, reloads, keyboard focus, dirty-input confirmation, Settings persistence, configured/new versus historical receipts, Light/Dark/System, contrast and 320/375/768/1024/1440px reflow. Four requested final desktop screenshots were inspected. Financial helpers/fixtures and original SRS/development/design documents match the starting snapshot; no existing file was deleted. No staging, commit, push or dependency change. Manual assistive-technology/device/printer checks and all secure local backend/auth/backup work remain pending.
+
+
+## Latest owner-approved frontend scope — 9 November 2026
+
+The final frontend brief supersedes older visible Total Investment, expense-category/date-input, Item Condition and Automatic Backup presentations. Current work uses Stock Value only (purchase/investment contracts preserved), required Amount/Reason with automatic Karachi date, an added Counter Cash Summary beneath the unchanged six closing cards, invoice-level partial/full return review, and disabled Backup & Restore controls. Everything remains a demo. See [the current refinement report](development/FINAL_FRONTEND_REFINEMENTS_REPORT.md) and [project memory](PROJECT_MEMORY.md) for exact verification/review status.
+
+The same brief selects SQLite as the future authoritative local shop database and proposes Supabase private Storage for encrypted backups. This conflicts with the older PostgreSQL/Prisma/cloud-mirror proposals; those documents are historical design references, not current backend implementation authorization. No database, auth, REST business API, Supabase connection or EXE is implemented here. The earlier remote Admin viewing requirement still needs architecture reconciliation: encrypted backup uploads alone do not provide a live remote activity viewer.
+
+Logo integration is explicitly deferred to the end. The later client approval/freeze entry above satisfies the visual-review gate and authorizes the local checkpoint only; do not push. Existing approved frontend work and historical fixture values remain protected.

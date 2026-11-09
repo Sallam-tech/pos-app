@@ -3,7 +3,7 @@ import { expectReadableContrast } from "./support/contrast";
 
 const screens = [
   ["login", "/login", "Shop POS"], ["checkout", "/pos", "Make a Sale"],
-  ["history", "/pos/history", "Sales History"], ["returns", "/pos/returns", "Return Item"],
+  ["history", "/pos/history", "Sales History"], ["returns", "/pos/returns", "Return & Refund"],
   ["expenses", "/pos/expenses", "Shop Expenses"], ["dashboard", "/admin/dashboard", "Dashboard"],
   ["products", "/admin/products", "Products"], ["add-product", "/admin/products/new", "Add Product"],
   ["edit-product", "/admin/products/diapers/edit", "Edit Product"],
@@ -12,7 +12,7 @@ const screens = [
   ["sales-report", "/admin/sales/today", "Sales Report"], ["profit-report", "/admin/profit/today", "Profit Report"],
   ["admin-expenses", "/admin/expenses", "Shop Expenses"],
   ["reports", "/admin/reports", "Reports"], ["sales-charts", "/admin/reports/sales", "Sales Report"],
-  ["profit-charts", "/admin/reports/profit", "Profit Report"], ["investment", "/admin/investment", "Investment & Stock Value"],
+  ["profit-charts", "/admin/reports/profit", "Profit Report"], ["investment", "/admin/investment", "Stock Value"],
 ] as const;
 test.use({ actionTimeout: 10_000 });
 async function noOverflow(page: Page) {
@@ -77,7 +77,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(price).toBeFocused();
     await expect(page.getByRole("main").getByRole("alert")).toHaveText("Enter a price with no more than 2 decimal places.");
     await price.fill("1250.25"); await expect(page.getByTestId("sale-total")).toHaveText("Rs. 2,500.50");
-    await page.getByLabel("Discount (%, optional)", { exact: true }).fill("10");
+    await page.getByLabel("Diapers discount (%), item 1", { exact: true }).fill("10");
     await expect(page.getByTestId("sale-total")).toHaveText("Rs. 2,250.45");
     await page.getByRole("button", { name: "Create Invoice", exact: true }).click();
     let receipt = page.getByRole("dialog", { name: "Sample Invoice", exact: true });
@@ -111,17 +111,19 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByRole("button", { name: "Clear filters", exact: true }).click();
     await expect(page.getByLabel("Find invoice...")).toBeFocused();
     await page.goto("/pos/returns");
-    await page.getByLabel("Find Sale", { exact: true }).fill("demo-sale-1");
-    await page.getByLabel("Product / original sale", { exact: true }).selectOption("demo-sale-1");
-    await page.getByLabel("Return Quantity", { exact: true }).fill("3");
-    await page.getByRole("button", { name: "Review Return", exact: true }).click();
+    await page.getByLabel("Find Original Sale", { exact: true }).fill("demo-sale-1");
+    await page.getByLabel("Find Original Sale", { exact: true }).fill("demo-sale-1");
+  await page.getByRole("button", { name: "Select demo-sale-1 — Diapers", exact: true }).click();
+    await page.getByRole("textbox", { name: /^Return Quantity/ }).fill("3");
+    await page.getByRole("button", { name: "Review Refund", exact: true }).click();
     await expect(page.getByRole("main").getByRole("alert")).toContainText("cannot exceed");
-    await page.getByLabel("Return Quantity", { exact: true }).fill("1");
-    await page.getByLabel("Item Condition (optional)", { exact: true }).selectOption("damaged");
-    await page.getByRole("button", { name: "Review Return", exact: true }).click();
-    await expect(page.getByText("Refund amount not available for this demo sale.", { exact: true })).toBeVisible();
+    await page.getByRole("textbox", { name: /^Return Quantity/ }).fill("1");
+    await expect(page.getByLabel("Item Condition (optional)", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Review Refund", exact: true }).click();
+    await expect(page.getByLabel("Total Cash Refund", { exact: true })).toContainText("Refund amount unavailable");
     await page.goto("/pos/expenses");
     await page.getByLabel("Amount (Rs.)", { exact: true }).fill("250.50");
+    await page.getByLabel("Reason", { exact: true }).fill("Cleaning supplies");
     await page.getByRole("button", { name: "Add Expense", exact: true }).click();
     await page.getByRole("button", { name: "View Expense Summary", exact: true }).click();
     await expect(page.getByRole("table")).toContainText("Rs. 250.50");

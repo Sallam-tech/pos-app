@@ -3,6 +3,12 @@
 ## Project
 Build a production-oriented, single-shop Inventory, Stock, Sales, and Profit Management System.
 
+## Continuity and project memory
+
+Read [`docs/PROJECT_MEMORY.md`](docs/PROJECT_MEMORY.md) at the start of every new chat or agent handoff, then inspect live Git status before editing. It records current features, demo/backend boundaries, the latest checkpoint and uncommitted work, verified checks, blockers and pending decisions. Do not restart or discard existing work.
+
+After meaningful changes, update the affected memory facts and verification status so the next agent can continue. Keep it factual, concise and free of secrets; distinguish implemented previews from real persisted functionality and owner approval from awaiting review. Memory is a handoff summary, not authorization for a new module, and does not replace the source documents or latest explicit owner instructions.
+
 ## Source of truth
 Read these project documents before planning or implementation:
 

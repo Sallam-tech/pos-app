@@ -62,35 +62,26 @@ for (const theme of ["light", "dark"] as const) test("simple original invoice hi
   await expect(page.getByRole("rowheader")).toHaveCount(8);
   expect(await page.content()).not.toMatch(/unitCostSnapshot|grossProfitPaise|lowStockThreshold|stockOnHand/);
 });
-test("optional return condition preserves quantity and refund safeguards", async ({ page }) => {
-  await page.goto("/pos/returns");
-  const condition = page.getByLabel("Item Condition (optional)", { exact: true });
-  await expect(condition).not.toHaveAttribute("required"); await expect(condition).toHaveValue("");
-  await condition.locator("option").evaluateAll((options) => options.map((option) => option.textContent)).then((names) => expect(names).toEqual(["Not specified", "Good / Can be sold again", "Damaged / Cannot be sold again"]));
-  await page.getByLabel("Product / original sale", { exact: true }).selectOption("demo-sale-1");
-  const quantity = page.getByLabel("Return Quantity", { exact: true }); await quantity.fill("2");
-  const review = page.getByRole("button", { name: "Review Return", exact: true }); await review.click();
-  const result = page.locator('[aria-label="Return preview"]');
-  await expect(page.getByRole("heading", { name: "Return Review - Demo Only" })).toBeFocused();
-  await expect(page.getByText(/Pending inspection/)).toHaveCount(2);
-  await expect(page.getByText("Refund amount not available for this demo sale.")).toBeVisible();
-  await quantity.fill("3"); await review.click(); await expect(quantity).toBeFocused();
-  await expect(page.getByRole("main").getByRole("alert")).toContainText("cannot exceed");
-  await quantity.fill("2");
-  for (const value of ["good", "damaged"]) { await condition.selectOption(value); await review.click(); await expect(page.getByText("Demo only — no refund or stock change was saved.", { exact: true })).toBeVisible(); }
-  await expect(page.getByText("Do not return to available stock.", { exact: true })).toHaveCount(2);
-  await expect(result).toContainText("Do not return to available stock.");
-  await page.getByRole("button", { name: "Reset Return Preview" }).click(); await expect(condition).toHaveValue("");
+test("condition-free returns preserve quantity and pending-inspection safeguards", async ({ page }) => {
+  await page.goto("/pos/returns"); await expect(page.getByLabel("Item Condition (optional)")).toHaveCount(0);
+  await page.getByLabel("Find Original Sale", { exact: true }).fill("demo-sale-1"); await page.getByRole("button", { name: "Select demo-sale-1 — Diapers", exact: true }).click();
+  const quantity = page.getByRole("textbox", { name: /^Return Quantity/ }), button = page.getByRole("button", { name: "Review Refund", exact: true });
+  await quantity.fill("3"); await button.click(); await expect(quantity).toBeFocused(); await expect(page.getByRole("main").getByRole("alert")).toContainText("cannot exceed");
+  await quantity.fill("2"); await button.click(); const review = page.getByRole("dialog", { name: "Refund Review — Demo Only", exact: true });
+  await expect(review).toContainText("Refund amount unavailable"); await expect(review).toContainText("pending inspection");
+  await review.getByRole("button", { name: "Done", exact: true }).click(); await expect(button).toBeFocused();
+  await page.getByRole("button", { name: "Reset", exact: true }).click(); await expect(quantity).toHaveCount(0);
 });
 for (const theme of ["light", "dark"] as const) test("centered expense form and temporary daily/monthly summary in " + theme, async ({ page }, info) => {
   await page.addInitScript((mode) => localStorage.setItem("pos-theme", mode), theme);
   const desktop = info.project.name === "chromium";
   await page.setViewportSize({ width: desktop ? 1440 : 375, height: 900 }); await page.goto("/pos/expenses");
-  const date = page.getByLabel("Expense Date", { exact: true }), type = page.getByLabel("Expense Type", { exact: true }), amount = page.getByLabel("Amount (Rs.)", { exact: true });
+  const amount = page.getByLabel("Amount (Rs.)", { exact: true }), reason = page.getByLabel("Reason", { exact: true });
   await expect(amount).toBeVisible();
   const expectedDate = await page.evaluate(() => { const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Karachi", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()); const part = (name: string) => parts.find((p) => p.type === name)!.value; return part("year") + "-" + part("month") + "-" + part("day"); });
-  await expect(date).toHaveValue(expectedDate);
-  await expect(type.locator("option")).toHaveText(["Rent", "Electricity", "Transport", "Other"]);
+  await expect(page.locator("form time")).toHaveAttribute("datetime", expectedDate);
+  await expect(page.getByLabel("Expense Type", { exact: true })).toHaveCount(0);
+  await reason.fill("Cleaning");
   await expect(page.getByRole("table")).toHaveCount(0); await expect(page.getByText("Daily Expenses", { exact: true })).toHaveCount(0);
   const summaryButton = page.getByRole("button", { name: "View Expense Summary", exact: true });
   if (desktop) {
@@ -106,19 +97,19 @@ for (const theme of ["light", "dark"] as const) test("centered expense form and 
   await summary.getByRole("button", { name: "Done", exact: true }).click(); await expect(summaryButton).toBeFocused();
   await amount.fill("0"); await page.getByRole("button", { name: "Add Expense", exact: true }).click(); await expect(amount).toBeFocused();
   await expect(page.getByRole("main").getByRole("alert")).toContainText("positive PKR amount");
-  await date.fill("2026-11-08"); await amount.fill("100.10"); await page.getByRole("button", { name: "Add Expense", exact: true }).dblclick();
+  await page.clock.install({ time: new Date("2026-11-08T07:00:00Z") }); await amount.fill("100.10"); await page.getByRole("button", { name: "Add Expense", exact: true }).dblclick();
   await expect(page.getByRole("status").filter({ hasText: "Expense added to demo." })).toBeVisible(); await expect(amount).toHaveValue("");
-  await date.fill("2026-11-09"); await type.selectOption("Transport"); await amount.fill("0.20"); await page.getByRole("button", { name: "Add Expense", exact: true }).click();
+  await page.clock.setFixedTime(new Date("2026-11-09T07:00:00Z")); await reason.fill("Transport"); await amount.fill("0.20"); await page.getByRole("button", { name: "Add Expense", exact: true }).click();
   await expect(page.getByRole("table")).toHaveCount(0); await summaryButton.click();
   await expect(summary.getByText("Monthly Expenses", { exact: true }).locator("..")).toContainText("Rs. 100.30");
   await summary.getByLabel("Selected Date", { exact: true }).fill("2026-11-08");
   await expect(summary.getByText("Daily Expenses", { exact: true }).locator("..")).toContainText("Rs. 100.10");
   await expect(summary.getByRole("row")).toHaveCount(2);
-  await summary.getByRole("button", { name: "Correct Rent expense on 2026-11-08", exact: true }).click(); await expect(date).toBeFocused();
+  await summary.getByRole("button", { name: "Correct expense: Cleaning", exact: true }).click(); await expect(amount).toBeFocused();
   await amount.fill("200.20"); await page.getByRole("button", { name: "Update Expense", exact: true }).click(); await summaryButton.click();
   await expect(summary.getByText("Monthly Expenses", { exact: true }).locator("..")).toContainText("Rs. 200.40");
   await summary.getByLabel("Selected Date", { exact: true }).fill("2026-11-09");
-  await summary.getByRole("button", { name: "Remove Transport expense on 2026-11-09", exact: true }).click();
+  await summary.getByRole("button", { name: "Remove expense: Transport", exact: true }).click();
   await expect(summary.getByText("No expenses recorded for this date.", { exact: true })).toBeVisible();
   await expect(summary.getByText("Monthly Expenses", { exact: true }).locator("..")).toContainText("Rs. 200.20");
   await summary.getByRole("button", { name: "Reset Demo Expenses", exact: true }).click();

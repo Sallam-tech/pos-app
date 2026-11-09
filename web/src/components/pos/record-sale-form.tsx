@@ -6,14 +6,14 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { DraftInvoice } from "@/components/pos/draft-invoice";
-import { calculateDemoCheckout } from "@/lib/demo/checkout";
+import { calculateItemDiscounts } from "@/lib/item-discount-preview";
 import { ProductCombobox } from "@/components/pos/product-combobox";
 import { getCheckoutDemoPrice } from "@/lib/demo/checkout-products";
 import type { ReceiptDraftState } from "@/lib/receipt-draft-preview";
 import "./sale-preview.css";
-import { draftSubtotal, type DraftItem, type DraftInvoice as Invoice } from "@/lib/sale-draft-preview";
+import { type DraftItem, type DraftInvoice as Invoice } from "@/lib/sale-draft-preview";
 import {
-  createSaleSimulation, formatPreviewPKR, previewTotal, stepPreviewQuantity, validatePreview,
+  formatPreviewPKR, stepPreviewQuantity, validatePreview,
   type PreviewErrors, type PreviewProduct,
 } from "@/lib/pos-preview";
 
@@ -25,7 +25,6 @@ export function RecordSaleForm() {
   const ready = useSyncExternalStore(subscribe, clientReady, serverReady);
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<DraftItem[]>([]);
-  const [discount, setDiscount] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [errors, setErrors] = useState<PreviewErrors>({});
@@ -39,14 +38,13 @@ export function RecordSaleForm() {
   const invoiceContext = useRef<{ previewedAt: string; sampleReference: string } | null>(null);
   const adding = useRef(false);
   const creating = useRef(false);
-  const total = draftSubtotal(items);
-  const checkout = calculateDemoCheckout(total, discount);
+  const discounted = calculateItemDiscounts(items);
   useEffect(() => {
     if (ready && !invoice) { adding.current = false; productRef.current?.focus(); }
   }, [ready, searchVersion, invoice]);
   function clearSearch() { setQuery(""); setErrors({}); setSearchVersion((version) => version + 1); }
   function reset() {
-    setInvoice(null); setItems([]); setDiscount(""); setCustomerName(""); setCustomerPhone(""); setReceiptDraft(null);
+    setInvoice(null); setItems([]); setCustomerName(""); setCustomerPhone(""); setReceiptDraft(null);
     adding.current = false; creating.current = false; invoiceContext.current = null; setAnnouncement(""); clearSearch();
   }
   function addProduct(product: PreviewProduct | null) {
@@ -68,11 +66,11 @@ export function RecordSaleForm() {
     } else {
       adding.current = true;
       const key = nextKey.current++;
-      setItems((current) => [...current, { key, product, quantity: "1", price }]);
+      setItems((current) => [...current, { key, product, quantity: "1", price, discount: "0" }]);
     }
     setAnnouncement(product.name + " added to current items."); clearSearch();
   }
-  function editItem(key: number, field: "quantity" | "price", value: string) {
+  function editItem(key: number, field: "quantity" | "price" | "discount", value: string) {
     setItems((current) => current.map((item) => item.key === key ? { ...item, [field]: value } : item));
   }
   function createInvoice(event: FormEvent<HTMLFormElement>) {
@@ -87,15 +85,19 @@ export function RecordSaleForm() {
       const next = validatePreview(invalid.product, invalid.quantity, invalid.price);
       document.getElementById("item-" + invalid.key + (next.quantity ? "-quantity" : "-price"))?.focus(); return;
     }
-    if (!checkout.value) { document.getElementById("sale-discount")?.focus(); return; }
+    if (!discounted.checkout || !discounted.lines) {
+      const invalidDiscount = items.find((item) => discounted.errors[item.key]);
+      if (invalidDiscount) document.getElementById("item-" + invalidDiscount.key + "-discount")?.focus();
+      return;
+    }
     creating.current = true;
     invoiceContext.current ??= { previewedAt: new Date().toISOString(), sampleReference: "PREVIEW-" + String(previewSequence.current++).padStart(3, "0") };
-    setInvoice({ items: items.map((item) => createSaleSimulation(item.product, item.quantity, item.price)!),
-      checkout: checkout.value, customer: { name: customerName, phone: customerPhone },
+    setInvoice({ items: discounted.lines, discountMode: "per-item",
+      checkout: discounted.checkout, customer: { name: customerName, phone: customerPhone },
       ...invoiceContext.current });
   }
   return <>
-    <form data-unsaved-changes={Boolean(query || items.length || discount || customerName || customerPhone || receiptDraft)} onSubmit={createInvoice} noValidate aria-label="Make a sale preview">
+    <form data-unsaved-changes={Boolean(query || items.length || customerName || customerPhone || receiptDraft)} onSubmit={createInvoice} noValidate aria-label="Make a sale preview">
       <fieldset disabled={!ready || Boolean(invoice)} className="grid min-w-0 gap-5 rounded-lg border bg-card p-4 sm:p-6">
         <legend className="sr-only">Sample invoice draft</legend>
         <section aria-labelledby="find-product-title" className="grid min-w-0 gap-3">
@@ -112,11 +114,19 @@ export function RecordSaleForm() {
           {!items.length ? <p className="py-2 text-sm text-muted-foreground">Find a product to start this sale.</p> : <ul className="grid min-w-0 divide-y">
             {items.map((item, index) => {
               const next = validatePreview(item.product, item.quantity, item.price);
-              const lineTotal = previewTotal(item.quantity, item.price);
+              const lineTotal = discounted.lineTotals[index] ?? null;
+              const discountError = discounted.errors[item.key];
               const prefix = "item-" + item.key;
-              return <li key={item.key} aria-label={item.product.name + " item " + (index + 1)} className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] items-start gap-3 py-3 first:pt-0 last:pb-0 sm:grid-cols-[minmax(0,1fr)_144px_104px_112px_44px]">
-                <p className="col-span-2 break-words font-bold sm:col-span-1 sm:pt-8">{item.product.name}</p>
-                <div className="col-span-3 col-start-1 row-start-2 min-w-0 sm:col-span-1 sm:col-start-auto sm:row-start-auto">
+              return <li key={item.key} aria-label={item.product.name + " item " + (index + 1)} className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_44px] items-start gap-3 py-3 first:pt-0 last:pb-0 md:grid-cols-[minmax(0,1fr)_88px_144px_104px_100px_44px]">
+                <p className="col-span-2 break-words font-bold md:col-span-1 md:pt-8">{item.product.name}</p>
+                <div className="col-start-1 row-start-2 min-w-0 md:col-start-auto md:row-start-auto">
+                  <Field id={prefix + "-discount"} label="Discount %" error={discountError}>
+                    <Input id={prefix + "-discount"} aria-label={item.product.name + " discount (%), item " + (index + 1)} inputMode="decimal" autoComplete="off" maxLength={8} value={item.discount}
+                      aria-invalid={Boolean(discountError) || undefined} aria-describedby={discountError ? prefix + "-discount-error" : undefined} className="numeric min-w-0 px-2" placeholder="0"
+                      onChange={(event) => editItem(item.key, "discount", event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} />
+                  </Field>
+                </div>
+                <div className="col-span-2 col-start-2 row-start-2 min-w-0 md:col-span-1 md:col-start-auto md:row-start-auto">
                   <Field id={prefix + "-quantity"} label="Quantity" error={next.quantity}>
                     <div className="flex min-w-0 gap-1">
                       <Button size="sm" variant="outline" className="w-11 px-0" aria-label={"Decrease " + item.product.name + " quantity, item " + (index + 1)} disabled={!stepPreviewQuantity(item.quantity, -1)} onClick={() => editItem(item.key, "quantity", stepPreviewQuantity(item.quantity, -1)!)}>-</Button>
@@ -125,25 +135,20 @@ export function RecordSaleForm() {
                     </div>
                   </Field>
                 </div>
-                <div className="col-span-3 col-start-1 row-start-3 min-w-0 sm:col-span-1 sm:col-start-auto sm:row-start-auto">
+                <div className="col-span-3 col-start-1 row-start-3 min-w-0 md:col-span-1 md:col-start-auto md:row-start-auto">
                   <Field id={prefix + "-price"} label="Price (PKR)" error={next.price}>
                     <Input id={prefix + "-price"} aria-label={item.product.name + " price (PKR), item " + (index + 1)} inputMode="decimal" maxLength={32} value={item.price} aria-invalid={Boolean(next.price) || undefined} aria-describedby={next.price ? prefix + "-price-error" : undefined} className="numeric min-w-0 px-2" onChange={(event) => editItem(item.key, "price", event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }} />
                   </Field>
                 </div>
-                <output aria-label={item.product.name + " line total, item " + (index + 1)} className="numeric col-span-3 row-start-4 break-all text-right font-bold sm:col-span-1 sm:row-start-auto sm:pt-9">{lineTotal === null ? "\u2014" : formatPreviewPKR(lineTotal)}</output>
-                <Button variant="ghost" size="sm" className="sale-remove-button col-start-3 row-start-1 w-11 px-0 sm:col-start-auto sm:row-start-auto sm:mt-7" aria-label={"Remove " + item.product.name} onClick={() => { setItems((current) => current.filter((entry) => entry.key !== item.key)); setAnnouncement(item.product.name + " removed."); productRef.current?.focus(); }}><Icon name="close" /></Button>
+                <output aria-label={item.product.name + " line total, item " + (index + 1)} className="numeric col-span-3 row-start-4 break-all text-right font-bold md:col-span-1 md:row-start-auto md:pt-9">{lineTotal === null ? "\u2014" : formatPreviewPKR(lineTotal)}</output>
+                <Button variant="ghost" size="sm" className="sale-remove-button col-start-3 row-start-1 w-11 px-0 md:col-start-auto md:row-start-auto md:mt-7" aria-label={"Remove " + item.product.name} onClick={() => { setItems((current) => current.filter((entry) => entry.key !== item.key)); setAnnouncement(item.product.name + " removed."); productRef.current?.focus(); }}><Icon name="close" /></Button>
               </li>;
             })}
           </ul>}
         </section>
-        <div className="border-t pt-4">
-          <Field id="sale-discount" label="Discount (%, optional)" error={checkout.errors.discount}>
-            <Input id="sale-discount" inputMode="decimal" autoComplete="off" value={discount} maxLength={8} aria-invalid={Boolean(checkout.errors.discount) || undefined} aria-describedby={checkout.errors.discount ? "sale-discount-error" : undefined} className="numeric max-w-48" placeholder="No discount" onChange={(event) => setDiscount(event.target.value)} />
-          </Field>
-          <div className="mt-4 flex min-w-0 flex-wrap items-baseline justify-between gap-2 border-y py-4">
-            <p id="sale-total-label" className="font-semibold">TOTAL</p>
-            <output aria-labelledby="sale-total-label" data-testid="sale-total" className="numeric min-w-0 break-all text-3xl font-bold tracking-tight">{checkout.value === null ? "\u2014" : formatPreviewPKR(checkout.value.total)}</output>
-          </div>
+        <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2 border-y py-4">
+          <p id="sale-total-label" className="font-semibold">TOTAL</p>
+          <output aria-labelledby="sale-total-label" data-testid="sale-total" className="numeric min-w-0 break-all text-3xl font-bold tracking-tight">{discounted.checkout === null ? "—" : formatPreviewPKR(discounted.checkout.total)}</output>
         </div>
         <details className="optional-details">
           <summary>Customer (Optional)</summary>

@@ -25,10 +25,11 @@ export function DraftInvoice({ invoice, initialDraft, onDone, onEditSale }: {
   const [layout, setLayout] = useState(initialDraft?.layout ?? settings.receiptLayout);
   const [cash, setCash] = useState(initialDraft?.cash ?? "");
   const errors = validateReceiptDraft(details);
-  const payment = calculateDemoCheckout(checkout.subtotal, checkout.discountPercent, cash);
+  const perItem = invoice.discountMode === "per-item";
+  const payment = perItem ? calculateDemoCheckout(checkout.total, "", cash) : calculateDemoCheckout(checkout.subtotal, checkout.discountPercent, cash);
   const cashError = payment.errors.cash ?? payment.value?.cashWarning ?? undefined;
   const printDisabled = Object.keys(errors).length > 0 || payment.value === null || Boolean(cashError);
-  const hasDiscount = checkout.discountPercent !== "0";
+  const hasDiscount = perItem ? checkout.discountAmount !== "0.00" : checkout.discountPercent !== "0";
   const paidAmounts = payment.value && !cashError && payment.value.cashReceived !== null ? payment.value : null;
   const editSale = () => onEditSale({ details, cash, layout });
   const input = (key: "shopName" | "address" | "footer" | "customerName" | "customerPhone", label: string, maximum: number) => {
@@ -79,7 +80,7 @@ export function DraftInvoice({ invoice, initialDraft, onDone, onEditSale }: {
       <InvoiceItemsTable items={invoice.items} />
       <dl className="invoice-summary numeric">
         {hasDiscount && <><div><dt>Subtotal</dt><dd>{formatPreviewPKR(checkout.subtotal)}</dd></div>
-          <div><dt>Discount ({checkout.discountPercent}%)</dt><dd>{formatPreviewPKR(checkout.discountAmount)}</dd></div></>}
+          <div><dt>{perItem ? "Item discounts" : "Discount (" + checkout.discountPercent + "%)"}</dt><dd>{formatPreviewPKR(checkout.discountAmount)}</dd></div></>}
         <div className="invoice-total"><dt>TOTAL</dt><dd data-testid="receipt-total">{formatPreviewPKR(checkout.total)}</dd></div>
         {paidAmounts && <><div><dt>Cash Received</dt><dd>{formatPreviewPKR(paidAmounts.cashReceived!)}</dd></div>
           <div><dt>Change</dt><dd>{formatPreviewPKR(paidAmounts.change!)}</dd></div></>}

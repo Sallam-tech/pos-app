@@ -99,8 +99,10 @@ describe("truthful security and backup preparation", () => {
   });
   it("displays pending automatic backup with no download or fake successful backup", () => {
     render(<SettingsPreview />);
-    expect(screen.getByText("Daily backup and restore options will become available with the local database.")).toBeVisible();
-    expect(screen.getByText("Setup pending")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Backup & Restore" })).toBeVisible();
+    expect(screen.getByText("Supabase — Not connected")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Backup Now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Restore Backup" })).toBeDisabled();
     expect(screen.queryByRole("link", { name: /download|restore/i })).not.toBeInTheDocument();
   });
 });

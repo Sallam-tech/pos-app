@@ -29,7 +29,7 @@ for (const theme of ["light", "dark"] as const) test("compact Settings, neutral 
   await expect(page.getByLabel("Currency", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Receipt Paper", { exact: true }).locator("option")).toHaveText(["Ordinary page", "Compact receipt (80 mm)"]);
   await expect(page.getByRole("heading", { name: "Passwords", exact: true })).toBeVisible();
-  await expect(page.getByText("Setup pending", { exact: true })).toBeVisible();
+  await expect(page.getByText("Planned / Not configured", { exact: true })).toBeVisible();
   await expect(page.getByLabel("New password", { exact: true })).toHaveCount(0);
   if (desktop) {
     const [phone, paper, preview, save] = await Promise.all(["Phone Number", "Receipt Paper"].map((name) => page.getByLabel(name, { exact: true }).boundingBox()).concat(["Preview Receipt", "Save Settings"].map((name) => page.getByRole("button", { name, exact: true }).boundingBox())));

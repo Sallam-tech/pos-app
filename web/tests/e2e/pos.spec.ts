@@ -41,7 +41,7 @@ for (const theme of ["light", "dark"] as const) test("fast product entry, editab
   await page.getByLabel("Milk Powder price (PKR), item 2", { exact: true }).press("Enter");
   await expect(page.getByRole("dialog")).toHaveCount(0); await expect(page.getByRole("listitem")).toHaveCount(3);
   await choose(page, "rice"); await page.getByRole("button", { name: "Remove Rice", exact: true }).click(); await expect(search(page)).toBeFocused();
-  await page.getByLabel("Discount (%, optional)", { exact: true }).fill("10");
+  for (const input of await page.getByLabel(/discount \(%\), item/).all()) await input.fill("10");
   await expect(page.getByTestId("sale-total")).toHaveText("Rs. 3,170.25");
   await page.getByText("Customer (Optional)", { exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Ali & Sons"); await page.getByLabel("Phone", { exact: true }).fill("0300-1234567");
@@ -58,7 +58,7 @@ for (const theme of ["light", "dark"] as const) test("fast product entry, editab
   await expect(dialog.getByRole("table").getByRole("row")).toHaveCount(4);
   await expect(paper).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(paper).toContainText("Ali & Sons"); await expect(paper).toContainText("0300-1234567");
-  await expect(paper).toContainText("Subtotal"); await expect(paper).toContainText("Discount (10%)");
+  await expect(paper).toContainText("Subtotal"); await expect(paper).toContainText("Item discounts");
   await expect(paper).toContainText(credit); await expect(paper).not.toContainText(/Cash Received|Change|Paid/);
   await expect(dialog.getByTestId("receipt-total")).toHaveText("Rs. 3,170.25");
   await expect(dialog.getByRole("button", { name: "Print", exact: true })).toHaveCount(1);
@@ -89,7 +89,7 @@ for (const theme of ["light", "dark"] as const) test("fast product entry, editab
   await dialog.getByRole("button", { name: "Edit Sale", exact: true }).click();
   await expect(dialog).toHaveCount(0); await expect(search(page)).toBeFocused();
   await expect(page.getByLabel("Diapers price (PKR), item 1", { exact: true })).toHaveValue("1250.25");
-  await expect(page.getByLabel("Discount (%, optional)", { exact: true })).toHaveValue("10");
+  await expect(page.getByLabel("Diapers discount (%), item 1", { exact: true })).toHaveValue("10");
   await page.getByRole("button", { name: "Create Invoice", exact: true }).click();
   await expect(paper).toContainText("One receipt only"); await expect(paper).toContainText("PREVIEW-001");
   await expect(paper).toContainText("Rs. 329.75");
@@ -133,9 +133,9 @@ test("all seven temporary prices, precision, typing/pasting and exact totals", a
   }
   await quantity.fill("-1"); await page.getByRole("button", { name: "Create Invoice" }).click(); await expect(quantity).toBeFocused();
   await quantity.fill("0.125"); await price.fill("0.10"); await expect(page.getByTestId("sale-total")).toHaveText("Rs. 0.0125");
-  await page.getByLabel("Discount (%, optional)").fill("10"); await page.getByRole("button", { name: "Create Invoice" }).click();
+  await page.getByLabel("Diapers discount (%), item 1").fill("10"); await page.getByRole("button", { name: "Create Invoice" }).click();
   await expect(page.getByRole("main").getByRole("alert")).toContainText("never rounds");
-  await page.getByLabel("Discount (%, optional)").fill(""); await page.getByRole("button", { name: "Create Invoice" }).click();
+  await page.getByLabel("Diapers discount (%), item 1").fill(""); await page.getByRole("button", { name: "Create Invoice" }).click();
   const dialog = page.getByRole("dialog", { name: "Sample Invoice" }); await expect(dialog.getByTestId("receipt-total")).toHaveText("Rs. 0.0125");
   await expect(dialog.locator(".receipt-sheet")).not.toContainText(/Customer|Cash Received|Change|Discount/);
   await dialog.press("Escape"); await expect(search(page)).toBeFocused(); await expect(quantity).toHaveValue("0.125");

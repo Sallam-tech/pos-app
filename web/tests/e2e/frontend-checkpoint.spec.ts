@@ -54,7 +54,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(guard).toBeVisible(); await guard.getByRole("button", { name: "Keep editing" }).click(); await expect(login).toBeFocused(); await expect(search).toHaveValue("dia");
     await search.press("Enter"); await page.getByLabel("Diapers quantity, item 1", { exact: true }).fill("2");
     await page.getByLabel("Diapers price (PKR), item 1", { exact: true }).fill("1250.25");
-    await page.getByLabel("Discount (%, optional)", { exact: true }).fill("10"); await page.getByRole("button", { name: "Create Invoice", exact: true }).click();
+    await page.getByLabel("Diapers discount (%), item 1", { exact: true }).fill("10"); await page.getByRole("button", { name: "Create Invoice", exact: true }).click();
     const receipt = page.getByRole("dialog", { name: "Sample Invoice", exact: true }), paper = receipt.locator(".receipt-sheet");
     await expect(paper.locator("[data-developer-credit] p")).toHaveText(lines); await expect(paper).not.toContainText("0310-3698894");
     await expect(receipt.getByTestId("receipt-total")).toHaveText("Rs. 2,250.45");

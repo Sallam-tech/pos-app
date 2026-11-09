@@ -46,7 +46,7 @@ test("connected role workflows, direct navigation, safe payloads and bookmarked 
   await responsive(page); await expectReadableContrast(page);
   if (desktop) {
     const nav = page.getByRole("navigation", { name: "Main navigation", exact: true });
-    await expect(nav.getByRole("link", { name: "Total Investment", exact: true })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Stock Value", exact: true })).toBeVisible();
     await expect(nav.getByRole("link", { name: /Demo Tools|Return Item|Shop Expenses/ })).toHaveCount(0);
     await page.screenshot({ path: info.outputPath("02-dashboard-light.png"), fullPage: true, scale: "css" });
     await page.getByRole("link", { name: "Total Products", exact: true }).click();
@@ -55,10 +55,10 @@ test("connected role workflows, direct navigation, safe payloads and bookmarked 
     await responsive(page); await expectReadableContrast(page);
     await page.screenshot({ path: info.outputPath("07-products-light.png"), fullPage: true, scale: "css" });
     await nav.getByRole("link", { name: "Dashboard", exact: true }).click();
-    await nav.getByRole("link", { name: "Total Investment", exact: true }).click();
+    await nav.getByRole("link", { name: "Stock Value", exact: true }).click();
   } else {
     await page.getByRole("button", { name: "Open navigation", exact: true }).click();
-    await page.getByRole("navigation", { name: "Mobile navigation", exact: true }).getByRole("link", { name: "Total Investment", exact: true }).click();
+    await page.getByRole("navigation", { name: "Mobile navigation", exact: true }).getByRole("link", { name: "Stock Value", exact: true }).click();
   }
   await expect(page).toHaveURL("/admin/investment");
   await expect(page.getByText("Not available — purchase information incomplete", { exact: true })).toHaveCount(2);
@@ -85,16 +85,18 @@ test("connected role workflows, direct navigation, safe payloads and bookmarked 
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL("/pos/returns"); await safeSalesperson(page);
   await expect(salesNavigation(page).getByRole("link", { name: "Return Item", exact: true })).toHaveAttribute("aria-current", "page");
-  await page.getByLabel("Product / original sale", { exact: true }).selectOption("demo-sale-1");
-  await page.getByLabel("Return Quantity", { exact: true }).fill("3");
-  await page.getByRole("button", { name: "Review Return", exact: true }).click();
+  await page.getByLabel("Find Original Sale", { exact: true }).fill("demo-sale-1");
+  await page.getByRole("button", { name: "Select demo-sale-1 — Diapers", exact: true }).click();
+  await page.getByRole("textbox", { name: /^Return Quantity/ }).fill("3");
+  await page.getByRole("button", { name: "Review Refund", exact: true }).click();
   await expect(page.getByRole("main").getByRole("alert")).toContainText("cannot exceed");
-  await page.getByLabel("Return Quantity", { exact: true }).fill("2");
-  await page.getByLabel("Item Condition (optional)", { exact: true }).selectOption("good");
-  await page.getByRole("button", { name: "Review Return", exact: true }).click();
-  await expect(page.locator("main h2[tabindex='-1']")).toBeFocused();
-  await expect(page.getByText("Refund amount not available for this demo sale.", { exact: true })).toBeVisible();
-  await expect(page.getByRole("main")).toContainText("Rs. 2,500.50");
+  await page.getByRole("textbox", { name: /^Return Quantity/ }).fill("2");
+  await expect(page.getByLabel("Item Condition (optional)", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Review Refund", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Refund Review — Demo Only" }).getByRole("button", { name: "Close dialog" })).toBeFocused();
+  await page.getByRole("dialog", { name: "Refund Review — Demo Only" }).getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page.getByLabel("Total Cash Refund", { exact: true })).toContainText("Refund amount unavailable");
+  await expect(page.getByRole("main")).toContainText("Not recorded");
   await responsive(page); await expectReadableContrast(page);
   await page.evaluate(() => scrollTo(0, 0));
   if (desktop) await page.screenshot({ path: info.outputPath("05-return-light.png"), fullPage: true, scale: "css" });
@@ -102,16 +104,18 @@ test("connected role workflows, direct navigation, safe payloads and bookmarked 
   await expect(page).toHaveURL("/pos/expenses"); await safeSalesperson(page);
   expect(await page.content()).not.toMatch(/demo-sale-[1-8]/);
   await expect(page.getByRole("table")).toHaveCount(0);
+  await page.clock.install({ time: new Date("2026-11-02T07:00:00Z") });
+  await page.getByLabel("Reason", { exact: true }).fill("Temporary example");
   await page.getByLabel("Amount (Rs.)", { exact: true }).fill("-1");
   await page.getByRole("button", { name: "Add Expense", exact: true }).click();
   await expect(page.getByRole("main").getByRole("alert")).toContainText("positive PKR");
-  await page.getByLabel("Expense Date", { exact: true }).fill("2026-11-02");
+  await expect(page.getByLabel("Expense Date", { exact: true })).toHaveCount(0);
   await page.getByLabel("Amount (Rs.)", { exact: true }).fill("1250.25");
-  await page.getByLabel("Note (optional)", { exact: true }).fill("Temporary example");
+  await page.getByLabel("Reason", { exact: true }).fill("Temporary example");
   await page.getByRole("button", { name: "Add Expense", exact: true }).click();
   await page.getByRole("button", { name: "View Expense Summary", exact: true }).click();
   await expect(page.getByRole("region", { name: "Temporary demo expenses" })).toContainText("Rs. 1,250.25");
-  await page.getByRole("button", { name: "Correct Rent expense on 2026-11-02" }).click();
+  await page.getByRole("button", { name: "Correct expense: Temporary example" }).click();
   await page.getByLabel("Amount (Rs.)", { exact: true }).fill("1500.50");
   await page.getByRole("button", { name: "Update Expense", exact: true }).click();
   await page.getByRole("button", { name: "View Expense Summary", exact: true }).click();
@@ -122,7 +126,7 @@ test("connected role workflows, direct navigation, safe payloads and bookmarked 
   await page.evaluate(() => scrollTo(0, 0));
   if (desktop) await page.screenshot({ path: info.outputPath("06-expenses-light.png"), fullPage: true, scale: "css" });
   await page.getByLabel("Selected Date", { exact: true }).fill("2026-11-02");
-  await page.getByRole("button", { name: "Remove Rent expense on 2026-11-02" }).click();
+  await page.getByRole("button", { name: "Remove expense: Temporary example" }).click();
   await expect(page.getByText("No expenses recorded for this date.", { exact: true })).toBeVisible();
   await page.getByRole("dialog", { name: "Expense Summary", exact: true }).getByRole("button", { name: "Done", exact: true }).click();
   await salesNavigation(page).getByRole("link", { name: "Make a Sale", exact: true }).click();

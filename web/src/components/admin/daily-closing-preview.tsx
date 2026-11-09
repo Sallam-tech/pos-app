@@ -1,6 +1,7 @@
 "use client";
 
 import { PageHeading } from "@/components/shell/page-heading";
+import { CounterCashSummary } from "./counter-cash-summary";
 
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,7 @@ export function DailyClosingPreview() {
       </Card>)}
     </section>
     <p className="mt-3 text-sm leading-6 text-muted-foreground">Buying costs are fictional examples for the original demo sales. Saved expenses and returns are incomplete, so Profit After Expenses is not available.</p>
+    <CounterCashSummary key={date} businessDate={date} />
     <Card className="mt-5">
       <h2 className="section-title">Closing is not available yet</h2>
       <p id="closing-backend-note" className="mt-2 text-sm leading-6 text-muted-foreground">A secure local database must save and confirm the closing record first. Nothing is deleted, reset or closed here.</p>

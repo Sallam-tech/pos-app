@@ -25,7 +25,7 @@ for (const kind of ["sales", "profit"] as const) for (const theme of ["light", "
     await expect(page.getByText("Demo Data", { exact: true })).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     const nav = page.getByRole("navigation", { name: "Main navigation", exact: true });
-    await expect(nav.getByRole("link")).toHaveText(["Dashboard", "Products", "Inventory", "Reports", "Total Investment"]);
+    await expect(nav.getByRole("link")).toHaveText(["Dashboard", "Products", "Inventory", "Reports", "Stock Value", "Daily Closing", "Settings"]);
     await expect(nav.getByRole("link", { name: "Reports", exact: true })).toHaveAttribute("aria-current", "location");
     await expect(nav.getByRole("link", { name: "Sales", exact: true })).toHaveCount(0);
     const totals = page.getByLabel(kind === "sales" ? "Revenue totals" : "Gross profit totals", { exact: true });

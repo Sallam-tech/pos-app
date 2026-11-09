@@ -4,7 +4,7 @@ import { ProductListPreview } from "@/components/admin/product-list-preview";
 import InvestmentPage from "@/app/admin/investment/page";
 import DashboardPage from "@/app/admin/dashboard/page";
 import { mockInventory } from "@/lib/admin/mock-inventory";
-import { incompletePurchaseInformation } from "@/lib/admin/stock-investment-preview";
+import { missingBuyingCostsMessage } from "@/lib/admin/stock-investment-preview";
 
 const methods = ["showModal", "close"] as const;
 const originals = methods.map((name) => Object.getOwnPropertyDescriptor(HTMLDialogElement.prototype, name));
@@ -76,13 +76,16 @@ describe("separate Add Stock purchase preview", () => {
   });
 });
 
-describe("honest shared Investment overview", () => {
-  it("replaces manual entry with two unavailable summaries and seven read-only valuation rows", () => {
+describe("honest shared Stock Value overview", () => {
+  it("replaces manual entry with one unavailable summary and on-demand valuation rows", () => {
     render(<InvestmentPage />);
-    expect(screen.getByRole("heading", { level: 1, name: "Investment & Stock Value" })).toBeVisible();
-    expect(screen.getAllByText(incompletePurchaseInformation)).toHaveLength(2);
-    expect(screen.getAllByRole("group")).toHaveLength(2);
-    expect(screen.getAllByRole("columnheader").map((item) => item.textContent)).toEqual(["Product", "Available Stock", "Buying Cost", "Stock Value"]);
+    expect(screen.getByRole("heading", { level: 1, name: "Stock Value" })).toBeVisible();
+    expect(screen.getAllByText(missingBuyingCostsMessage)).toHaveLength(1);
+    expect(document.querySelector("details")).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("View Product Details"));
+    expect(screen.getByRole("group", { name: "Total Stock Value" })).toBeVisible();
+    expect(screen.queryByRole("group", { name: "Total Investment" })).toBeNull();
+    expect(screen.getAllByRole("columnheader").map((item) => item.textContent)).toEqual(["Product", "Available Quantity", "Buying Cost", "Stock Value"]);
     for (const product of mockInventory) {
       const row = screen.getByRole("rowheader", { name: product.name }).closest("tr")!;
       expect(within(row).getByText(product.quantity + " units")).toBeVisible();
@@ -93,14 +96,14 @@ describe("honest shared Investment overview", () => {
     expect(screen.queryByText("Rs. 0.00")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to Dashboard" })).toHaveAttribute("href", "/admin/dashboard");
   });
-  it("adds two linked Dashboard summaries from the same incomplete source without replacing existing values", () => {
+  it("keeps the linked Stock Value Dashboard summary from the same incomplete source without replacing existing values", () => {
     render(<DashboardPage />);
     const overview = screen.getByRole("region", { name: "Shop overview" });
-    expect(within(overview).getAllByRole("group")).toHaveLength(8);
-    for (const label of ["Total Investment", "Stock Value"]) {
+    expect(within(overview).getAllByRole("group")).toHaveLength(7);
+    for (const label of ["Stock Value"]) {
       const card = within(overview).getByRole("group", { name: label });
       expect(within(card).getByText("Not available", { exact: true })).toBeVisible();
-      expect(within(card).getByText("Purchase information incomplete.")).toBeVisible();
+      expect(within(card).getByText("Buying costs not recorded.")).toBeVisible();
       expect(within(card).getByRole("link")).toHaveAttribute("href", "/admin/investment");
       expect(card.querySelector("data")).toBeNull();
     }

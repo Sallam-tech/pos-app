@@ -117,11 +117,11 @@ it.each(["/admin/products/new", "/admin/products/diapers/edit", "/admin/products
   expect(screen.getAllByRole("link", { name: "Exit Demo" })).toHaveLength(1);
 });
 
-it("makes Total Investment directly accessible without a Demo Tools hub", () => {
+it("makes Stock Value directly accessible without a Demo Tools hub", () => {
   vi.mocked(usePathname).mockReturnValue("/admin/investment");
   render(<AdminShell>Investment preview</AdminShell>);
   const nav = screen.getByRole("navigation", { name: "Main navigation" });
-  expect(within(nav).getByRole("link", { name: "Total Investment" })).toHaveAttribute("aria-current", "page");
+  expect(within(nav).getByRole("link", { name: "Stock Value" })).toHaveAttribute("aria-current", "page");
   expect(within(nav).queryByRole("link", { name: "Demo Tools" })).not.toBeInTheDocument();
   expect(within(nav).getByRole("link", { name: "Reports" })).not.toHaveAttribute("aria-current");
 });

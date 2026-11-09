@@ -79,29 +79,31 @@ for (const theme of ["light", "dark"] as const) test("separate stock purchase, p
   await expect(page.getByRole("main").getByRole("status")).toContainText("changes were not saved");
   await page.goto("/admin/dashboard");
   const overview = page.getByRole("region", { name: "Shop overview" });
-  await expect(overview.getByRole("group")).toHaveCount(8);
+  await expect(overview.getByRole("group")).toHaveCount(7);
   await expect(overview.getByText("Rs. 25,690.00", { exact: true })).toBeVisible();
   await expect(overview.getByText("Rs. 5,140.00", { exact: true })).toBeVisible();
-  for (const label of ["Total Investment", "Stock Value"]) {
+  for (const label of ["Stock Value"]) {
     const card = overview.getByRole("group", { name: label, exact: true });
     await expect(card.getByText("Not available", { exact: true })).toBeVisible();
     const link = card.getByRole("link", { name: label, exact: true });
     await link.focus(); await expect(link).toHaveCSS("outline-width", "3px"); await link.press("Enter");
     await expect(page).toHaveURL("/admin/investment");
-    await expect(page).toHaveTitle("Investment & Stock Value | Shop POS");
-    await expect(page.getByRole("heading", { name: "Investment & Stock Value", exact: true })).toBeVisible();
-    await expect(page.getByText("Not available — purchase information incomplete", { exact: true })).toHaveCount(2);
-    await expect(page.getByRole("main").getByRole("group")).toHaveCount(2);
+    await expect(page).toHaveTitle("Stock Value | Shop POS");
+    await expect(page.getByRole("heading", { name: "Stock Value", exact: true })).toBeVisible();
+    await expect(page.getByText("Not available — buying costs not recorded", { exact: true })).toHaveCount(1);
+    await expect(page.getByRole("main").getByRole("group", { name: "Total Stock Value", exact: true })).toHaveCount(1);
     await expect(page.getByRole("main").getByRole("form")).toHaveCount(0);
+    await expect(page.getByRole("table")).toHaveCount(0);
+    await page.getByText("View Product Details", { exact: true }).click();
     const table = page.getByRole("table", { name: "Demo stock value by product" });
     await expect(table.getByRole("rowheader")).toHaveCount(7);
     await expect(table.getByText("Not available", { exact: true })).toHaveCount(14);
     const toothpaste = table.getByRole("rowheader", { name: "Toothpaste", exact: true }).locator("..");
     await expect(toothpaste).toContainText("0 units"); await expect(toothpaste).not.toContainText("Rs. 0.00");
     await expectReadableContrast(page);
-    if (label === "Total Investment") {
+    if (label === "Stock Value") {
       await expect(page.locator(".investment-workspace")).toHaveCSS("background-color", theme === "light" ? "rgb(241, 245, 243)" : "rgb(20, 28, 38)");
-      await expect(page.getByRole("group", { name: "Stock Value", exact: true })).toHaveCSS("background-color", theme === "light" ? "rgb(255, 255, 255)" : "rgb(28, 39, 51)");
+      await expect(page.getByRole("group", { name: "Total Stock Value", exact: true })).toHaveCSS("background-color", theme === "light" ? "rgb(255, 255, 255)" : "rgb(28, 39, 51)");
       if (desktop) await page.screenshot({ path: info.outputPath("investment-" + theme + ".png"), fullPage: true, scale: "css" });
       for (const width of [320, 375, 768, 1024, 1440]) { await page.setViewportSize({ width, height: 720 }); await noOverflow(page); }
       await page.setViewportSize({ width: desktop ? 1440 : 375, height: 900 });

@@ -24,7 +24,7 @@ async function checkAdminNavigation(page: Page) {
   const mobile = page.viewportSize()!.width < 1024;
   if (mobile) await page.getByRole("button", { name: "Open navigation", exact: true }).click();
   const nav = page.getByRole("navigation", { name: mobile ? "Mobile navigation" : "Main navigation", exact: true });
-  await expect(nav.getByRole("link")).toHaveText(["Dashboard", "Products", "Inventory", "Reports", "Total Investment", "Daily Closing", "Settings"]);
+  await expect(nav.getByRole("link")).toHaveText(["Dashboard", "Products", "Inventory", "Reports", "Stock Value", "Daily Closing", "Settings"]);
   if (mobile) await page.getByRole("dialog", { name: "Admin navigation", exact: true }).press("Escape");
 }
 for (const theme of ["light", "dark"] as const) test("compact Dashboard and preserved drilldowns in " + theme, async ({ page }, info) => {
@@ -35,7 +35,7 @@ for (const theme of ["light", "dark"] as const) test("compact Dashboard and pres
   await ready(page, "/admin/dashboard");
   await checkAdminNavigation(page);
   const overview = page.getByRole("region", { name: "Shop overview", exact: true });
-  for (const [name, count] of [["Sales & Profit", 3], ["Inventory Overview", 3], ["Investment Overview", 2]] as const) {
+  for (const [name, count] of [["Sales & Profit", 3], ["Inventory Overview", 3], ["Stock Overview", 1]] as const) {
     const section = overview.getByRole("region", { name, exact: true });
     await expect(section.getByRole("group")).toHaveCount(count);
     if (desktop) {
@@ -46,7 +46,7 @@ for (const theme of ["light", "dark"] as const) test("compact Dashboard and pres
   }
   await expect(overview.getByText("View Details", { exact: true })).toHaveCount(0);
   for (const text of ["Rs. 25,690.00", "Rs. 5,140.00", "7", "123", "3"]) await expect(overview.getByText(text, { exact: true })).toBeVisible();
-  await expect(overview.getByText("Not available", { exact: true })).toHaveCount(2);
+  await expect(overview.getByText("Not available", { exact: true })).toHaveCount(1);
   await expect(overview.getByRole("group", { name: "Shop Expenses", exact: true })).toContainText("Unavailable");
   if (desktop) await expect(page.getByRole("complementary", { name: "Admin sidebar" })).toHaveCSS("background-color", "rgb(25, 39, 53)");
   await expect(page.locator("body")).toHaveCSS("background-color", theme === "light" ? "rgb(241, 245, 243)" : "rgb(20, 28, 38)");
@@ -58,7 +58,7 @@ for (const theme of ["light", "dark"] as const) test("compact Dashboard and pres
     ["Today's Sales Revenue (PKR)", "/admin/sales/today"], ["Today's Gross Profit", "/admin/profit/today"],
     ["Shop Expenses", "/admin/expenses"], ["Total Products", "/admin/products"],
     ["Available Stock", "/admin/inventory/available-stock"], ["Low Stock Products", "/admin/inventory/low-stock"],
-    ["Total Investment", "/admin/investment"], ["Stock Value", "/admin/investment"],
+    ["Stock Value", "/admin/investment"],
   ]) {
     const link = overview.getByRole("link", { name: label, exact: true });
     await link.focus(); await expect(link).toHaveCSS("outline-width", "3px"); await link.press("Enter");
@@ -137,7 +137,7 @@ test("browser-local Settings, safe Login and new receipt branding", async ({ pag
   await page.getByLabel("Diapers price (PKR), item 1", { exact: true }).fill("1250.25");
   
   await expect(page.getByTestId("sale-total")).toHaveText("Rs. 2,500.50");
-  await page.getByLabel("Discount (%, optional)", { exact: true }).fill("10");
+  await page.getByLabel("Diapers discount (%), item 1", { exact: true }).fill("10");
   await expect(page.getByTestId("sale-total")).toHaveText("Rs. 2,250.45");
   await page.getByRole("button", { name: "Create Invoice", exact: true }).click();
   dialog = page.getByRole("dialog", { name: "Sample Invoice", exact: true });

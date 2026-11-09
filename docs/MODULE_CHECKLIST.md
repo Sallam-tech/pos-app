@@ -1,6 +1,18 @@
 # POS Module Checklist
 
-## Current owner-authorized UI revision - 6 November 2026
+## Client-approved frontend freeze — 9 November 2026
+
+- [x] Client approves existing Admin/Salesperson frontend, per-item discounts, Stock Value, simplified Shop Expenses, closing cash summary, partial/full return previews and Backup & Restore UI.
+- [x] Freeze all optional visual changes; preserve approved layouts, navigation, themes, receipts and financial fixtures.
+- [x] Reuse previously reported 175 unit/component tests, 17 browser tests and passing TypeScript/ESLint/build; do not claim a new test run.
+- [x] Owner authorizes one reviewed LOCAL checkpoint with subject chore: freeze approved POS frontend before backend development; no push.
+- [ ] SQLite backend, real persisted transactions/accounting and secure authentication/authorization.
+- [ ] Private Supabase encrypted backup/restore, secure remote Admin viewing and Windows EXE packaging.
+- [ ] Client logo integration at the final project stage; manual physical-device/printer and assistive-technology checks.
+
+Necessary future backend connections, data wiring and error/validation states must preserve the frozen frontend. Backend architecture/database design is the next separately approved task. Earlier unchecked visual-review items below are historical delivery snapshots, superseded by this approval; they are not instructions to resume optional redesign.
+
+## Historical owner-authorized UI revision - 6 November 2026
 
 This is the current review state and supersedes the earlier Demo Tools placement and presentation-scope statements below. Previous reports remain historical evidence. The prior appearance was rejected; **the new visual design is awaiting owner review**, not approved. This does not advance the master backend phases.
 
@@ -333,3 +345,18 @@ This entry supersedes the earlier current Login presentation only; historical de
 - [ ] Owner visual approval of this Settings/header/navigation revision.
 - [ ] Manual screen-reader, real device, native zoom and physical printer checks; browser-controlled password prompts cannot be guaranteed disabled.
 - [ ] Secure local backend authentication/authorization, password hashing/recovery, shared persistence, durable closing and scheduled verified backups/restore drills.
+
+
+## Owner-requested final frontend refinements — 9 November 2026
+
+- [x] Preserve existing layouts, checkout/receipts/history, financial fixtures and prior pending work.
+- [x] Replace visible cumulative Total Investment with one Stock Value card and on-demand product details; retain historical purchase contracts.
+- [x] Simplify Shop Expenses to required Amount/Reason and automatic Karachi date; keep temporary summaries and duplicate protection.
+- [x] Preserve same-period net-profit helper and honest unavailable shared-accounting states.
+- [x] Add Counter Cash Summary beneath the unchanged six closing cards; use complete recorded cash sources only.
+- [x] Support one/all-remaining invoice-line refunds in an unsaved preview; remove visible condition controls; default future disposition to inspection.
+- [x] Replace the backup placeholder with compact disabled Backup & Restore UI and truthful disconnected status.
+- [x] Owner confirms client visual approval and authorizes the final local freeze checkpoint; optional visual changes are frozen.
+- [ ] Real persistence, synchronized accounting, cash/return ledgers, auth, backup/restore, Supabase and EXE remain backend work.
+
+Current evidence and the exact changed-file list are in [FINAL_FRONTEND_REFINEMENTS_REPORT.md](development/FINAL_FRONTEND_REFINEMENTS_REPORT.md). This frontend task does not change completed backend phase status. The new SQLite / Supabase-backup direction must be reconciled with the older stack plans before backend implementation; logo work is deferred.

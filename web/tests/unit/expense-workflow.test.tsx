@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, expect, it } from "vitest";
 import { AdminExpensesPreview } from "@/components/demo/admin-expenses-preview";
-import { currentKarachiBusinessDate, netProfitAfterExpenses, validateExpenseEntry } from "@/lib/demo/expense-preview";
+import { currentKarachiBusinessDate, netProfitAfterExpenses, validateExpenseEntry, validateSimpleExpenseEntry } from "@/lib/demo/expense-preview";
 import { demoExpenseTotals, type DemoExpense } from "@/lib/demo/admin-preview";
 beforeEach(() => {
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value(this: HTMLDialogElement) { this.open = true; } });
@@ -31,6 +31,8 @@ it("guards duplicate submissions, resets fields and keeps summaries/history out 
   expect(screen.queryByRole("table")).toBeNull(); expect(screen.queryByText("Daily Expenses")).toBeNull();
   expect(screen.getByRole("heading", { name: "Add Expense" })).toBeVisible();
   fireEvent.change(screen.getByLabelText("Amount (Rs.)"), { target: { value: "100.10" } });
+  fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Cleaning supplies" } });
+  expect(screen.queryByLabelText("Expense Type")).toBeNull();
   const form = screen.getByRole("form", { name: "Demo expense entry" });
   fireEvent.submit(form); fireEvent.submit(form);
   expect(screen.getByRole("status")).toHaveTextContent("Expense added to demo."); expect(screen.getByLabelText("Amount (Rs.)")).toHaveValue("");
@@ -68,4 +70,21 @@ it("never mixes the historical gross profit day with current expenses or assumes
   expect(netProfitAfterExpenses(null, matched)).toBeNull();
   expect(netProfitAfterExpenses(gross, { ...matched, entries: [...matched.entries, ...matched.entries] })).toBeNull();
   expect(netProfitAfterExpenses(gross, { ...matched, entries: [] })).toBe(BigInt(514000));
+});
+
+it("requires a short reason without categories and rejects nonfinite amounts", () => {
+  for (const amount of ["NaN", "Infinity", "-1", "0", "1e3", "100.999"]) expect(validateSimpleExpenseEntry(amount, "Cleaning").errors.amount).toBeTruthy();
+  for (const reason of ["", "  ", "x".repeat(161)]) expect(validateSimpleExpenseEntry("1", reason).errors.reason).toBeTruthy();
+  expect(validateSimpleExpenseEntry("0.01", "Cleaning").errors).toEqual({});
+});
+it("validates and focuses Reason after a valid amount, then clears both fields", () => {
+  render(<AdminExpensesPreview businessDate={date} />);
+  const reason = screen.getByLabelText("Reason");
+  fireEvent.change(screen.getByLabelText("Amount (Rs.)"), { target: { value: "1.25" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add Expense" }));
+  expect(reason).toHaveFocus(); expect(screen.getByRole("alert")).toHaveTextContent("short reason");
+  fireEvent.change(reason, { target: { value: "Counter cleaning" } });
+  fireEvent.click(screen.getByRole("button", { name: "Add Expense" }));
+  expect(reason).toHaveValue(""); expect(screen.getByLabelText("Amount (Rs.)")).toHaveValue("");
+  expect(screen.queryByLabelText("Expense Date")).toBeNull();
 });

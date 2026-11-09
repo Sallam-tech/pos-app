@@ -31,14 +31,13 @@ export default function DashboardPage() {
     { id: "today-revenue", label: "Today's Sales Revenue (PKR)", value: mockRevenueDecimal(revenuePaise), display: formatMockRevenue(revenuePaise), href: "/admin/sales/today" },
     { id: "today-profit", label: "Today's Gross Profit", value: profit === null ? null : profitDecimal(profit), display: profit === null ? "Unavailable" : formatProfitMoney(profit), href: "/admin/profit/today", note: profit === null ? "Historical costs or exact sale data are missing or invalid." : "Example purchase costs for demo sales." },
     { id: "shop-expenses", label: "Shop Expenses", value: expenses === null ? null : demoMoneyDecimal(expenses), display: expenses === null ? "Unavailable" : formatDemoMoney(expenses), href: "/admin/expenses", note: "Demo day: " + mockSalesBusinessDate.label + ". Temporary entries are not shared with Admin." },
-    { id: "total-investment", label: "Total Investment", value: investment.totalInvestmentPaise === null ? null : demoMoneyDecimal(investment.totalInvestmentPaise), display: investment.totalInvestmentPaise === null ? "Not available" : formatDemoMoney(investment.totalInvestmentPaise), href: "/admin/investment", note: "Purchase information incomplete." },
-    { id: "stock-value", label: "Stock Value", value: investment.stockValuePaise === null ? null : demoMoneyDecimal(investment.stockValuePaise), display: investment.stockValuePaise === null ? "Not available" : formatDemoMoney(investment.stockValuePaise), href: "/admin/investment", note: "Purchase information incomplete." },
+    { id: "stock-value", label: "Stock Value", value: investment.stockValuePaise === null ? null : demoMoneyDecimal(investment.stockValuePaise), display: investment.stockValuePaise === null ? "Not available" : formatDemoMoney(investment.stockValuePaise), href: "/admin/investment", note: "Buying costs not recorded." },
   ] as const;
 
   const sections = [
     { title: "Sales & Profit", icon: "chart", ids: ["today-revenue", "today-profit", "shop-expenses"] },
     { title: "Inventory Overview", icon: "layers", ids: ["total-products", "available-stock", "low-stock-products"] },
-    { title: "Investment Overview", icon: "wallet", ids: ["total-investment", "stock-value"] },
+    { title: "Stock Overview", icon: "wallet", ids: ["stock-value"] },
   ] as const;
   return <>
     <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -51,7 +50,7 @@ export default function DashboardPage() {
       <p id="dashboard-mock-notice" className="sr-only">Mock data only. These figures are examples, not live shop records.</p>
       {sections.map((section, index) => <section key={section.title} className="dashboard-section" aria-labelledby={"dashboard-section-" + index}>
         <h3 id={"dashboard-section-" + index} className="dashboard-section-title"><Icon name={section.icon} />{section.title}</h3>
-        <dl className={"grid gap-3 " + (section.ids.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3")}>
+        <dl className={"grid gap-3 " + (section.ids.length === 1 ? "sm:max-w-xl" : "sm:grid-cols-3")}>
           {section.ids.map((id) => {
             const card = mockSummaryCards.find((item) => item.id === id)!;
             const icon = id === "total-products" ? "box" : id === "available-stock" ? "layers" : id === "low-stock-products" ? "alert" : id === "today-revenue" ? "sales" : id === "stock-value" || id === "today-profit" ? "chart" : "wallet";

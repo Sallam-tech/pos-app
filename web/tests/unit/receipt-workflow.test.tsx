@@ -18,7 +18,7 @@ function openSale(discount = "") {
   fireEvent.change(search, { target: { value: "dia" } }); fireEvent.keyDown(search, { key: "Enter" });
   fireEvent.change(screen.getByLabelText("Diapers quantity, item 1"), { target: { value: "2" } });
   fireEvent.change(screen.getByLabelText("Diapers price (PKR), item 1"), { target: { value: "1250.25" } });
-  fireEvent.change(screen.getByLabelText("Discount (%, optional)"), { target: { value: discount } });
+  fireEvent.change(screen.getByLabelText("Diapers discount (%), item 1"), { target: { value: discount } });
   fireEvent.click(screen.getByRole("button", { name: "Create Invoice" }));
 }
 it("uses saved shop details but permits one-receipt overrides without changing Settings or money", () => {
@@ -33,7 +33,7 @@ it("uses saved shop details but permits one-receipt overrides without changing S
   fireEvent.change(within(dialog()).getByLabelText("Customer Phone (optional)"), { target: { value: "+92 300 7654321" } });
   expect(paper()).toHaveTextContent("One receipt only"); expect(paper()).toHaveTextContent("Temporary address"); expect(paper()).toHaveTextContent("<Ali & Sons>");
   expect(paper().querySelector("Ali")).toBeNull(); expect(total).toHaveTextContent("Rs. 2,250.45");
-  expect(paper()).toHaveTextContent("Subtotal"); expect(paper()).toHaveTextContent("Discount (10%)");
+  expect(paper()).toHaveTextContent("Subtotal"); expect(paper()).toHaveTextContent("Item discounts");
   expect(JSON.parse(localStorage.getItem(shopSettingsStorageKey)!)).toEqual(saved);
   expect(paper()).toHaveTextContent(credit); expect(dialog().querySelector('input[value*="AbdulSalam"]')).toBeNull();
 });
@@ -77,7 +77,7 @@ it("Edit Sale preserves customer, cart, discount, receipt overrides, cash and pr
   const originalDate = paper().querySelector("dl")!.textContent;
   fireEvent.click(within(dialog()).getByRole("button", { name: "Edit Sale" }));
   expect(screen.queryByRole("dialog")).toBeNull(); expect(screen.getByLabelText("Diapers quantity, item 1")).toHaveValue("2");
-  expect(screen.getByLabelText("Diapers price (PKR), item 1")).toHaveValue("1250.25"); expect(screen.getByLabelText("Discount (%, optional)")).toHaveValue("10");
+  expect(screen.getByLabelText("Diapers price (PKR), item 1")).toHaveValue("1250.25"); expect(screen.getByLabelText("Diapers discount (%), item 1")).toHaveValue("10");
   expect(screen.getByLabelText("Name", { exact: true })).toHaveValue("Ali");
   fireEvent.click(screen.getByRole("button", { name: "Create Invoice" }));
   expect(within(dialog()).getByLabelText("Print layout")).toHaveValue("compact");

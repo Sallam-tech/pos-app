@@ -13,3 +13,12 @@ This supplements the original SRS for the approved demo and future local backend
 - The current pure helper requires matching period boundaries and an explicitly complete expense source, rejects duplicate expense identities and returns null when inputs are insufficient. This is not proof of approval, persistence or server authorization.
 - Return condition may be unspecified in the demo: disposition remains pending inspection. Good items need an authorized recorded return before restocking; damaged items stay out of sellable stock. The backend must check cumulative prior returns and approved refund/accounting policies transactionally.
 - General Salesperson history access remains a future server permission decision. The owner-approved preview exposes only the original allowlisted fictional sale fields. Historical receipt copies stay read-only, and developer credit is presentation-only.
+
+
+## Owner frontend amendment — 9 November 2026
+
+Ordinary expense entry now requires Amount and a short Reason, with an automatic Asia/Karachi date. No category/date-selection controls appear in entry. The legacy categorized record type remains readable; new page-local entries use its internal Other value for compatibility, without exposing a category choice. Corrections preserve an entry's original date. This is not a finalized production classification scheme.
+
+Gross/net-profit definitions, same-period completeness, duplicate protection and exclusion of purchases/personal withdrawals remain unchanged. The form identifies operating expenses only; durable classification and authorization remain backend responsibilities. Temporary entries do not synchronize with fixed Admin history.
+
+The visible return-condition field is removed. Future returned goods default to pending inspection and must not enter sellable stock before a separate authorized disposition. Multi-line selection uses actual invoice/line identities and original paid snapshots, including discounts and trusted prior returns; missing payment information remains unavailable. Review performs no refund or stock write.

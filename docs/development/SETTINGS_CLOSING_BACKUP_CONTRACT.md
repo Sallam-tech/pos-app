@@ -38,3 +38,14 @@ Closing never deletes sales, receipts or expenses, resets inventory, investment 
 - Restore requires authenticated authorization, explicit confirmation, preservation of current data and a tested isolated restore/reconciliation procedure before any production replacement. Verify transactions, financial snapshots, stock, settings and login after restore.
 
 No Windows service, scheduled task, PostgreSQL installation, backup archive or restore operation is created by this UI task.
+
+
+## Owner frontend / future architecture amendment — 9 November 2026
+
+Keep the existing six Daily Closing cards, business-date control and disabled confirmation. A compact Counter Cash Summary now follows those cards.
+
+Expected Counter Cash = recorded Opening Cash + Cash Sales Received - Cash Refunds Paid - Operating Expenses Paid from Counter, for one complete matching business date. Missing opening cash or cash-flow records makes the expectation/difference unavailable. Historical sales revenue is not proof of cash received, even though the current shop is cash-only. An actual cash count is temporary input, may be zero, and never automatically creates an expense. Known differences show Short by / Extra / Cash matches. Inventory purchases and personal withdrawals require future accounting treatment, not misclassification here.
+
+Settings now shows Backup & Restore: Planned / Not configured automatic backup, unconfigured local/cloud backups, Supabase — Not connected, and disabled Backup Now / Restore Backup. No fake files, successes, credentials or restores are introduced.
+
+The latest owner brief selects SQLite for the future authoritative local database and proposes Supabase private Storage for encrypted, database-consistent backup uploads when online. This supersedes the prior PostgreSQL packaging proposal for future design, without implementing the backend now. Verified backup creation and tested isolated restoration remain distinct evidence. Laptop replacement must fence the former authoritative copy before the replacement begins authoritative writes. The remote activity-viewing requirement must be reconciled separately; backups alone do not implement that viewer.
