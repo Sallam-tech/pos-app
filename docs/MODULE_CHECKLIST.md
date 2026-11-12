@@ -1,5 +1,72 @@
 # POS Module Checklist
 
+**FINAL OWNER UPDATE: OPTION2 APPROVED - per-unit final-payable HALF_UP first, multiply quantity, then sum lines. Complete coordinated TEST Sales36 contract APPROVED; implementation VERIFIED TEST ONLY. Earlier extended-line recommendation/approval-pending text below is historical and superseded. No production activation.**
+
+## Active master execution - 12 November 2026
+
+- [x] Recover exact workspace, preserve prior work/evidence and maintain the [completion matrix/API inventory](development/MASTER_COMPLETION_MATRIX_AND_API_INVENTORY.md).
+- [x] Owner APPROVED corrected0019-0035 TEST contract: one cancellation table plus16 pinned audit/rowid guards. Historical0001-0018 and original anchor preserved.
+- [x] Implement coordinated permanent cancellation, exact35 admission and explicit browser terminal acknowledgement; clean34 recovery checks plus selected regressions PASS.
+- [x] Wire existing Login only on trusted TEST HTTPS role hosts; production remains disabled.
+- [x] Final affected Login/lost-COMMIT/browser verification:52 distinct passing focused checks across runs; final isolated build, scoped TypeScript and zero-warning ESLint PASS. Critical source/workflow self-review completed; see [current report](development/INVENTORY_COORDINATED_RECOVERY_AND_TEST_LOGIN_REPORT.md).
+- [x] Record12 November OWNER APPROVED whole-PKR P02, whole-percent Q1, final-payable HALF_UP Q2, cumulative Q3, atomic incoming-cost D05 and signed late-count P08; no source/fixture conversion.
+- [x] Inspect actual35 ledger/guards/SRS/cart and prepare ONE [preserving Sales contract](development/FINANCIAL_POLICY_AND_SALES_SCHEMA_CONTRACT.md); separate arithmetic checks are not Sales integration proof.
+- [x] Owner approved FINAL OPTION2 per-unit HALF_UP and the complete coordinated TEST36 schema/API/recovery/minimal-UI contract. The bounded TEST implementation and focused verification are complete; production remains disabled.
+- [x] Coordinated TEST Returns37 verified:63 new checks +2 selected Sales36 regressions, scoped type/lint and final isolated build PASS; see current Returns report. No rebuild authorized.
+- [x] Latest owner scope: ONE complete Shop Expenses module; COUNTER CASH ONLY, one withdrawal/one expense, including genuine shop costs initially paid personally. No funding selector/workflow or invented balances; purchases/restocks excluded.
+- [x] Prepared ONE [preserving TEST38 schema/correction-evidence approval contract](development/SHOP_EXPENSES_SCHEMA38_AUTHORIZATION_CONTRACT.md); confirmed P07 authorization retained.
+- [x] Owner APPROVED complete TEST38 A+B; coordinated Expenses API/UI/SQLite/recovery/net-profit implementation delivered. See [implementation/evidence](development/EXPENSES_SCHEMA38_COORDINATED_TEST_IMPLEMENTATION_REPORT.md).
+- [x] TEST38 final follow-up verified:45 distinct focused passes, scoped type/zero-warning lint/final isolated build; exact268-source match and preservation PASS.
+- [x] Owner accepts TEST modules through Expenses38 as complete; no repeated full suites.
+- [x]13 November: inspect actual sources/Git and prepare ONE [Admin Invoice Corrections39 A+B contract](development/ADMIN_INVOICE_CORRECTIONS_SCHEMA39_AUTHORIZATION_CONTRACT.md), including revised Returns, event-date ledger and verified actual settlement.
+- [x] Owner APPROVED complete39 A+B; Admin-only immutable revisions, verified cash/stock evidence, original COGS/current valuation separation, effective receipt/Returns and event-date Profit/Reports integration verified TEST-only.
+- [x]44 distinct focused cases, final scoped type/zero-warning lint/exact-source build and preservation PASS; [implementation/evidence](development/INVOICE_CORRECTIONS_SCHEMA39_COORDINATED_TEST_IMPLEMENTATION_REPORT.md). No production activation.
+- [x] After39 PASS, review all uncommitted paths and explicit backend dependency/hash manifest; independent experiments and unrelated cloud-plan whitespace remain excluded. Safe LOCAL checkpoint authorized; actual hash/status comes from live Git and final delivery. No push/reset/clean.
+- [ ] Production/recovery/custody and independent-restore gates. Sales36/Returns37 are TEST-only. No second Windows PC/profile available.
+
+Older dated module records below are retained history; current source/status and this matrix take precedence.
+
+## Current decision/documentation status - 11 November 2026
+
+- [x] Reconcile final P01-P12 into existing [SQLite architecture](development/BACKEND_SQLITE_ARCHITECTURE_V1.md), plan and memory; documentation only, no backend module completed.
+- [x] Record confirmed whole-pack variants, buying-cost floor, A corrections/inspection-first returns, shared-S limited grants, calendar midnight, exactly two accounts, hybrid remote and installed Windows; older alternatives SUPERSEDED.
+- [x] P02 and P08 policies approved12 November, including FINAL OPTION2 per-unit rounding. Later Closing evidence/variance, recovery and P11 backup acceptance remain separately gated.
+- [x] B1a TEST-only SQLite experiment and targeted hardening complete; owner confirms 18 passing checks. Sources/evidence preserved.
+- [x] Implement and verify ONLY B1b Part 1; correct its Medium/two Low audit findings with exact-table SQLite STRICT metadata checks, synchronous-result handling and bounded syntax support/documentation. Eight focused regressions and ONE full 30-case TEST-file suite pass; focused TypeScript/ESLint pass. [Exact scope and evidence](development/SQLITE_B1B_PART1_FOUNDATION_REPORT.md).
+- [ ] Independent review/owner acceptance of B1b Part 1 and current bounded Part 3A. Whole B1b is NOT production complete; bounded TEST auth/inventory HTTP works, while operational shop enrollment, Login UI and production activation remain gated.
+- [x] Owner-authorized isolated Part2A/2C compatibility proofs: 18 async-transaction /26 memory-session checks; Part2B write-hook storage design remains BLOCKED. RAM-only sessions with mandatory SQL gateway now owner approved.
+- [x] Owner-approved four exact auth dependencies installed with scripts disabled; no upgrades to existing package versions.
+- [x] Bounded B1b Part3A auth-only STRICT schema/private server gateway verified:27 focused integration checks plus TypeScript/ESLint. [Scope, files and evidence](development/AUTH_B1B_PART3A_FOUNDATION_REPORT.md). No provisioning, password verifier or login route.
+- [x] Bounded B1b Part3B: supported private hash/verify callbacks, exact-input async native scrypt, versioned schema-compatible encoding and binary timingSafeEqual;19 focused tests plus scoped TypeScript/ESLint pass. [Scope/evidence](development/AUTH_B1B_PART3B_PASSWORD_REPORT.md). Login/signup remain disabled; no provisioning/session issuance.
+- [ ] Owner review/acceptance and remaining login security gates. Part3G now integrates owner-approved8+ passwords/screening for BOTH roles; the shared15-character minimum is superseded. No real enrollment/login is enabled.
+- [x] Bounded Part3C safe portion: private atomic two-account creation, exact credential distinctness, pinned offline common-password screening and STRICT completion latch;19 new tests plus2 affected gateway/migration regressions and scoped TypeScript/ESLint pass. [Exact scope/recovery gate](development/AUTH_B1B_PART3C_PROVISIONING_REPORT.md).
+- [ ] Part3C owner review and permanent first-run/enrollment/recovery/restore contract; overall PARTIAL, no real setup authorization. Login/logout, rotation/version binding, persistent throttling, deployed role isolation and production security remain pending. P02/P08 still gate financial/cash migrations; no next module authorized.
+- [x] Bounded Part3E: private ADMIN-only8..128-scalar/max512-byte exact-input validation and expanded pinned offline screening;21 focused tests and scoped TypeScript/ESLint pass. [Scope/provenance/pending integration](development/AUTH_B1B_PART3E_ADMIN_PASSWORD_POLICY_REPORT.md). No callback/provision/gateway/UI/schema change.
+- [ ] Part3E/3G owner review; short-PIN initial-release requirement superseded by BOTH-role8+ passwords, PIN remains DISABLED. Actual UI stays presence-only demo; enrollment/login, throttling, recovery/restore and deployed security remain pending.
+- [x] Bounded Part3G: one shared bounds policy, reviewed8+ screening for BOTH roles, actual private Better Auth callbacks and atomic two-account setup verified;61 affected cases plus3 targeted gateway regressions, scoped TypeScript/ESLint pass. [Exact scope/evidence](development/AUTH_B1B_PART3G_ROLE_PASSWORD_POLICY_REPORT.md). One test-vector failure corrected by targeted rerun; no applied migration/frontend/dependency change.
+- [x] Part3H owner-corrected safe portion:5 CONSECUTIVE failures per role, exactly30-second cooldown for BOTH roles, success/expiry resets that streak; no escalation. STRICT0007/atomic security rows, durable charges, bounded concurrency and conservative clocks retained.25 focused tests pass; prior7 provisioning/4 gateway results reused. Scoped TypeScript/ESLint pass. [Exact scope/evidence](development/AUTH_B1B_PART3H_LOGIN_ATTEMPT_PROTECTION_REPORT.md).
+- [x] Part3I bounded verifier binding: both real private Better Auth/native callbacks, authoritative setup/role/active/version/epoch/hash checks, durable ROLE charges, shared queue/close drain, stale-result rejection and five-second non-authorizing receipts.16 new +25 throttle +5 selected gateway cases pass; scoped TypeScript/ESLint pass. [Exact scope/evidence](development/AUTH_B1B_PART3I_PRIVATE_CREDENTIAL_GATEWAY_REPORT.md).
+- [x] Bounded Part3J: private single-use receipt consumption and actual Better Auth RAM-session issuance, SAME owner/queue, inherited-context rejection, secure staged cookies released only after registry COMMIT, failure revocation/cleanup quarantine and restart invalidation.19 new +3 gateway cases pass; scoped TypeScript/ESLint pass. [Scope/evidence](development/AUTH_B1B_PART3J_CONTROLLED_SESSION_ISSUANCE_REPORT.md).
+- [x] Bounded Part3K: private signed-cookie logout, exact SQL revocation confirmed after COMMIT, targeted RAM cleanup/secure cookie expiry, idempotency, stale-session denial, receipt/issuance cancellation and shared shutdown lifecycle.25 new +6 selected regressions pass; scoped TypeScript/ESLint pass. [Scope/evidence](development/AUTH_B1B_PART3K_SESSION_REVOCATION_REPORT.md).
+- [x] Bounded Part3L: active signed Admin session AND single-use fresh Admin proof; exact screened distinct credentials; native work outside writer; atomic hash/version/epoch/role-wide revocation; post-COMMIT RAM cleanup, stale-session denial and robust close.32 new +10 selected regressions pass; scoped TypeScript/ESLint pass. [Scope/history/evidence](development/AUTH_B1B_PART3L_PASSWORD_ROTATION_REPORT.md).
+- [x] Part3M owner-approved correction: fresh5-second proof through authorized snapshot, single consumption, then private fixed30-second operation lifecycle; final SQL/session/revocation/cancellation guards retained. ONE real laptop run2404.20ms;17 new timeout +11 selected regression cases and2 investigation checks pass; scoped TypeScript/ESLint pass. [Timing/approval/evidence](development/AUTH_B1B_PART3M_ROTATION_TIMEOUT_REPORT.md).
+- [ ] Owner review of Part3M and target-hardware timing remain pending; no HTTP/UI or production security approval. Proof/session lifetimes,8+ passwords and5-failure/30-second cooldown unchanged.
+- [x] Part3N HTTP runtime gate inspected against installed Next16.4.3 docs/source and actual app: BLOCKED before route implementation; plain HTTP/default unrestricted bind, distinct trusted local HTTPS and one-owner lifecycle not established. [Exact evidence and scope](development/AUTH_B1B_PART3N_HTTP_RUNTIME_BLOCKER_REPORT.md). No new HTTP tests or source changes.
+- [ ] Establish reviewed loopback-only dual-host HTTPS, protected certificate/signing-key custody and single-process gateway startup/drain/close before enabling/testing HTTP login/logout. Production auth endpoints remain disabled; no caller-header or development-server bypass.
+- [x] Part3O local hosting/runtime foundation: real loopback HTTPS for localhost/127.0.0.1, scoped TEST CA trust/hostname validation, strict transport/Host/SNI/header checks, actual Next custom host, fixed application-wide cross-process guard and SAME gateway startup/drain/close.34 distinct focused checks pass; scoped TypeScript/ESLint pass. [Files/evidence/deployment limits](development/AUTH_B1B_PART3O_LOCAL_HOSTING_REPORT.md).
+- [ ] Owner acceptance, protected production TLS/signing-key custody, target-machine availability and compiled custom-host/normal-Next Windows packaging remain gates. Part3P adds only path-confined TEST login/logout; persistent production auth stays disabled. Earlier prerequisite checkbox describes the foundation, not production activation.
+- [x] Part3P: exact trusted-host POST login/logout reuse SAME gateway; bounded strict JSON/Origin/CSRF, real credential/cooldown/receipt/committed-cookie path, SQL revocation and disconnect/shutdown handling.40 distinct HTTP cases +6 host regressions pass; scoped TypeScript/ESLint pass. [Exact files/evidence/gates](development/AUTH_B1B_PART3P_HTTPS_AUTHENTICATION_REPORT.md).
+- [ ] Independent Part3P security/owner acceptance and production custody/enrollment/activation before UI wiring; TEST authentication is not production security approval.
+- [x] Part3Q: focused HTTP security review with13 selected regressions; exact TEST-only GET /api/auth/session via SAME gateway/authoritative SQL, minimal boolean/no cookie refresh;19 new socket +3 real Chromium cases pass, scoped TypeScript/ESLint pass. Host-only Secure/HttpOnly/Strict cookies, role/logout/restart isolation verified using scoped disposable leaf-key TEST trust; production Windows trust remains a gate. [Files/evidence/limits](development/AUTH_B1B_PART3Q_SESSION_STATUS_BROWSER_REPORT.md).
+- [ ] Part3Q owner acceptance, enrollment/recovery and protected production TLS/signing-key custody/trust/activation remain pending. Session status is not page/API/business authorization; no UI or desktop reopen/role-switch guarantee.
+- [x] Part3R bounded custody: real Windows CurrentUser DPAPI/restricted ACLs, separate role keys/encrypted TLS, pristine DB/rekey guards, SAME owner/fences, safe reopen/corruption handling;21 new +6 selected provisioning regressions and scoped TypeScript/ESLint pass. [Exact files/evidence/limits](development/AUTH_B1B_PART3R_PROTECTED_BOOTSTRAP_REPORT.md).
+- [x] Part3R safe enrollment PREPARATION only: strict pristine/custody checks, always ownerAuthorizationRequired=true/enrollmentAccepted=false/productionActivation=false. Existing atomic provisioner unchanged; no second account writer.
+- [x] Part3S private enrollment orchestration and bounded protected intent/confirmed-COMMIT/anchor foundation: original sole account writer, genuine ownership lease, additive STRICT0008, atomic two-account binding, fresh-confirmation retry and fresh-process anchor-only reconciliation.32 new distinct +20 selected existing checks and scoped TypeScript/ESLint pass. [Exact files/evidence/limits](development/AUTH_B1B_PART3S_TRUSTED_ENROLLMENT_ANCHOR_REPORT.md).
+- [ ] Part3S Task A production owner entry/physical ceremony and owner acceptance remain PARTIAL; Task B bounded protocol verified. Production HTTP disabled. R and separate B, portable restore/rebind, TLS trust/key lifecycle, signed Windows deployment and activation remain gates; no whole-machine/same-user/admin or universal snapshot-rollback guarantee.
+- [ ] Owner review/whole-B1b completion remain pending. ROLE5/30 seconds unchanged; GLOBAL10/15-minute policy DISABLED, no escalation/permanent lock/PIN/Remote Admin. Actual reopen/Back to Login/role-switch wiring, production auth activation/UI, real owner enrollment/recovery/restore, auth audit storage and deployed security remain unimplemented.
+
+Older D decision and PostgreSQL/employee/direct-only instructions below are historical where conflicting with architecture section15. No unit conversion or reopening settled choices is a full-pack prototype prerequisite. Existing frontend/tests/fixtures and backend implementation checkboxes are preserved.
+
 ## Client-approved frontend freeze — 9 November 2026
 
 - [x] Client approves existing Admin/Salesperson frontend, per-item discounts, Stock Value, simplified Shop Expenses, closing cash summary, partial/full return previews and Backup & Restore UI.
@@ -7,7 +74,7 @@
 - [x] Reuse previously reported 175 unit/component tests, 17 browser tests and passing TypeScript/ESLint/build; do not claim a new test run.
 - [x] Owner authorizes one reviewed LOCAL checkpoint with subject chore: freeze approved POS frontend before backend development; no push.
 - [ ] SQLite backend, real persisted transactions/accounting and secure authentication/authorization.
-- [ ] Private Supabase encrypted backup/restore, secure remote Admin viewing and Windows EXE packaging.
+- [ ] Private Supabase encrypted backup/restore, hybrid remote projection/details-price queue and installed Windows EXE packaging.
 - [ ] Client logo integration at the final project stage; manual physical-device/printer and assistive-technology checks.
 
 Necessary future backend connections, data wiring and error/validation states must preserve the frozen frontend. Backend architecture/database design is the next separately approved task. Earlier unchecked visual-review items below are historical delivery snapshots, superseded by this approval; they are not instructions to resume optional redesign.
@@ -182,6 +249,25 @@ Legacy references: P02/P03/P03U; guide §§3–5/17, old guide phase 1 DB subset
 
 Legacy references: P05/P06/P07/P08; guide §§6–9/14, old guide phases 3/4; UI-6 products/inventory.
 
+B2 Part1 current checkpoint: **PARTIAL**, private backend verified; production/auth/UI gates remain. [Exact scope, files and42 distinct tests](development/INVENTORY_B2_PART1_REPORT.md). Earlier unchecked end-to-end criteria below remain broader than this private-only task.
+
+- [x] Private same-gateway Admin product create/read/search/list/metadata/normal-price/Stop-Resume/archive, code/barcode and independent whole PACK/BOX variants. No mock import or frontend changes.
+- [x] Private one-time opening (zero recorded without zero movement), same-cost receiving50+20=70 once, reasoned signed count correction and explicit Option A remaining-stock reprice with old snapshots intact.
+- [x] Atomic operation-key/payload/result/balance/ledger/audit, optimistic versions, BigInt/int64 prices/quantities/Stock Value, inclusive low/out/available filters and bounded pages/totals.
+- [x]42 distinct focused real Better Auth/cookie/official-adapter/SQLite checks, actual write/COMMIT rollback, retry/concurrency, all12 methods deny missing/Salesperson role, owner reopen/independent-process persistence and preserved auth8->18 history/binding. Scoped TypeScript/ESLint pass; no historical full suites repeated.
+- [x] B2 Part2 bounded source/integrity review:3 real failing probes corrected with ordered movement-chain and product-bound complete audit snapshots;12 new +12 selected regressions plus scoped TypeScript/ESLint pass. [Exact findings/gaps](development/INVENTORY_B2_PART2_INTEGRITY_COMPATIBILITY_REVIEW.md). No full42-case rerun, migration/auth/custody/frontend changes.
+- [x] B2 Part3 private read-only exact schema/history validator for reviewed8/18:40 new +4 selected inventory regressions and scoped TypeScript/ESLint pass. Real internal objects/canonical SQL/history/failures, zero inspector DML, auth/inventory preservation and Admin-only existing gateway use verified. [Contract/self-review/limits](development/SCHEMA_B2_PART3_READ_ONLY_VALIDATOR_REPORT.md).
+- [x] B2 Part4A private READ-ONLY preflight under genuine existing lease/live transaction:26 new distinct +5 selected regressions and scoped TypeScript/ESLint pass. Nine diagnostic states; exact8/protected enrollment,18/maintenance-proof-required, invalid/missing/unknown evidence fail closed; ALL grants false. [Contract/results/self-review](development/ENROLLMENT_B2_PART4A_MIGRATION_PREFLIGHT_REPORT.md). No live migration or protected-record publication.
+- [x] MASTER8-to18 approved reader/lease correction:10 new native checks +14 format-only candidate checks +26 affected regressions=50 distinct passes; scoped TypeScript/ESLint PASS. Real scope/transaction/file-identity expiry enforced; candidate records NEVER prove protected storage/recovery/owner authority. [Exact approved work, limitations and files](development/MIGRATION_8_TO_18_SECURITY_GATE_REVIEW.md). No enrolled upgrade or production activation.
+- [x] B2 Part5 bounded authenticated TEST API/UI:33 new (30 socket/API+3 browser) +4 selected schema regressions=37 distinct passes; scoped TypeScript/ESLint and isolated real UI build pass. SAME owner/gateway, exact18/per-operation Admin SQL, real create/search/details/same-cost receive, totals/filters, SAME-key uncertainty lookup, real logout and restart/fresh-login persistence. Preview and production remain separate. [Exact files/evidence/self-review](development/INVENTORY_B2_PART5_TEST_API_UI_REPORT.md). No enrolled upgrade, production activation, historical migration or dependency change.
+- [ ] Owner acceptance of TEST slice and implemented crash recovery; production enrollment/recovery/maintenance/append-only/TLS/key/desktop gates remain unresolved.
+- [x] Owner approved eight-point [TEST recovery contract](development/INVENTORY_CRASH_RECOVERY_SAFETY_GATE.md); bounded implementation verified:20 new +8 selected regressions=28 distinct passes, scoped TypeScript/ESLint and isolated UI build. Minimal IndexedDB marker, genuine same-owner Admin context, atomic cross-tab admission, real crash/relaunch/refresh/restart/lost-response recovery, fresh authorized acknowledgement and stale-ACK race.404/timeout/mismatch stay UNKNOWN and block; no new-key retry/cancellation/expiry/RAM fallback. No new migration, registry or production activation. [Exact scope/evidence/self-review](development/INVENTORY_CRASH_RECOVERY_IMPLEMENTATION_REPORT.md).
+- [ ] Separately review durable UNKNOWN cancellation/reconciliation; storage/profile loss, production/desktop/restore/key custody and target hardware remain gates. Do not manually clear UNKNOWN or introduce an unapproved fence.
+- [ ] Owner acceptance of Parts2-4A and complete maintenance: gated TEST contract APPROVED; independent Windows restore target/profile explicitly UNAVAILABLE. Real portable backup/recovery/key custody, trusted purpose-bound owner authority, protected maintenance journal/verifier/coordinator and uncertain-COMMIT recovery remain blocked/unverified. Original immutable8 anchors/ALL0001-0018 stay unchanged; general runtime still lacks exact-schema admission. Production activation disabled; trigger migrations need separate approval.
+- [ ] Review/accept B2 private implementation and supply reviewed DB-level append-only guards: current migrator permits table/index only, not architecture triggers. No service history update/delete exists, but no DB tamper-proof claim.
+- [ ] Approve safe business-migration maintenance/enrollment-anchor compatibility: existing sole provisioner/bootstrap still require8. TEST-only8->18 proof does not activate production or weaken auth checks.
+- [ ] Resolve D05 differing-cost receipts before that case; current service rejects it. P02/P08 and actual sale races remain pending. Persistent production HTTP/UI and operational shop acceptance remain separate gates; only the bounded Part5 TEST slice is verified.
+
 - [ ] Approve catalog/quantity/receipt/date/import policies and connect the approved mock UI to server services.
 - [ ] Product metadata create/search/edit/approved archival works; no generic stock/cost bypass or history deletion.
 - [ ] Opening 50 creates one +50 event; retry/rollback/archive/selector privacy and reconciliation tests pass.
@@ -266,7 +352,7 @@ P00 / guide phase 0 / UI-0 describe source/decision preparation, not another cur
 
 ## Pending Business Decisions
 
-All five groups remain PENDING. No historical example, schema sketch, mock or DTO selects a business rule.
+Historical decision register: final P01-P12 now resolve substantial parts of these groups. Use current status above and architecture section15; not all five remain pending. Remaining precision/cash/receiving/correction details are separately gated, never implied implementation approval.
 
 - [ ] D05: Stock receiving at a different purchase cost, receipt-only versus explicit linked repricing, dates and receipt correction.
 - [ ] D07: Below-cost and zero selling prices, override policy, safe cost-confidential feedback and any suggested price source.
@@ -360,3 +446,22 @@ This entry supersedes the earlier current Login presentation only; historical de
 - [ ] Real persistence, synchronized accounting, cash/return ledgers, auth, backup/restore, Supabase and EXE remain backend work.
 
 Current evidence and the exact changed-file list are in [FINAL_FRONTEND_REFINEMENTS_REPORT.md](development/FINAL_FRONTEND_REFINEMENTS_REPORT.md). This frontend task does not change completed backend phase status. The new SQLite / Supabase-backup direction must be reconciled with the older stack plans before backend implementation; logo work is deferred.
+
+### Coordinated TEST Sales36 checkpoint -12 November2026
+
+- [x] Owner FINAL OPTION2 per-unit rounding and preserving TEST36 contract implemented; six STRICT tables, same ledger/rowids, old0001-0035 untouched.
+- [x] Real fixed-role Sales API/cart/saved invoice/history/print, idempotency, optional actual cash and D05 atomic incoming-cost revaluation; durable Sales original-key recovery and Admin permanent fence.
+- [x]64 distinct focused checks pass across recorded runs; final isolated build/scoped TypeScript/zero-warning ESLint pass. [Exact scope and files](development/SALES_SCHEMA36_COORDINATED_TEST_IMPLEMENTATION_REPORT.md).
+- [ ] Owner acceptance, production custody/maintenance/independent restore/EXE/printer gates; returns/corrections/expenses/closing/reporting remain pending. No production activation or automatic next module.
+
+### Returns/Refunds TEST37 approval gate
+
+- [x] Inspect actual requirements/policies/schema36/UI/gateway and prepare ONE [schema37/authorization contract](development/RETURNS_REFUNDS_SCHEMA37_AUTHORIZATION_CONTRACT.md).
+- [x] Owner approved complete coordinated TEST37 including controlsA/B; implemented and verified under the next checkpoint. Production remains disabled.
+
+### Coordinated TEST Returns37 checkpoint -12 November2026
+
+- [x] Preserving explicit unenrolled TEST36-to37,10 STRICT guarded tables, exact37 admission and typed shared stock/cash/financial ledgers; old0001-0036 preserved.
+- [x] Real original-paid Q3 partial/full/repeated refunds, fresh exact Admin grants, inspection/restock/damage, historical COGS/valuation, role-safe HTTPS/UI and original-key crash recovery. No assumed payment or duplicate cash/restock.
+- [x]63 new distinct checks +2 selected Sales36 regressions pass across recorded focused runs; final exact-source build/scoped TypeScript/zero-warning ESLint pass. [Files and limits](development/RETURNS_SCHEMA37_COORDINATED_TEST_IMPLEMENTATION_REPORT.md).
+- [ ] Owner acceptance, production maintenance/key custody/independent restore/EXE/hardware gates. Corrections, expenses, Closing and persisted reporting remain later modules; do not auto-start.

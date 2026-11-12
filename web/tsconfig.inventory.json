@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.sqlite.json",
+  "include": [
+    "src/server/inventory/**/*.ts",
+    "tests/integration/inventory.test.ts",
+    "vitest.inventory.config.mts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

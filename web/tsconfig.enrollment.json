@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.bootstrap.json",
+  "include": [
+    "src/server/bootstrap/**/*.ts",
+    "src/server/hosting/**/*.ts",
+    "src/server/auth/**/*.ts",
+    "src/server/db/**/*.ts",
+    "tests/integration/owner-enrollment.test.ts",
+    "vitest.enrollment.config.mts",
+    "tests/integration/account-provisioning.test.ts",
+    "tests/integration/auth-foundation.test.ts",
+    "tests/integration/session-issuance.test.ts",
+    "tests/integration/session-revocation.test.ts",
+    "tests/integration/password-rotation.test.ts",
+    "tests/integration/local-hosting.test.ts",
+    "tests/integration/password-callbacks.test.ts"
+  ]
+}

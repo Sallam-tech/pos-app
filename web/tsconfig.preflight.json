@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.sqlite.json",
+  "include": [
+    "src/server/bootstrap/**/*.ts",
+    "tests/integration/migration-preflight.test.ts",
+    "tests/integration/bootstrap-read-scope.test.ts",
+    "tests/unit/maintenance-record-contract.test.ts",
+    "vitest.preflight.config.mts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

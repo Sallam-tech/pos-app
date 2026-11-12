@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "types": ["node"],
+    "plugins": []
+  },
+  "include": [
+    "src/server/db/**/*.ts",
+    "tests/integration/sqlite-foundation.test.ts",
+    "vitest.sqlite.config.mts"
+  ],
+  "exclude": ["node_modules"]
+}

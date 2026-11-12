@@ -1,0 +1,1 @@
+CREATE INDEX auth_session_principal_index ON auth_session_authorizations(principal_id, revoked_at_ms);

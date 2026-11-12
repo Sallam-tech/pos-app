@@ -1,0 +1,12 @@
+0007_auth_login_attempts.sql text eol=lf
+0008_auth_enrollment_binding.sql text eol=lf
+0009_products.sql text eol=lf
+0010_inventory_operations.sql text eol=lf
+0011_stock_balances.sql text eol=lf
+0012_product_identifiers.sql text eol=lf
+0013_stock_movements.sql text eol=lf
+0014_product_events.sql text eol=lf
+0015_stock_opening_unique_index.sql text eol=lf
+0016_product_events_product_index.sql text eol=lf
+0017_inventory_operations_product_index.sql text eol=lf
+0018_products_search_index.sql text eol=lf

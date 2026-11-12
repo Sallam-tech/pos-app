@@ -1,0 +1,646 @@
+import "server-only";
+
+import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
+import { betterAuth } from "better-auth";
+import { createAuthEndpoint } from "better-auth/api";
+import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
+import { getCurrentAdapter, runWithTransaction } from "@better-auth/core/context";
+import { openAsyncOwner } from "./database";
+import { createVolatileStorage } from "./storage";
+import { assertPasswordNotReused, passwordCallbacks, passwordPolicy } from "./password";
+import { createLoginAttemptProtection } from "./login-attempts";
+import { assertOfflinePassword } from "./offline-password";
+import { validateReviewedSchema } from "../db/validate-schema";
+import { int64 } from "../db/integers";
+import { AuthorizationDenied, type Actor, type AuthorizationConfiguration, type AuthorizationGateway, type AuthorizedTransaction, type Role, type VerifiedCredential } from "./types";
+
+const ownerKey = Symbol.for("shop-pos.authorization.single-process-owner");
+const receiptLifetimeMs = 5000;
+const rotationOperationLifetimeMs = 30000; // Part3M owner-approved execution bound; not proof/session lifetime.
+const processState = globalThis as typeof globalThis & { [key: symbol]: boolean | undefined };
+const roles = ["ADMIN", "SALESPERSON"] as const;
+const deny = (): never => { throw new AuthorizationDenied(); };
+const deniedGateway = (): AuthorizationGateway => Object.freeze({
+  verifyAdminPassword: async () => deny(),
+  verifySalespersonPassword: async () => deny(),
+  issueAdminSession: async () => deny(),
+  issueSalespersonSession: async () => deny(),
+  logoutAdmin: async () => deny(),
+  logoutSalesperson: async () => deny(),
+  rotateAdminPassword: async () => deny(),
+  rotateSalespersonPassword: async () => deny(),
+  authorizeAdmin: async () => deny(),
+  authorizeSalesperson: async () => deny(),
+  withFreshAdminTransaction: async () => deny(),
+  withAdminTransaction: async () => deny(),
+  withSalespersonTransaction: async () => deny(),
+  close: async () => {},
+});
+interface BoundSession {
+  id: string; userId: string; token: string; expiresAt: Date;
+  credentialVersion: string; authEpoch: string; bootGeneration: string; roleBinding: string;
+}
+function boundSession(value: unknown): BoundSession {
+  if (!value || typeof value !== "object") return deny();
+  const s = value as Record<string, unknown>;
+  for (const field of ["id", "userId", "token", "credentialVersion", "authEpoch", "bootGeneration", "roleBinding"]) {
+    if (typeof s[field] !== "string" || s[field] === "") return deny();
+  }
+  if (!(s.expiresAt instanceof Date) || !Number.isFinite(s.expiresAt.getTime()) || s.id === s.token) return deny();
+  return s as unknown as BoundSession;
+}
+
+// No eager open, environment secret, default signing key, login or HTTP route.
+// Missing configuration is a usable deny-only foundation, never a bypass.
+export async function openAuthorizationGateway(config?: AuthorizationConfiguration, requiredSchema?: 35 | 36 | 37 | 38 | 39): Promise<AuthorizationGateway> {
+  if (!config) return deniedGateway();
+  if (requiredSchema !== undefined && ((requiredSchema !== 35 && requiredSchema !== 36 && requiredSchema !== 37 && requiredSchema !== 38 && requiredSchema !== 39) || config.database.mode !== "test")) return deny();
+  if (processState[ownerKey]) return deny();
+  const origins = {} as Record<Role, string>;
+  try {
+    for (const role of roles) {
+      const url = new URL(config.origins[role]);
+      if (url.protocol !== "https:" || url.username || url.password || url.pathname !== "/" || url.search || url.hash ||
+          config.origins[role] !== url.origin || typeof config.signingSecrets[role] !== "string" ||
+          Buffer.byteLength(config.signingSecrets[role]) < 48) return deny();
+      origins[role] = url.origin;
+    }
+    if (new URL(origins.ADMIN).hostname === new URL(origins.SALESPERSON).hostname ||
+        config.signingSecrets.ADMIN === config.signingSecrets.SALESPERSON ||
+        !Number.isSafeInteger(config.sessionLifetimeSeconds) || config.sessionLifetimeSeconds < 1 || config.sessionLifetimeSeconds > 86400) return deny();
+  } catch { return deny(); }
+  const sessionLifetimeSeconds = config.sessionLifetimeSeconds; // Validated immutable lifetime for this owner.
+  processState[ownerKey] = true;
+  const stores = { ADMIN: createVolatileStorage(), SALESPERSON: createVolatileStorage() };
+  let owner: ReturnType<typeof openAsyncOwner> | undefined;
+  let closed = false, closing = false;
+  const active = new Set<Promise<unknown>>();
+  let tail: Promise<void> = Promise.resolve();
+  let closePromise: Promise<void> | undefined;
+  const local = new AsyncLocalStorage<boolean>();
+  const boot = randomUUID(); // Non-secret, non-credential process generation.
+  const available = () => { if (closed) deny(); };
+  const track = <T>(operation: Promise<T>) => {
+    active.add(operation);
+    void operation.finally(() => active.delete(operation)).catch(() => {});
+    return operation;
+  };
+  const enqueue = <T>(work: () => Promise<T>) => {
+    const operation = tail.then(work);
+    tail = operation.then(() => undefined, () => undefined);
+    return track(operation);
+  };
+  interface CredentialState {
+    role: Role; hash: string; credentialVersion: bigint; authEpoch: bigint;
+    provisionedAt: bigint; updatedAt: string;
+  }
+  let verification: { role: Role; snapshot?: CredentialState } | undefined;
+  type ReceiptState = CredentialState & { boot: string; expiresAtMonotonic: number };
+  const receipts = new WeakMap<VerifiedCredential, ReceiptState>();
+  let issuing = false, rotating = false;
+  let transition = {}; // Replaced on logout: cancels earlier verification/issuance. No identity or bearer.
+  let receipt: VerifiedCredential | undefined, receiptController: AbortController | undefined;
+  let receiptTimer: ReturnType<typeof setTimeout> | undefined;
+  const invalidateReceipt = () => {
+    if (receiptTimer) clearTimeout(receiptTimer);
+    receiptTimer = undefined;
+    if (receipt) receipts.delete(receipt);
+    receiptController?.abort(); receiptController = undefined; receipt = undefined;
+  };
+  const issueReceipt = (snapshot: CredentialState): VerifiedCredential => {
+    invalidateReceipt();
+    const tick = Math.floor(performance.now());
+    if (!Number.isSafeInteger(tick) || tick < 0 || !Number.isSafeInteger(tick + receiptLifetimeMs)) return deny();
+    receiptController = new AbortController();
+    receipt = Object.freeze({ signal: receiptController.signal }) as VerifiedCredential;
+    receipts.set(receipt, { ...snapshot, boot, expiresAtMonotonic: tick + receiptLifetimeMs });
+    // Consumption also enforces this monotonic deadline and fresh SQL, never
+    // relying on timer delivery or AbortSignal as authorization.
+    receiptTimer = setTimeout(invalidateReceipt, receiptLifetimeMs); receiptTimer.unref();
+    return receipt;
+  };
+  try {
+    owner = openAsyncOwner(config);
+    const owned = owner;
+    const requireSchema = async () => {
+      if (requiredSchema !== undefined && !(await validateReviewedSchema({
+        get: async (sql, values) => owned.get(sql, values), all: async (sql, values) => owned.all(sql, values),
+      }, requiredSchema)).ok) return deny();
+    };
+    // Startup is private and precedes session portals or request admission. Same
+    // native handle, one consistent transaction, no manufactured Admin session.
+    if (requiredSchema !== undefined) await owned.db.transaction().execute(requireSchema);
+    const gatewayTransaction = <T>(adapter: typeof contexts.ADMIN.adapter, work: () => Promise<T>) =>
+      runWithTransaction(adapter, async () => { await requireSchema(); const result = await work(); await requireSchema(); return result; });
+    const makePortal = (role: Role) => betterAuth({
+      baseURL: origins[role], secret: config.signingSecrets[role],
+      database: { db: owned.db, type: "sqlite", transaction: true },
+      secondaryStorage: stores[role].storage,
+      user: { modelName: "auth_users", additionalFields: { role: { type: "string", required: true, input: false } } },
+      account: { modelName: "auth_credentials" },
+      session: {
+        // Secondary storage deliberately omits the framework SQL session model.
+        storeSessionInDatabase: false, preserveSessionInDatabase: false,
+        expiresIn: sessionLifetimeSeconds, disableSessionRefresh: true,
+        cookieCache: { enabled: false },
+        additionalFields: {
+          credentialVersion: { type: "string", required: true, input: false },
+          authEpoch: { type: "string", required: true, input: false },
+          bootGeneration: { type: "string", required: true, input: false, defaultValue: boot },
+          roleBinding: { type: "string", required: true, input: false, defaultValue: role },
+        }
+      },
+      // BOTH private role portals explicitly share the owner-approved 8+ callbacks.
+      emailAndPassword: {
+        enabled: false, disableSignUp: true, password: passwordCallbacks,
+        minPasswordLength: passwordPolicy.minCharacters,
+        // Framework prechecks count UTF-16 units; callback enforces scalar/byte limits.
+        maxPasswordLength: passwordPolicy.maxCharacters * 2,
+      },
+      trustedOrigins: [origins[role]],
+      advanced: { useSecureCookies: true, cookiePrefix: role === "ADMIN" ? "pos-admin" : "pos-salesperson",
+        defaultCookieAttributes: { httpOnly: true, secure: true, sameSite: "strict", path: "/" } },
+      telemetry: { enabled: false }, logger: { disabled: true },
+    });
+    const portals = { ADMIN: makePortal("ADMIN"), SALESPERSON: makePortal("SALESPERSON") };
+    // Initialize both private contexts before accepting requests; never return them.
+    const contexts = { ADMIN: await portals.ADMIN.$context, SALESPERSON: await portals.SALESPERSON.$context };
+    for (const role of roles) if (contexts[role].password.verify !== passwordCallbacks.verify ||
+      contexts[role].password.hash !== passwordCallbacks.hash) return deny();
+    const securityTime = () => {
+      const time = Date.now();
+      if (!Number.isSafeInteger(time) || time <= 0) return deny();
+      return int64(BigInt(time));
+    };
+    const provisioned = (now: bigint): bigint => {
+      const setup = owned.get("SELECT format_version,admin_id,salesperson_id,completed_at_ms FROM auth_provisioning WHERE id=?", [BigInt(1)]);
+      if (!setup || setup.format_version !== BigInt(1) || setup.admin_id !== "ADMIN" ||
+          setup.salesperson_id !== "SALESPERSON" || typeof setup.completed_at_ms !== "bigint" ||
+          setup.completed_at_ms <= BigInt(0) || setup.completed_at_ms > now) return deny();
+      // Missing either securely provisioned role closes the entire foundation.
+      const complete = owned.get(`SELECT count(*) AS n FROM auth_users u
+        JOIN auth_credentials c ON c.userId=u.id AND c.accountId=u.id AND c.providerId='credential'
+        JOIN auth_principals p ON p.id=u.id WHERE p.provisioned_at_ms=?`, [setup.completed_at_ms]);
+      if (complete?.n !== BigInt(2)) return deny();
+      return setup.completed_at_ms;
+    };
+    const credentialState = (role: Role): CredentialState => {
+      const completed = provisioned(securityTime());
+      const row = owned.get(`SELECT u.id,u.role,c.id AS credential_id,c.accountId,c.providerId,c.password,c.updatedAt,
+        p.active,p.credential_version,p.auth_epoch,p.provisioned_at_ms
+        FROM auth_users u JOIN auth_credentials c ON c.userId=u.id
+        JOIN auth_principals p ON p.id=u.id WHERE u.id=?`, [role]);
+      if (!row || row.id !== role || row.role !== role || row.credential_id !== role ||
+          row.accountId !== role || row.providerId !== "credential" || row.active !== BigInt(1) ||
+          row.provisioned_at_ms !== completed || typeof row.password !== "string" || row.password.length !== 161 ||
+          typeof row.updatedAt !== "string" || typeof row.credential_version !== "bigint" ||
+          typeof row.auth_epoch !== "bigint" || row.credential_version <= BigInt(0) || row.auth_epoch <= BigInt(0)) return deny();
+      return { role, hash: row.password, credentialVersion: int64(row.credential_version),
+        authEpoch: int64(row.auth_epoch), provisionedAt: completed, updatedAt: row.updatedAt };
+    };
+    const quarantine = () => {
+      closed = true; invalidateReceipt();
+      for (const role of roles) try { stores[role].clear(); } catch { /* Closed denies even if RAM cleanup fails. */ }
+      owned.quarantine();
+    };
+    const quarantineIfNeeded = () => { if (owned.inTransaction()) quarantine(); };
+    const sameCredential = (state: CredentialState, saved: CredentialState) =>
+      (Object.keys(state) as (keyof CredentialState)[]).every(key => state[key] === saved[key]);
+    const attempts = createLoginAttemptProtection({
+      owner: owned,
+      withOwnerTransaction: async <T>(work: () => Promise<T>): Promise<T> => {
+        const current = verification;
+        if (!current || local.getStore()) return deny();
+        return enqueue(async () => {
+          try {
+            return await gatewayTransaction(contexts[current.role].adapter, async () => {
+              available();
+              if (closing || verification !== current) return deny();
+              owned.run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?", [current.role]);
+              const state = credentialState(current.role);
+              // Equality here detects changed trusted SQL state, never verifies a password.
+              if (current.snapshot && !sameCredential(state, current.snapshot)) return deny();
+              const result = await local.run(true, work);
+              if (closing) return deny();
+              current.snapshot ??= state;
+              return result;
+            });
+          } catch { quarantineIfNeeded(); return deny(); }
+        });
+      },
+      verifyCredential: async (role, password) => {
+        const current = verification;
+        if (!current || current.role !== role || !current.snapshot || typeof password !== "string" || closing || closed) return false;
+        // Actual pinned private Better Auth callback; no public API/checkPassword
+        // lookup, default verifier, session issuance or client-selected hash.
+        return local.run(true, () => contexts[role].password.verify({ hash: current.snapshot!.hash, password }));
+      },
+    });
+    const verify = (role: Role, password: unknown): Promise<VerifiedCredential> => {
+      if (local.getStore() || closed || closing || verification || issuing || rotating) return Promise.reject(new AuthorizationDenied());
+      invalidateReceipt();
+      const admitted = transition;
+      const current: { role: Role; snapshot?: CredentialState } = { role };
+      verification = current; // Before any await: fail fast, no KDF/waiter queue.
+      return track((async () => {
+        try {
+          await (role === "ADMIN" ? attempts.verifyAdminPassword(password) : attempts.verifySalespersonPassword(password));
+          available();
+          if (closing || admitted !== transition || !current.snapshot) return deny();
+          return issueReceipt(current.snapshot);
+        } catch { invalidateReceipt(); return deny(); } // Transaction runners quarantine only their own failures.
+        finally { verification = undefined; }
+      })());
+    };
+    const authority = (role: Role, session: BoundSession): Actor => {
+      const now = securityTime(); provisioned(now);
+      const row = owned.get(`SELECT u.id,u.role,p.active,p.credential_version,p.auth_epoch,
+        r.credential_version AS session_version,r.auth_epoch AS session_epoch,
+        r.boot_generation,r.created_at_ms,r.expires_at_ms,r.revoked_at_ms
+        FROM auth_users u JOIN auth_principals p ON p.id=u.id
+        JOIN auth_session_authorizations r ON r.principal_id=p.id
+        WHERE r.session_id=? AND u.id=?`, [session.id, role]);
+      if (!row || row.id !== role || row.role !== role || row.active !== BigInt(1) ||
+          row.revoked_at_ms !== null || row.boot_generation !== boot ||
+          session.userId !== role || session.roleBinding !== role || session.bootGeneration !== boot ||
+          row.credential_version !== row.session_version || row.auth_epoch !== row.session_epoch ||
+          String(row.credential_version) !== session.credentialVersion || String(row.auth_epoch) !== session.authEpoch ||
+          typeof row.created_at_ms !== "bigint" || row.created_at_ms > now ||
+          typeof row.expires_at_ms !== "bigint" || row.expires_at_ms <= now ||
+          session.expiresAt.getTime() <= Date.now()) return deny();
+      return Object.freeze({ principalId: role, role, sessionId: session.id });
+    };
+    const receiptLive = (saved: ReceiptState) => {
+      const tick = Math.floor(performance.now());
+      if (!Number.isSafeInteger(tick) || tick < saved.expiresAtMonotonic - receiptLifetimeMs ||
+          tick >= saved.expiresAtMonotonic || saved.boot !== boot) return deny();
+      return tick;
+    };
+    const issue = (role: Role, value: unknown): Promise<Response> => {
+      let saved: ReceiptState;
+      try {
+        if (!value || typeof value !== "object") return deny();
+        const candidate = value as VerifiedCredential, found = receipts.get(candidate);
+        if (!found) return deny(); // No getter or framework call for forged objects.
+        const aborted = candidate.signal.aborted;
+        receipts.delete(candidate); invalidateReceipt(); // Burn before ANY later failure.
+        saved = found;
+        if (aborted || saved.role !== role || local.getStore() || closed || closing ||
+            verification || issuing || rotating || owned.inTransaction()) return deny();
+        receiptLive(saved);
+      } catch { return Promise.reject(new AuthorizationDenied()); }
+      const admitted = transition;
+      issuing = true; // Synchronous admission: no concurrent issuance/verification queue.
+      return enqueue(() => local.run(true, async () => {
+        let created: Awaited<ReturnType<typeof contexts.ADMIN.internalAdapter.createSession>> | undefined;
+        let registered = false, creationStarted = false, transactionStarted = false;
+        const current = () => {
+          available(); if (closing || admitted !== transition || !owned.inTransaction()) return deny(); receiptLive(saved);
+          const state = credentialState(role);
+          if (!sameCredential(state, saved)) return deny();
+          return state;
+        };
+        try {
+          // The core helper joins an inherited adapter context. Reject it before
+          // BEGIN; this capability must own its transaction and COMMIT boundary.
+          if (owned.inTransaction() || await getCurrentAdapter(contexts[role].adapter) !== contexts[role].adapter) return deny();
+          transactionStarted = true;
+          const response = await gatewayTransaction(contexts[role].adapter, async () => {
+            available(); if (closing || !owned.inTransaction()) return deny();
+            owned.run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?", [role]);
+            current(); // Holds writer from this read through registration COMMIT.
+            const now = securityTime(), expires = int64(now + BigInt(sessionLifetimeSeconds * 1000));
+            // JavaScript Date is used only after exact safe timestamp range validation.
+            if (expires > BigInt(8640000000000000)) return deny();
+            // Supported pinned context API generates both ID and bearer itself.
+            // getCurrentAdapter inside createSession joins this SAME transaction.
+            creationStarted = true;
+            created = await contexts[role].internalAdapter.createSession(role, true, {
+              credentialVersion: String(saved.credentialVersion), authEpoch: String(saved.authEpoch),
+              bootGeneration: boot, roleBinding: role, createdAt: new Date(Number(now)),
+              updatedAt: new Date(Number(now)), expiresAt: new Date(Number(expires)),
+            }, true);
+            const session = boundSession(created);
+            if (created.createdAt.getTime() !== Number(now) || session.expiresAt.getTime() !== Number(expires)) return deny();
+            const user = await contexts[role].internalAdapter.findUserById(role);
+            if (!user || user.id !== role) return deny();
+            if (owned.run("INSERT INTO auth_session_authorizations VALUES(?,?,?,?,?,?,?,NULL)", [
+              session.id, role, saved.credentialVersion, saved.authEpoch, boot, now, expires,
+            ]).changes !== BigInt(1)) return deny();
+            registered = true;
+            // Official pathless serverOnly helper: no URL, plugin route or raw API.
+            // Cookies are staged privately INSIDE the transaction, never published here.
+            const cookieEndpoint = createAuthEndpoint.serverOnly({
+              method: "POST", metadata: { noStore: true },
+            }, async ctx => {
+              await setSessionCookie(ctx, { session: created!, user }, true);
+              return { ok: true };
+            });
+            const staged = await cookieEndpoint({ context: contexts[role], headers: new Headers(), returnHeaders: true });
+            current(); authority(role, session);
+            return new Response(JSON.stringify({ ok: true }), {
+              status: 200, headers: new Headers([...staged.headers, ["content-type", "application/json"]]),
+            });
+          });
+          // Promise resolution is after the driver's COMMIT, not just handler completion.
+          if (owned.inTransaction()) { quarantine(); return deny(); }
+          available(); if (closing || admitted !== transition) return deny();
+          return response;
+        } catch {
+          // A failed/uncertain publication never leaves a live SQL authorization,
+          // even if framework deletion AND RAM clearing both fail.
+          if (transactionStarted && owned.inTransaction()) quarantine();
+          else if (registered && created) {
+            try {
+              await gatewayTransaction(contexts[role].adapter, async () => {
+                if (!owned.inTransaction()) return deny();
+                owned.run("UPDATE auth_session_authorizations SET revoked_at_ms=created_at_ms " +
+                  "WHERE session_id=? AND principal_id=? AND boot_generation=?", [created!.id, role, boot]);
+                const row = owned.get("SELECT revoked_at_ms FROM auth_session_authorizations WHERE session_id=?", [created!.id]);
+                if (row && row.revoked_at_ms === null) return deny();
+              });
+              if (owned.inTransaction()) quarantine();
+            } catch { quarantine(); } // SQL ambiguity poisons this entire owner.
+          }
+          try {
+            if (created) await contexts[role].internalAdapter.deleteSession(created.token);
+            else if (creationStarted) stores[role].clear(); // Only a started creation can leave partial RAM.
+          } catch { try { stores[role].clear(); } catch { /* No live SQL row, or owner closed. */ } }
+          return deny(); // Discard staged headers and underlying errors unconditionally.
+        } finally { issuing = false; }
+      }));
+    };
+    const validateRequest = (role: Role, request: Request) => {
+      const url = new URL(request.url);
+      if (url.origin !== origins[role] || (request.headers.has("origin") && request.headers.get("origin") !== origins[role]) ||
+          (request.headers.has("host") && request.headers.get("host") !== url.host)) return deny();
+    };
+    const logout = (role: Role, request: Request): Promise<Response> => {
+      // Reject nesting BEFORE changing a transition or joining the serialized owner.
+      if (local.getStore() || closed || closing) return Promise.reject(new AuthorizationDenied());
+      try { validateRequest(role, request); } catch { return Promise.reject(new AuthorizationDenied()); }
+      transition = {}; invalidateReceipt(); // No earlier password proof may survive Back to Login.
+      return enqueue(() => local.run(true, async () => {
+        let started = false;
+        try {
+          available(); validateRequest(role, request);
+          if (owned.inTransaction() || await getCurrentAdapter(contexts[role].adapter) !== contexts[role].adapter) return deny();
+          started = true;
+          // SQL unavailable is an error even for a missing, expired or invalid cookie.
+          await owned.db.selectFrom("auth_principals").selectAll().limit(0).execute();
+          const verified = await portals[role].api.getSession({
+            headers: request.headers, query: { disableCookieCache: true, disableRefresh: true },
+          });
+          const session = verified ? boundSession(verified.session) : undefined;
+          if (session && (session.userId !== role || session.roleBinding !== role || session.bootGeneration !== boot)) return deny();
+          await gatewayTransaction(contexts[role].adapter, async () => {
+            available(); if (!owned.inTransaction()) return deny();
+            owned.run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?", [role]);
+            const now = securityTime(); provisioned(now);
+            // Confirm registry availability for idempotent no-session logout too.
+            owned.get("SELECT session_id FROM auth_session_authorizations LIMIT 0");
+            if (!session) return; // Already unauthenticated; no guessed identity/row is revoked.
+            const row = owned.get("SELECT * FROM auth_session_authorizations WHERE session_id=?", [session.id]);
+            if (!row) return; // No SQL grant exists. Only this verified RAM session is cleaned.
+            if (row.principal_id !== role || row.boot_generation !== boot ||
+                typeof row.credential_version !== "bigint" || row.credential_version <= BigInt(0) ||
+                typeof row.auth_epoch !== "bigint" || row.auth_epoch <= BigInt(0) ||
+                String(row.credential_version) !== session.credentialVersion || String(row.auth_epoch) !== session.authEpoch ||
+                typeof row.created_at_ms !== "bigint" || row.created_at_ms <= BigInt(0) || row.created_at_ms > now ||
+                typeof row.expires_at_ms !== "bigint" || row.expires_at_ms !== BigInt(session.expiresAt.getTime()) ||
+                (row.revoked_at_ms !== null && (typeof row.revoked_at_ms !== "bigint" || row.revoked_at_ms < row.created_at_ms))) return deny();
+            if (row.revoked_at_ms === null && owned.run(
+              "UPDATE auth_session_authorizations SET revoked_at_ms=? WHERE session_id=? AND principal_id=? AND boot_generation=? AND revoked_at_ms IS NULL",
+              [now, session.id, role, boot]).changes !== BigInt(1)) return deny();
+            const confirmed = owned.get("SELECT revoked_at_ms FROM auth_session_authorizations WHERE session_id=?", [session.id]);
+            if (!confirmed || typeof confirmed.revoked_at_ms !== "bigint") return deny();
+          });
+          // Authoritative confirmation is AFTER native COMMIT, before RAM/cookie cleanup.
+          if (owned.inTransaction()) return deny();
+          available();
+          if (session) {
+            try { await contexts[role].internalAdapter.deleteSession(session.token); }
+            catch {
+              // Pinned secondaryStorage session key is exactly its framework token.
+              // Never clear a whole role store and accidentally log out another session.
+              try { await stores[role].storage.delete(session.token); } catch { /* Confirmed SQL revocation still denies access. */ }
+            }
+          }
+          const cookieEndpoint = createAuthEndpoint.serverOnly({ method: "POST", metadata: { noStore: true } }, async ctx => {
+            deleteSessionCookie(ctx); return { ok: true };
+          });
+          const cleared = await cookieEndpoint({ context: contexts[role], headers: request.headers, returnHeaders: true });
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200, headers: new Headers([...cleared.headers, ["content-type", "application/json"]]),
+          });
+        } catch {
+          // An uncertain lookup/revocation/COMMIT closes this owner, never reports success.
+          // Closed admission denies even if SQLite rolled back and RAM cleanup also fails.
+          if (started) quarantine();
+          return deny();
+        }
+      }));
+    };
+    const rotate = (target: Role, incoming: Request, value: unknown, password: unknown): Promise<void> => {
+      let saved: ReceiptState, request: Request;
+      try {
+        if (!value || typeof value !== "object") return deny();
+        const candidate = value as VerifiedCredential, found = receipts.get(candidate);
+        if (!found) return deny();
+        const aborted = candidate.signal.aborted;
+        receipts.delete(candidate); invalidateReceipt(); // Burn even on later denial/failure.
+        saved = found;
+        if (aborted || saved.role !== "ADMIN" || local.getStore() || closed || closing ||
+            verification || issuing || rotating || owned.inTransaction()) return deny();
+        receiptLive(saved); validateRequest("ADMIN", incoming);
+        request = new Request(incoming.url, { headers: new Headers(incoming.headers) });
+      } catch { return Promise.reject(new AuthorizationDenied()); }
+      const admitted = transition;
+      rotating = true; // Before await: one KDF operation, no rotation/login waiter queue.
+      return track((async () => {
+        let operation: { lastTick: number; expiresAt: number } | undefined;
+        const live = () => {
+          available(); if (closing || admitted !== transition || saved.boot !== boot) return deny();
+          if (!operation) { receiptLive(saved); return; } // Fresh proof through initial SQL snapshot.
+          const tick = Math.floor(performance.now());
+          if (!Number.isSafeInteger(tick) || tick < operation.lastTick || tick >= operation.expiresAt) return deny();
+          operation.lastTick = tick; // Conservative rollback detection; deadline never slides.
+        };
+        // Two short owned transactions with expensive password work BETWEEN them.
+        const phase = <T>(mutates: boolean, work: (session: BoundSession) => Promise<T>) =>
+          enqueue(() => local.run(true, async () => {
+            let started = false, completed = false;
+            try {
+              live();
+              if (owned.inTransaction() || await getCurrentAdapter(contexts.ADMIN.adapter) !== contexts.ADMIN.adapter) return deny();
+              validateRequest("ADMIN", request);
+              await owned.db.selectFrom("auth_principals").selectAll().limit(0).execute();
+              const verified = await portals.ADMIN.api.getSession({
+                headers: request.headers, query: { disableCookieCache: true, disableRefresh: true },
+              });
+              const session = boundSession(verified?.session);
+              started = true;
+              const result = await runWithTransaction(contexts.ADMIN.adapter, async () => {
+                live(); if (!owned.inTransaction()) return deny();
+                owned.run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?", ["ADMIN"]);
+                authority("ADMIN", session);
+                if (!sameCredential(credentialState("ADMIN"), saved)) return deny();
+                const result = await work(session);
+                live(); if (!owned.inTransaction() || BigInt(session.expiresAt.getTime()) <= securityTime()) return deny();
+                if (!mutates) authority("ADMIN", session);
+                completed = true;
+                return result;
+              });
+              if (owned.inTransaction()) { quarantine(); return deny(); }
+              available();
+              if (mutates) {
+                // After confirmed COMMIT, still under the SAME queue. This role
+                // portal/store contains only the changed identity's RAM sessions.
+                try { await contexts[target].internalAdapter.deleteUserSessions(target); } catch { /* SQL versions/revocation deny. */ }
+                try { stores[target].clear(); } catch { /* Surviving RAM cannot authorize. */ }
+                invalidateReceipt();
+              }
+              return result;
+            } catch {
+              // Callback failure with confirmed rollback leaves old credentials intact.
+              // COMMIT/acknowledgment uncertainty poisons the owner, never reports success.
+              if (started && (owned.inTransaction() || (mutates && completed))) quarantine();
+              return deny();
+            }
+          }));
+        try {
+          const before = await phase(false, async session => ({
+            sessionId: session.id, ADMIN: credentialState("ADMIN"), SALESPERSON: credentialState("SALESPERSON"),
+          }));
+          // The consumed proof must STILL be fresh when trusted authorization has
+          // completed. Only then create this private, once-only execution lifecycle.
+          const started = receiptLive(saved), expiresAt = started + rotationOperationLifetimeMs;
+          if (!Number.isSafeInteger(expiresAt)) return deny();
+          operation = { lastTick: started, expiresAt };
+          live(); assertOfflinePassword(password);
+          // A false login verifier can also mean native failure. These checks share
+          // its exact native comparison core but throw on ANY operational/format error.
+          await local.run(true, () => assertPasswordNotReused(password, before.ADMIN.hash)); live();
+          await local.run(true, () => assertPasswordNotReused(password, before.SALESPERSON.hash)); live();
+          const encoded = await local.run(true, () => contexts[target].password.hash(password)); live();
+          await phase(true, async session => {
+            if (session.id !== before.sessionId ||
+                !sameCredential(credentialState("ADMIN"), before.ADMIN) ||
+                !sameCredential(credentialState("SALESPERSON"), before.SALESPERSON)) return deny();
+            const previous = before[target], other = target === "ADMIN" ? "SALESPERSON" : "ADMIN";
+            const version = int64(previous.credentialVersion + BigInt(1)), epoch = int64(previous.authEpoch + BigInt(1));
+            const now = securityTime(), date = new Date(Number(now));
+            // Conservative clock handling; never repair future-dated registrations.
+            if (!Number.isFinite(date.getTime()) || owned.get(
+              "SELECT count(*) AS n FROM auth_session_authorizations WHERE principal_id=? AND revoked_at_ms IS NULL AND created_at_ms>?",
+              [target, now])?.n !== BigInt(0)) return deny();
+            // Supported pinned helper resolves getCurrentAdapter and joins this tx.
+            const changed = await contexts[target].internalAdapter.updateAccount(target, { password: encoded, updatedAt: date });
+            live(); if (!owned.inTransaction() || !changed || changed.id !== target) return deny();
+            if (owned.run("UPDATE auth_principals SET credential_version=?,auth_epoch=? " +
+                "WHERE id=? AND active=1 AND credential_version=? AND auth_epoch=?",
+              [version, epoch, target, previous.credentialVersion, previous.authEpoch]).changes !== BigInt(1)) return deny();
+            owned.run("UPDATE auth_session_authorizations SET revoked_at_ms=? WHERE principal_id=? AND revoked_at_ms IS NULL", [now, target]);
+            const expected = { ...previous, hash: encoded, credentialVersion: version, authEpoch: epoch, updatedAt: date.toISOString() };
+            // Hash string equality confirms trusted SQL writes, never verifies plaintext.
+            if (!sameCredential(credentialState(target), expected) ||
+                !sameCredential(credentialState(other), before[other]) || owned.get(
+                  "SELECT count(*) AS n FROM auth_session_authorizations WHERE principal_id=? AND revoked_at_ms IS NULL",
+                  [target])?.n !== BigInt(0)) return deny();
+            if (target !== "ADMIN") authority("ADMIN", session);
+            // Self-rotation deliberately invalidates this Admin session at COMMIT.
+          });
+        } catch { return deny(); }
+        finally { rotating = false; }
+      })());
+    };
+    const execute = <T>(role: Role, request: Request, work: (tx: AuthorizedTransaction, actor: Actor) => Promise<T>) => {
+      if (local.getStore() || closed || closing) return Promise.reject(new AuthorizationDenied());
+      return enqueue(async () => {
+        try {
+          available();
+          validateRequest(role, request);
+          // Check authoritative SQL availability even before resolving the cookie.
+          await owned.db.selectFrom("auth_principals").selectAll().limit(0).execute();
+          const verified = await portals[role].api.getSession({
+            headers: request.headers, query: { disableCookieCache: true, disableRefresh: true }
+          });
+          const session = boundSession(verified?.session);
+          return await gatewayTransaction(contexts[role].adapter, async () => {
+            available();
+            // Kysely's supported SQLite transaction starts deferred. This no-change
+            // UPDATE acquires the writer reservation BEFORE the authorization read,
+            // excluding external revocation/check/write races through COMMIT.
+            owned.run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?", [role]);
+            const actor = authority(role, session);
+            let live = true;
+            const guard = () => { available(); if (!live || !owned.inTransaction()) deny(); };
+            try {
+              return await local.run(true, async () => {
+                const result = await work(owned.scope(guard), actor);
+                guard(); authority(role, session); // Expiry/revocation before publication/commit.
+                return result;
+              });
+            } finally { live = false; }
+          });
+        } catch {
+          quarantineIfNeeded();
+          return deny();
+        }
+      });
+      // Generic errors only; no SQL details or nested causes.
+    };
+    const fresh = <T>(request:Request,value:unknown,work:(tx:AuthorizedTransaction,actor:Actor)=>Promise<T>):Promise<T> => {
+      let saved:ReceiptState;
+      try {
+        if(!value||typeof value!=="object")return deny();
+        const candidate=value as VerifiedCredential,found=receipts.get(candidate);
+        if(!found)return deny();
+        const aborted=candidate.signal.aborted;receipts.delete(candidate);invalidateReceipt();saved=found;
+        if(aborted||saved.role!=="ADMIN"||local.getStore()||closed||closing||verification||issuing||rotating)return deny();
+        receiptLive(saved);validateRequest("ADMIN",request);
+      }catch{return Promise.reject(new AuthorizationDenied());}
+      const admitted=transition,copy=new Request(request.url,{headers:new Headers(request.headers)});
+      return execute("ADMIN",copy,async(tx,actor)=>{
+        const live=()=>{available();receiptLive(saved);if(closing||admitted!==transition||!sameCredential(credentialState("ADMIN"),saved))return deny();};
+        live();const result=await work(tx,actor);live();return result;
+      });
+    };
+    return Object.freeze({
+      withFreshAdminTransaction:fresh,
+      verifyAdminPassword: (password: unknown) => verify("ADMIN", password),
+      verifySalespersonPassword: (password: unknown) => verify("SALESPERSON", password),
+      issueAdminSession: (value: unknown) => issue("ADMIN", value),
+      issueSalespersonSession: (value: unknown) => issue("SALESPERSON", value),
+      logoutAdmin: (request: Request) => logout("ADMIN", request),
+      logoutSalesperson: (request: Request) => logout("SALESPERSON", request),
+      rotateAdminPassword: (request: Request, proof: unknown, password: unknown) => rotate("ADMIN", request, proof, password),
+      rotateSalespersonPassword: (request: Request, proof: unknown, password: unknown) => rotate("SALESPERSON", request, proof, password),
+      authorizeAdmin: (request: Request) => execute("ADMIN", request, async (_tx, actor) => actor),
+      authorizeSalesperson: (request: Request) => execute("SALESPERSON", request, async (_tx, actor) => actor),
+      withAdminTransaction: <T>(request: Request, work: (tx: AuthorizedTransaction, actor: Actor) => Promise<T>) => execute("ADMIN", request, work),
+      withSalespersonTransaction: <T>(request: Request, work: (tx: AuthorizedTransaction, actor: Actor) => Promise<T>) => execute("SALESPERSON", request, work),
+      async close() {
+        if (local.getStore()) return deny();
+        if (!closePromise) {
+          closing = true; invalidateReceipt();
+          closePromise = (async () => {
+            await Promise.allSettled(active);
+            closed = true; invalidateReceipt(); // No retained RAM can authorize this owner.
+            for (const role of roles) try { stores[role].clear(); } catch { /* Best effort; always close SQLite. */ }
+            try { await owned.close(); } catch { owned.quarantine(); return deny(); }
+            delete processState[ownerKey];
+          })();
+        }
+        await closePromise;
+      },
+    });
+  } catch {
+    invalidateReceipt(); stores.ADMIN.clear(); stores.SALESPERSON.clear();
+    try { if (owner) await owner.close(); } catch { owner?.quarantine(); return deny(); }
+    delete processState[ownerKey];
+    return deny();
+  }
+}

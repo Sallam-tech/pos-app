@@ -1,0 +1,2 @@
+# Migrations are byte-pinned; preserve LF during Windows checkout.
+web/src/server/db/migrations/*.sql text eol=lf

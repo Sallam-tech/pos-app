@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.expenses.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "src/server/**/*.ts",
+    "src/lib/invoices/**/*.ts",
+    "src/lib/sales/**/*.ts",
+    "src/lib/returns/**/*.ts",
+    "src/components/admin/test-invoices.tsx",
+    "src/components/pos/test-sale-receipt.tsx",
+    "src/components/pos/test-sales.tsx",
+    "src/components/admin/test-expense-financials.tsx",
+    "src/app/admin/sales/page.tsx",
+    "tests/integration/invoices*.test.ts",
+    "tests/helpers/invoices-fixture.ts",
+    "vitest.invoices.config.mts",
+    "src/components/pos/test-revised-receipt.tsx",
+    "src/app/pos/history/page.tsx",
+    "src/app/admin/reports/sales/page.tsx",
+    "src/components/shell/admin-shell.tsx",
+    "src/app/admin/layout.tsx",
+    "src/app/admin/reports/page.tsx"
+  ]
+}

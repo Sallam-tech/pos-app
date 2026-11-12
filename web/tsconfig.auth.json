@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.sqlite.json",
+  "include": [
+    "src/server/auth/**/*.ts",
+    "src/server/db/**/*.ts",
+    "tests/integration/auth-foundation.test.ts",
+    "vitest.auth.config.mts"
+  ]
+}

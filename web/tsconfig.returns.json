@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.sales.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "src/server/**/*.ts",
+    "src/lib/returns/**/*.ts",
+    "src/components/**/*return*.tsx",
+    "src/app/pos/returns/page.tsx",
+    "src/app/admin/returns/page.tsx",
+    "tests/integration/returns*.test.ts",
+    "tests/helpers/returns-fixture.ts",
+    "vitest.returns.config.mts"
+  ]
+}

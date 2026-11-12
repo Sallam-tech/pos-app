@@ -2,6 +2,8 @@
 
 This supplements the original SRS for the approved demo and future local backend; it does not rewrite historical sales or implement production accounting.
 
+Latest owner amendment,12 November2026: **COUNTER CASH ONLY.** Salesperson enters Amount + Reason when counter money is taken for a genuine shop expense, including a shop cost initially paid personally. Record that counter withdrawal once; reduce counter cash and Net Profit once. No personal-payment entry, pocket/source selector, owner-funding or reimbursement workflow. Never invent opening cash/balances or count purchases/restocks as expenses. Confirmed P07 restricts correction/reversal to Admin or an exact one-use Admin grant. The [preserving TEST38 schema and correction-evidence proposal](SHOP_EXPENSES_SCHEMA38_AUTHORIZATION_CONTRACT.md) is OWNER APPROVED A+B and implemented TEST-only; see [actual verification](EXPENSES_SCHEMA38_COORDINATED_TEST_IMPLEMENTATION_REPORT.md). Historical corrections preserve original economic dates and independently verified cash dates; prior-period acknowledgment and audit prevent silent restatement. Closing remains disabled. Earlier funding alternatives in architecture/history are superseded.
+
 - Gross Profit = Net Sales Revenue minus Cost of Goods Sold.
 - Net Profit = Gross Profit minus recorded, approved operating expenses for the same business date or reporting period. Keep the two figures separate; allow genuine losses.
 - Use exact PKR minor units and Asia/Karachi civil business dates. Never deduct a current-day expense from the fixed 2 November 2026 demonstration profit.

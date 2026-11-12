@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.auth.json",
+  "include": [
+    "src/server/auth/**/*.ts",
+    "src/server/db/**/*.ts",
+    "tests/integration/account-provisioning.test.ts",
+    "tests/integration/auth-foundation.test.ts",
+    "tests/integration/password-callbacks.test.ts",
+    "vitest.provision.config.mts"
+  ]
+}

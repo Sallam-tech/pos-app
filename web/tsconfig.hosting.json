@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.sqlite.json",
+  "include": [
+    "src/server/hosting/**/*.ts",
+    "src/server/auth/**/*.ts",
+    "src/server/db/**/*.ts",
+    "tests/integration/local-hosting.test.ts",
+    "vitest.hosting.config.mts"
+  ]
+}

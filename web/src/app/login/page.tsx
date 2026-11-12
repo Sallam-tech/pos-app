@@ -1,3 +1,6 @@
+import {isTestSalesRender} from "@/server/hosting/sales-render";
+import { connection } from "next/server";
+import { testLoginRole } from "@/server/hosting/login-render";
 import type { Metadata } from "next";
 import { DemoAccess } from "@/components/demo/demo-navigation";
 import { LoginForm } from "@/components/login/login-form";
@@ -13,7 +16,9 @@ export const metadata: Metadata = {
   title: "Login | Shop POS",
   description: "Shop POS login UI preview. Authentication is not connected.",
 };
-export default function LoginPage() {
+export default async function LoginPage() {
+  await connection();
+  const role = testLoginRole();
   return <div className="flex min-h-svh flex-col">
     <a href="#main-content" className="skip-link">Skip to content</a>
     <header className="border-b bg-surface">
@@ -28,15 +33,15 @@ export default function LoginPage() {
             <span className="mx-auto mb-3 grid size-11 place-items-center rounded-lg bg-primary text-primary-foreground"><Icon name="store" className="size-6" /></span>
             <ShopName as="h1" className="page-title break-words [overflow-wrap:anywhere]" />
             <p className="mt-2 text-sm text-muted-foreground">Enter your password to open the shop.</p>
-            <div className="mt-3"><Badge>UI Preview</Badge></div>
+            <div className="mt-3"><Badge>{role ? (role === "ADMIN" ? "Admin / Isolated TEST" : "Salesperson / Isolated TEST") : "UI Preview"}</Badge></div>
           </div>
-          <p id="login-preview-description" className="mt-3 text-sm leading-5 text-muted-foreground">Secure sign-in is not connected. Use made-up text to preview the form, or explore the demo below.</p>
-          <LoginForm />
+          <p id="login-preview-description" className="mt-3 text-sm leading-5 text-muted-foreground">{role ? "Enter your password for this role. Every visit requires fresh sign-in. Production remains disabled." : "Secure sign-in is not connected. Use made-up text to preview the form, or explore the demo below."}</p>
+          <LoginForm testRole={role} testSales={isTestSalesRender()} />
           <div className="mt-4 border-t pt-3"><ConnectivityIndicator compact /></div>
         </Card>
-        <DemoAccess />
+        {!role && <DemoAccess />}
       </div>
     </main>
-    <footer className="px-4 pb-3 text-center text-xs leading-5 text-muted-foreground">Shop-local demo. No accounts are connected.</footer>
+    <footer className="px-4 pb-3 text-center text-xs leading-5 text-muted-foreground">{role ? "Isolated TEST only. No real shop accounts or production access." : "Shop-local demo. No accounts are connected."}</footer>
   </div>;
 }

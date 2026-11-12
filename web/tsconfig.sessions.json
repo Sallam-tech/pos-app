@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.credentials.json",
+  "include": [
+    "src/server/auth/**/*.ts",
+    "src/server/db/**/*.ts",
+    "tests/integration/session-issuance.test.ts",
+    "tests/integration/credential-verification.test.ts",
+    "tests/integration/auth-foundation.test.ts",
+    "tests/integration/password-callbacks.test.ts",
+    "vitest.sessions.config.mts"
+  ]
+}

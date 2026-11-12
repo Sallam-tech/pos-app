@@ -1,0 +1,20 @@
+CREATE TABLE products (
+ id TEXT PRIMARY KEY NOT NULL CHECK(length(id)=36),
+ code TEXT NOT NULL UNIQUE CHECK(length(code) BETWEEN 1 AND 32),
+ name TEXT NOT NULL CHECK(length(name) BETWEEN 1 AND 120),
+ name_key TEXT NOT NULL CHECK(length(name_key) BETWEEN 1 AND 240),
+ category TEXT CHECK(category IS NULL OR length(category) BETWEEN 1 AND 80),
+ size_label TEXT CHECK(size_label IS NULL OR length(size_label) BETWEEN 1 AND 40),
+ unit TEXT NOT NULL CHECK(unit IN ('PACK','BOX')),
+ quantity_step_q INTEGER NOT NULL CHECK(quantity_step_q=1000000),
+ current_cost_m INTEGER NOT NULL CHECK(current_cost_m BETWEEN 1 AND 99999999999999),
+ selling_price_m INTEGER CHECK(selling_price_m BETWEEN 1 AND 99999999999999),
+ low_stock_q INTEGER NOT NULL CHECK(low_stock_q BETWEEN 0 AND 999999999999000000 AND low_stock_q%1000000=0),
+ selling_active INTEGER NOT NULL CHECK(selling_active IN (0,1)),
+ archived_at_ms INTEGER CHECK(archived_at_ms IS NULL OR archived_at_ms>0),
+ version INTEGER NOT NULL CHECK(version>0),
+ created_at_ms INTEGER NOT NULL CHECK(created_at_ms>0),
+ updated_at_ms INTEGER NOT NULL CHECK(updated_at_ms>=created_at_ms),
+ UNIQUE(id,current_cost_m),
+ CHECK(selling_active=0 OR (selling_price_m IS NOT NULL AND archived_at_ms IS NULL))
+) STRICT;

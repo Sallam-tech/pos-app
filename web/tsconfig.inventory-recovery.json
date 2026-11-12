@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.inventory-http.json",
+  "include": [
+    "src/server/hosting/**/*.ts",
+    "src/server/auth/**/*.ts",
+    "src/server/db/**/*.ts",
+    "src/server/inventory/**/*.ts",
+    "src/lib/inventory/**/*.ts",
+    "src/components/admin/test-*.tsx",
+    "src/components/shell/admin-shell.tsx",
+    "tests/helpers/inventory-http-fixture.ts",
+    "tests/integration/inventory-recovery.test.ts",
+    "vitest.inventory-recovery.config.mts",
+    "tests/integration/inventory-http.test.ts"
+  ]
+}

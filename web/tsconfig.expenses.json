@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.returns.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "src/server/**/*.ts",
+    "src/lib/expenses/**/*.ts",
+    "src/components/**/*expense*.tsx",
+    "src/app/pos/expenses/page.tsx",
+    "src/app/admin/expenses/page.tsx",
+    "tests/integration/expenses*.test.ts",
+    "tests/helpers/expenses-fixture.ts",
+    "vitest.expenses.config.mts"
+  ]
+}

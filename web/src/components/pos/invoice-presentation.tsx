@@ -14,8 +14,8 @@ export function InvoicePaperHeader({ shopName, address = "", phone = "", notice 
   </header>;
 }
 type PaperItem = { product: { name: string }; quantity: string | number; unitPrice: string | null; total: string | null; discountPercent?: string; discountAmount?: string };
-export function InvoiceItemsTable({ items }: { items: readonly PaperItem[] }) {
-  return <table className="receipt-items invoice-item-table"><caption className="sr-only">Sample invoice items</caption>
+export function InvoiceItemsTable({ items,caption="Sample invoice items" }: { items: readonly PaperItem[];caption?:string }) {
+  return <table className="receipt-items invoice-item-table"><caption className="sr-only">{caption}</caption>
     <colgroup><col style={{ width: "6%" }} /><col style={{ width: "38%" }} /><col style={{ width: "12%" }} /><col style={{ width: "22%" }} /><col style={{ width: "22%" }} /></colgroup>
     <thead><tr><th scope="col">#</th><th scope="col">Description</th><th scope="col">Qty</th><th scope="col">Rate (Rs.)</th><th scope="col">Amount (Rs.)</th></tr></thead>
     <tbody>{items.map((item, index) => <tr key={index}>

@@ -1,0 +1,5 @@
+CREATE TABLE product_identifiers (
+ product_id TEXT PRIMARY KEY NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+ kind TEXT NOT NULL CHECK(kind='BARCODE'),
+ value TEXT NOT NULL UNIQUE CHECK(length(value) BETWEEN 1 AND 128)
+) STRICT;

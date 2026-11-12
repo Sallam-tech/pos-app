@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.http-auth.json",
+  "include": [
+    "src/server/bootstrap/**/*.ts",
+    "src/server/hosting/**/*.ts",
+    "src/server/auth/**/*.ts",
+    "src/server/db/**/*.ts",
+    "tests/integration/protected-bootstrap.test.ts",
+    "vitest.bootstrap.config.mts"
+  ]
+}

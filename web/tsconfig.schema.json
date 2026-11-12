@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.sqlite.json",
+  "include": [
+    "src/server/db/**/*.ts",
+    "tests/integration/schema-validator.test.ts",
+    "vitest.schema.config.mts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

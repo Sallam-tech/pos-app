@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.sqlite.json",
+  "include": [
+    "src/server/hosting/**/*.ts",
+    "src/server/auth/**/*.ts",
+    "src/server/db/**/*.ts",
+    "src/server/inventory/**/*.ts",
+    "tests/integration/inventory-http.test.ts",
+    "vitest.inventory-http.config.mts",
+    "src/lib/inventory/**/*.ts",
+    "src/components/admin/test-*.tsx",
+    "src/components/shell/admin-shell.tsx",
+    "src/app/admin/layout.tsx",
+    "src/app/admin/products/page.tsx",
+    "src/app/admin/products/new/page.tsx",
+    "src/app/admin/inventory/available-stock/page.tsx",
+    "src/app/admin/inventory/low-stock/page.tsx",
+    "tests/helpers/inventory-http-fixture.ts"
+  ]
+}

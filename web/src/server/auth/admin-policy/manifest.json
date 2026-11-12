@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "source": "https://raw.githubusercontent.com/danielmiessler/SecLists/1a7bb9127eca9e6ff2fc0301c597fe6e16a0cb56/Passwords/Common-Credentials/100k-most-used-passwords-NCSC.txt",
+  "commit": "1a7bb9127eca9e6ff2fc0301c597fe6e16a0cb56",
+  "sourcePath": "Passwords/Common-Credentials/100k-most-used-passwords-NCSC.txt",
+  "sourceGitBlob": "38eb37702244f55fda75cab281eb2145cd7685b6",
+  "sourceSha256": "c2e5696882c603b76bb67a47ee970897e5a76fc4c3f5547abe3d0ca340c576e0",
+  "sourceBytes": 835538,
+  "sourceRecords": 99840,
+  "eligibleRecords": 47324,
+  "eligible8to14": 46993,
+  "digestRecords": 46483,
+  "outputBytes": 3021395,
+  "outputSha256": "f7d5f776bc1b4a59c507b67f09f80806a023c7fbb49ed465c4bb8362ac987734",
+  "transform": "Strict UTF-8. Split LF, remove final CR per record. Keep original well-formed 8..128 Unicode scalar values and <=512 UTF-8 bytes. Lowercase for screening only; SHA-256 over UTF-8, deduplicate/sort lowercase hex, LF terminators. No plaintext corpus retained.",
+  "license": "MIT",
+  "licenseFile": "../offline-policy/LICENSE.txt"
+}

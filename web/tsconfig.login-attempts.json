@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.role-password.json",
+  "include": [
+    "src/server/auth/**/*.ts",
+    "src/server/db/**/*.ts",
+    "tests/integration/login-attempt-protection.test.ts",
+    "tests/integration/account-provisioning.test.ts",
+    "tests/integration/auth-foundation.test.ts",
+    "tests/integration/password-callbacks.test.ts",
+    "vitest.login-attempts.config.mts"
+  ]
+}

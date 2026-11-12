@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.inventory-recovery.json",
+  "include": [
+    "src/server/**/*.ts",
+    "src/lib/inventory/**/*.ts",
+    "src/components/admin/test-*.tsx",
+    "src/components/shell/admin-shell.tsx",
+    "tests/helpers/inventory-http-fixture.ts",
+    "tests/integration/inventory-schema35.test.ts",
+    "tests/integration/inventory-terminal-http.test.ts",
+    "tests/integration/inventory-terminal-browser.test.ts",
+    "vitest.inventory-coordinated.config.mts",
+    "src/app/login/page.tsx",
+    "src/components/login/login-form.tsx",
+    "tests/integration/test-login-*.test.ts",
+    "tests/helpers/test-login-scenarios.ts"
+  ]
+}

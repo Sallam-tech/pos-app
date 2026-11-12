@@ -1,0 +1,8 @@
+import {randomUUID} from "node:crypto";
+import {beforeAll,afterEach,it,expect} from "vitest";
+import {seed,ready,passwords,productId} from "../helpers/returns-fixture";
+import {createReturnsService} from "../../src/server/returns/service";
+import {openDatabase} from "../../src/server/db/connection";
+import type {AuthorizationGateway} from "../../src/server/auth/types";
+const owners:AuthorizationGateway[]=[];beforeAll(seed);afterEach(async()=>{for(const g of owners.splice(0))await g.close();});
+it.each(["logout","shutdown"])("%s between durable intent and disposition execution cannot bypass authority",async effect=>{const f=await ready();owners.push(f.g);const r=(await f.refund()).refund,key=randomUUID();const guarded:AuthorizationGateway={...f.g,withFreshAdminTransaction:async(request,proof,work)=>{const v=await f.g.withFreshAdminTransaction(request,proof,work);if(effect==="logout")await f.g.logoutAdmin(f.admin);else await f.g.close();return v;}};await expect(createReturnsService(guarded).dispose(f.admin,passwords.ADMIN,key,{returnId:r.id,lines:[{returnLineId:r.lines[0].returnLineId,restockQuantity:"1",writeOffQuantity:"0",reason:"TEST inspected before transition"}]})).rejects.toThrow();await f.g.close();const db=openDatabase(f.config.database);try{expect(db.get("SELECT count(*) AS n FROM return_requests WHERE request_key=?",[key])?.n).toBe(BigInt(1));expect(db.get("SELECT count(*) AS n FROM return_dispositions")?.n).toBe(BigInt(0));expect(db.get("SELECT sellable_q FROM stock_balances WHERE product_id=?",[productId])?.sellable_q).toBe(BigInt(24000000));expect(db.get("SELECT count(*) AS n FROM auth_credentials")?.n).toBe(BigInt(2));expect(db.get("SELECT count(*) AS n FROM schema_migrations")?.n).toBe(BigInt(37));}finally{db.close();}});

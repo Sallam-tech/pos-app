@@ -1,5 +1,23 @@
 # POS Implementation Plan
 
+**FINAL OWNER UPDATE: OPTION2 APPROVED - per-unit final-payable HALF_UP first, multiply quantity, then sum lines. Complete coordinated TEST Sales36 contract APPROVED; implementation VERIFIED TEST ONLY. Earlier extended-line recommendation/approval-pending text below is historical and superseded. No production activation.**
+
+## Current execution authority - master assignment, 12 November 2026
+
+The owner now authorizes coordinated safe end-to-end development in this SAME conversation, starting from the existing private/TEST checkpoint. Follow the [current completion matrix and API inventory](development/MASTER_COMPLETION_MATRIX_AND_API_INVENTORY.md). First close Product/Stock UNKNOWN recovery with the [consolidated schema/lifecycle contract](development/INVENTORY_RECOVERY_AND_AUDIT_SCHEMA_CONTRACT.md); the owner subsequently APPROVED the corrected0019-0035 contract; the coordinated TEST implementation and real TEST Login wiring now exist, with52 distinct passing focused checks across runs, scoped TypeScript/ESLint and isolated final build PASS ([current report](development/INVENTORY_COORDINATED_RECOVERY_AND_TEST_LOGIN_REPORT.md)). Then continue safe TEST Login and dependent approved work without another prompt per small fix. The owner subsequently APPROVED whole-PKR P02/Q1/Q2/Q3, atomic incoming-cost D05 and signed late-count P08 on12 November; see [the financial policy and approved TEST Sales contract](development/FINANCIAL_POLICY_AND_SALES_SCHEMA_CONTRACT.md). FINAL OPTION2 and the complete preserving TEST36 Sales contract are also owner-approved and implemented. See the Sales implementation report for actual evidence. Separate crypto/production/real-shop authority remains gated. Independent Windows restore target/profile is unavailable.
+
+Earlier DOCUMENTATION ONLY / B1a-next / stop-after-every-module paragraphs below are historical authority, superseded where inconsistent with this master assignment and PROJECT_MEMORY sections44-46. Preserve original requirements, confirmed business rules, frozen design, historical migrations and all existing work. Current prototype versus private TEST versus production statuses remain distinct; the commercial POS is not complete.
+
+## Current backend planning authority - final client reconciliation, 9 November 2026
+
+The owner authorizes DOCUMENTATION ONLY. [BACKEND_SQLITE_ARCHITECTURE_V1.md](development/BACKEND_SQLITE_ARCHITECTURE_V1.md) now reconciles P01-P12 throughout schema, APIs, security, finances/cash, remote, recovery, desktop and acceptance phases. Its section15 marks CONFIRMED / PROVISIONAL / PENDING / SUPERSEDED. Original SRS/guides/contracts and frozen frontend remain unchanged.
+
+Confirmed: whole PACK/BOX variants; integer money/simple whole-rupee display/automatic rounding direction; final buying-cost floor/no zero/override; A-only saved corrections; inspection-first refund/COGS; shared-S exact Admin authorization for refunds/expense edits; Karachi midnight; exactly two role accounts; hybrid last-sync view/details-price queue; installed all-in-one Windows target. P11 backup scope remains PROVISIONAL until tested. Prior below-cost, fractional production, employee-account, direct-only remote, manual-daily-opening blocker/trading-day and browser-B alternatives are superseded.
+
+Next recommended module B1a needs separate bounded authorization: disposable TEST-only SQLite driver/native/BigInt/transaction/WAL/FULL/busy/restart/backup/integrity experiment, no production credentials/accounting schema/money/cloud/EXE. P02 precise discount/final-charge/refund/cash rounding and P08 count/carry/late reconstruction gate affected financial/cash services, not the isolated driver experiment. Two-role auth/provider compatibility gates B1b/B2; receiving-cost/correction-floor details gate B4/B6; cloud costs and backup retention/key tests gate later modules. Future conversion is deferred, not a full-pack blocker.
+
+Master Phases1-9/history remain; current detailed sequence is architecture section13 (B0, B1a, B1b, B2-B15), each reviewed before next. Lower legacy PostgreSQL/Prisma/Docker/employee/all-pending/cloud-mirror descriptions are historical where inconsistent; do not implement them or reopen confirmed decisions. No backend module is complete. No packages, database, migration, app/API/UI/fixture change, cloud connection, logo, EXE, staging/commit/push in this task.
+
 ## Client-approved frontend FROZEN — 9 November 2026
 
 The client has approved the current frontend; the owner authorizes one local checkpoint with subject chore: freeze approved POS frontend before backend development. This status supersedes older pending-visual-review statements below. All optional visual changes are frozen. Necessary future backend data wiring, connections and error/validation states must preserve the approved screens and flows.
@@ -107,6 +125,8 @@ Numerical performance/capacity and recovery objectives remain proposals; accessi
 
 ## 4. Stack review and application architecture
 
+Historical planning snapshot: current SQLite/Windows/two-role and final P01-P12 decisions above plus the reconciled architecture supersede conflicting alternatives here. Not active permission to install older tooling or reopen confirmed choices.
+
 Retain the mandated stack. Propose a modular monolith on one shop-local server and a single PostgreSQL primary; all stock-related consistency belongs in that database.
 
 | Technology | Responsibility / condition |
@@ -163,6 +183,8 @@ Later proposals (not Phase 1): `web/src/features/{auth,users,products,inventory,
 UI renders role-specific DTOs. Server actions/handlers validate session, permissions and input, then call services. Domain services own calculations, idempotency and transaction boundaries. Repositories/helpers use the caller's transaction client. No financial logic in components, nested independent writes or remote calls inside transactions. Dashboard/reports share definitions. Confidential data must not enter shared response caches or service-worker caches; verify logout/back-navigation and role changes do not reveal prior private data.
 
 ## 5. Proposed database architecture
+
+Historical planning snapshot: current SQLite/Windows/two-role and final P01-P12 decisions above plus the reconciled architecture supersede conflicting alternatives here. Not active permission to install older tooling or reopen confirmed choices.
 
 This is a logical design, not a final Prisma schema. Quantity, basket, receipt-cost and correction decisions in section 9 must precede final migrations. Single-product Sale is a historical guide example, not an approved policy; D02 must settle the sale/header/item model before Phase 4 schema approval.
 
@@ -310,6 +332,8 @@ Screen-specific forms, search, dialogs, report mocks and confirmation flows are 
 
 ## 8. Offline LAN operation and recovery
 
+Historical planning snapshot: current SQLite/Windows/two-role and final P01-P12 decisions above plus the reconciled architecture supersede conflicting alternatives here. Not active permission to install older tooling or reopen confirmed choices.
+
 This is target behavior for the completed system, not a claim that Phase 1/2 implement sales, authentication, deployment or recovery.
 
 The server hosts Next.js, Better Auth, PostgreSQL and the reverse proxy. Shop devices use its reserved LAN IP and a hostname resolved by local DNS even without WAN. Caddy can use an internal CA ([TLS documentation](https://caddyserver.com/docs/caddyfile/directives/tls)); each client must trust that root. Persist/protect CA state, DB data and application secrets. Maintain a reasonably accurate server/client clock for sessions and certificates.
@@ -330,6 +354,8 @@ A health check cannot prove an interrupted sale failed. Pending intent storage i
 Operations proposal: dedicated SSD server, stable wired LAN where possible, UPS for server and router, private DB network, LAN HTTPS firewall access, health/restart policy and protected secrets. Preload tested app/DB/proxy images, migration artifacts and recovery tools for offline restart/reinstallation. Encrypted scheduled backups go to separate physical storage; choose retention, recovery point objective (RPO: tolerated data loss) and recovery time objective (RTO: tolerated downtime). Restore into an isolated DB, verify auth/ledger/report totals and preserve existing live data. Rollback must account for schema compatibility; reverting an app image cannot undo arbitrary migrations.
 
 ## 9. Reconciliation and Pending Business Decisions
+
+Historical planning snapshot: current SQLite/Windows/two-role and final P01-P12 decisions above plus the reconciled architecture supersede conflicting alternatives here. Not active permission to install older tooling or reopen confirmed choices.
 
 The restored SRS, including its confirmed amendments, has been read. The following are current resolutions; the pre-reconciliation findings and proposed defaults remain preserved in the historical snapshot.
 
@@ -558,3 +584,5 @@ The final frontend brief supersedes older visible Total Investment, expense-cate
 The same brief selects SQLite as the future authoritative local shop database and proposes Supabase private Storage for encrypted backups. This conflicts with the older PostgreSQL/Prisma/cloud-mirror proposals; those documents are historical design references, not current backend implementation authorization. No database, auth, REST business API, Supabase connection or EXE is implemented here. The earlier remote Admin viewing requirement still needs architecture reconciliation: encrypted backup uploads alone do not provide a live remote activity viewer.
 
 Logo integration is explicitly deferred to the end. The later client approval/freeze entry above satisfies the visual-review gate and authorizes the local checkpoint only; do not push. Existing approved frontend work and historical fixture values remain protected.
+
+Current TEST-only delivery/evidence: [Sales36 implementation report](development/SALES_SCHEMA36_COORDINATED_TEST_IMPLEMENTATION_REPORT.md).64 distinct checks pass across recorded runs; scoped TypeScript/zero-warning ESLint and final isolated build pass. Production remains disabled.

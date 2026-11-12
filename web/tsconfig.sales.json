@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.inventory-coordinated.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "src/server/**/*.ts",
+    "src/lib/sales/**/*.ts",
+    "src/components/pos/test-*.tsx",
+    "tests/integration/sales*.test.ts",
+    "tests/helpers/inventory-http-fixture.ts",
+    "vitest.sales.config.mts",
+    "src/lib/inventory/**/*.ts",
+    "src/components/admin/test-*.tsx",
+    "src/components/shell/*.tsx",
+    "src/components/login/login-form.tsx",
+    "src/components/pos/invoice-presentation.tsx",
+    "src/app/login/page.tsx",
+    "src/app/pos/**/*.tsx"
+  ]
+}

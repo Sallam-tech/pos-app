@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { TestInventoryRecovery } from "@/components/admin/test-inventory-recovery";
+import { TestInventoryExit } from "@/components/admin/test-inventory-exit";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +18,7 @@ import { DeveloperCredit } from "@/components/demo/developer-credit";
 function isProductEditPath(pathname: string) {
   return /^\/admin\/products\/[^/]+\/edit$/.test(pathname);
 }
-function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate?: () => void }) {
+function Navigation({ mobile = false, onNavigate, invoices=false }: { mobile?: boolean; onNavigate?: () => void; invoices?:boolean }) {
   const pathname = usePathname();
   const isDashboard = pathname === "/admin/dashboard" || pathname === "/admin/expenses";
   const isReports = ["/admin/reports", "/admin/reports/sales", "/admin/reports/profit", "/admin/profit/today", "/admin/sales/today"].includes(pathname);
@@ -30,6 +32,7 @@ function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNaviga
       <li><Link href="/admin/products" aria-current={isProducts ? (pathname === "/admin/products" ? "page" : "location") : undefined} onClick={onNavigate} className={"app-nav-link " + (isProducts ? activeClasses : "text-muted-foreground")}><Icon name="box" />Products</Link></li>
       <li><Link href="/admin/inventory/available-stock" aria-current={isInventory ? (pathname === "/admin/inventory/available-stock" ? "page" : "location") : undefined} onClick={onNavigate}
         className={"app-nav-link " + (isInventory ? activeClasses : "text-muted-foreground")}><Icon name="layers" />Inventory</Link></li>
+      {invoices&&<li><Link href="/admin/sales" aria-current={pathname==="/admin/sales"?"page":undefined} onClick={onNavigate} className={"app-nav-link "+(pathname==="/admin/sales"?activeClasses:"text-muted-foreground")}><Icon name="chart"/>Sales History</Link></li>}
       <li><Link href="/admin/reports" aria-current={isReports ? (pathname === "/admin/reports" ? "page" : "location") : undefined} onClick={onNavigate}
         className={"app-nav-link " + (isReports ? activeClasses : "text-muted-foreground")}><Icon name="chart" />Reports</Link></li>
       <li className="mt-2 border-t pt-2"><Link href="/admin/investment" aria-current={pathname === "/admin/investment" ? "page" : undefined} onClick={onNavigate}
@@ -39,9 +42,9 @@ function Navigation({ mobile = false, onNavigate }: { mobile?: boolean; onNaviga
     </ul>
   </nav>;
 }
-export function AdminShell({ children }: { children: ReactNode }) {
+export function AdminShell({ children, testInventory = false, testInvoices=false }: { children: ReactNode; testInventory?: boolean; testInvoices?:boolean }) {
   const pathname = usePathname();
-  const compactAdminPreview = ["/admin/products", "/admin/products/new", "/admin/dashboard", "/admin/expenses", "/admin/inventory/low-stock", "/admin/inventory/available-stock", "/admin/sales/today", "/admin/profit/today", "/admin/reports", "/admin/reports/sales", "/admin/reports/profit"].includes(pathname) || isProductEditPath(pathname) || ["/admin/investment", "/admin/settings", "/admin/daily-closing"].includes(pathname);
+  const compactAdminPreview = ["/admin/sales", "/admin/products", "/admin/products/new", "/admin/dashboard", "/admin/expenses", "/admin/inventory/low-stock", "/admin/inventory/available-stock", "/admin/sales/today", "/admin/profit/today", "/admin/reports", "/admin/reports/sales", "/admin/reports/profit"].includes(pathname) || isProductEditPath(pathname) || ["/admin/investment", "/admin/settings", "/admin/daily-closing"].includes(pathname);
   const [open, setOpen] = useState(false);
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
@@ -52,8 +55,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
   return <div className="flex min-h-svh">
     <a href="#main-content" className="skip-link">Skip to content</a>
     <aside aria-label="Admin sidebar" className="app-sidebar sticky top-0 hidden h-svh w-[var(--sidebar-width)] shrink-0 flex-col overflow-y-auto border-r p-4 lg:flex">
-      <Brand /><Navigation key={pathname} />
-      <div className="mt-auto border-t pt-4"><Badge>Demo Mode</Badge><p className="mt-2 text-xs leading-5 text-muted-foreground">Preview access. No sign-in.</p><DemoExitLink /><DeveloperCredit variant="sidebar" /></div>
+      <Brand /><Navigation key={pathname} invoices={testInvoices} />
+      <div className="mt-auto border-t pt-4"><Badge>{testInventory ? "Isolated TEST" : "Demo Mode"}</Badge><p className="mt-2 text-xs leading-5 text-muted-foreground">{testInventory ? "Authenticated TEST workspace." : "Preview access. No sign-in."}</p>{testInventory ? <TestInventoryExit label="Exit TEST" /> : <DemoExitLink />}<DeveloperCredit variant="sidebar" /></div>
     </aside>
     <div className="min-w-0 flex-1">
       <header className={"workspace-header flex flex-wrap items-center justify-between sm:px-6 lg:px-8 " + (compactAdminPreview ? "gap-x-4 gap-y-2 px-4 py-3" : "gap-4 p-4")}>
@@ -61,12 +64,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
           <Button className="lg:hidden" variant="outline" size="icon" aria-label="Open navigation" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen(true)}><Icon name="menu" /></Button>
           {compactAdminPreview ? <div><p className="text-sm font-bold">Administration</p></div> : <div><p className="text-sm font-semibold">Admin workspace</p><p className="text-xs text-muted-foreground">Layout preview</p></div>}
         </div>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><ConnectivityIndicator compact /><ThemeSelector /><BackToLoginLink /></div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2"><ConnectivityIndicator compact /><ThemeSelector />{testInventory ? <TestInventoryExit /> : <BackToLoginLink />}</div>
       </header>
-      <main id="main-content" tabIndex={-1} className={"content-container outline-none" + (compactAdminPreview ? " pt-5" : "")}>{children}</main>
+      <main id="main-content" tabIndex={-1} className={"content-container outline-none" + (compactAdminPreview ? " pt-5" : "")}>{testInventory && <TestInventoryRecovery />}{children}</main>
     </div>
     <Dialog open={open} onOpenChange={setOpen} title="Admin navigation" description="Choose an Admin page." variant="drawer">
-      <Brand /><Navigation key={pathname} mobile onNavigate={() => setOpen(false)} /><div className="mt-5 border-t pt-3"><p className="text-xs text-muted-foreground">Preview only. No sign-in.</p><DemoExitLink /><DeveloperCredit variant="sidebar" /></div>
+      <Brand /><Navigation key={pathname} invoices={testInvoices} mobile onNavigate={() => setOpen(false)} /><div className="mt-5 border-t pt-3"><p className="text-xs text-muted-foreground">{testInventory ? "Authenticated TEST workspace." : "Preview only. No sign-in."}</p>{testInventory ? <TestInventoryExit label="Exit TEST" /> : <DemoExitLink />}<DeveloperCredit variant="sidebar" /></div>
     </Dialog>
   </div>;
 }

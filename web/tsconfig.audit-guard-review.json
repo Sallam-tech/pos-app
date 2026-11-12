@@ -1,0 +1,5 @@
+﻿{
+ "extends": "./tsconfig.sqlite.json",
+ "include": ["tests/integration/inventory-audit-guard-review.test.ts", "vitest.audit-guard-review.config.mts"],
+ "exclude": ["node_modules"]
+}

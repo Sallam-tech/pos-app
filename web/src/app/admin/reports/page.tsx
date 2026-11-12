@@ -1,3 +1,5 @@
+import {connection} from "next/server";
+import {readTestInvoicesRender} from "@/server/hosting/invoices-render";
 import { PageHeading } from "@/components/shell/page-heading";
 import type { Metadata } from "next";
 import "./reports.css";
@@ -8,11 +10,12 @@ import { Card, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Reports | Shop POS" };
 
-export default function ReportsPage() {
+export default async function ReportsPage() {
+ await connection();const live=readTestInvoicesRender();
   return <div className="reports-workspace">
     <div className="mb-5">
-      <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/reports"}>Reports</PageHeading><Badge>Demo Data</Badge></div>
-      <p className="mt-1 text-sm leading-6 text-muted-foreground">Choose a report to view demo sales or profit.</p>
+      <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/reports"}>Reports</PageHeading><Badge>{live?"Isolated TEST":"Demo Data"}</Badge></div>
+      <p className="mt-1 text-sm leading-6 text-muted-foreground">Choose a report to view {live?"recorded":"demo"} sales or profit.</p>
     </div>
     <section aria-label="Available reports" className="grid max-w-4xl gap-4 md:grid-cols-2">
       <Card role="group" aria-labelledby="sales-report-title" className="flex flex-col items-start">
