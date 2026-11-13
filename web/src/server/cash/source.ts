@@ -21,7 +21,7 @@ export async function admitSource(tx:Tx,a:Actor,kind:SourceKind,key:string,hash:
  if(kind==="SALE"&&!payload)return deny("UNAVAILABLE");const id=randomUUID();await tx.run("INSERT INTO counter_cash_admissions VALUES(?,?,?,?,?,?,?,?,?,?)",[id,kind,key,hash,a.role,a.sessionId,b.boot,b.now,payload?canonical(payload):null,payload?digest(payload):null]);return (await tx.get("SELECT * FROM counter_cash_admissions WHERE id=?",[id]))!;
 }
 export async function beforeSource(tx:Tx){
- if((await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version!==BigInt(40))return null;
+ if(![BigInt(40),BigInt(41)].includes((await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version as bigint))return null;
  const c=await cutoffs(tx),requests:Record<string,bigint>={};
  for(const s of specs)requests[s.kind]=big((await tx.get("SELECT coalesce(max(rowid),0) AS n FROM "+s.table))?.n);
  return {...c,requests};

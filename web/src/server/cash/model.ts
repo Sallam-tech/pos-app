@@ -1,3 +1,4 @@
+import {digestSqlRows} from "../db/canonical-row-digest";
 import "server-only";
 import {randomUUID} from "node:crypto";
 import type {AuthorizedTransaction} from "../auth/types";
@@ -21,8 +22,8 @@ export async function physicalRows(tx:Tx,cutoff?:bigint,evidenceCutoff?:bigint){
  const c=cutoff??(await cutoffs(tx)).cash,e=evidenceCutoff??(await cutoffs(tx)).evidence;
  return tx.all("SELECT m.rowid AS ordinal,m.*,e.id AS evidence_id,e.actual_date,e.earliest_at_ms,e.latest_at_ms,e.admission_id FROM cash_movements m LEFT JOIN cash_flow_evidence e ON e.movement_id=m.id AND e.rowid=(SELECT max(p.rowid) FROM cash_flow_evidence p WHERE p.movement_id=m.id AND p.rowid<=?) WHERE m.rowid<=? ORDER BY m.rowid",[e,c]);
 }
-export async function cashDigest(tx:Tx,cutoff:bigint,evidence:bigint){return digest(asStrings(await physicalRows(tx,cutoff,evidence)));}
-export async function financialDigest(tx:Tx,date:string){calendar(date);return digest(asStrings(await tx.all("SELECT rowid,* FROM financial_events WHERE effective_date=? ORDER BY rowid",[date])));}
+export async function cashDigest(tx:Tx,cutoff:bigint,evidence:bigint){return digestSqlRows(after=>tx.all("SELECT m.rowid AS ordinal,m.*,e.id AS evidence_id,e.actual_date,e.earliest_at_ms,e.latest_at_ms,e.admission_id FROM cash_movements m LEFT JOIN cash_flow_evidence e ON e.movement_id=m.id AND e.rowid=(SELECT max(p.rowid) FROM cash_flow_evidence p WHERE p.movement_id=m.id AND p.rowid<=?) WHERE m.rowid<=? AND m.rowid>? ORDER BY m.rowid LIMIT 1000",[evidence,cutoff,after]),"ordinal");}
+export async function financialDigest(tx:Tx,date:string){calendar(date);return digestSqlRows(after=>tx.all("SELECT rowid,* FROM financial_events NOT INDEXED WHERE effective_date=? AND rowid>? ORDER BY rowid LIMIT 1000",[date,after]),"rowid");}
 export async function observedCount(tx:Tx,id:string){const c=await tx.get("SELECT c.*,s.target_date,s.started_at_ms,s.cash_cutoff,s.financial_cutoff,s.evidence_cutoff,s.source_digest,s.boot_generation FROM cash_counts c JOIN cash_count_sessions s ON s.id=c.session_id WHERE c.id=?",[id]);if(!c||c.outcome!=="RECORDED")return deny("NOT_FOUND");json(c);return c;}
 function interval(r:Row){if(r.kind==="COUNTER_RECONCILIATION")return null;if(r.evidence_id)return {date:calendar(r.actual_date),earliest:big(r.earliest_at_ms),latest:big(r.latest_at_ms)};return {date:calendar(r.cash_date),earliest:karachiStart(String(r.cash_date)),latest:karachiStart(nextDay(String(r.cash_date)))-BigInt(1)};}
 export async function currentAnchor(tx:Tx,at:bigint){const a=await tx.get("SELECT a.*,c.actual_m,c.counted_at_ms,c.snapshot_json,c.snapshot_hash,cs.evidence_cutoff AS source_evidence_cutoff FROM cash_anchors a JOIN cash_counts c ON c.id=a.count_id JOIN cash_count_sessions cs ON cs.id=c.session_id WHERE a.activated_at_ms<=? ORDER BY a.activated_at_ms DESC,a.rowid DESC LIMIT 1",[at]);if(a){verifiedJson(a.basis_json,digest(JSON.parse(String(a.basis_json))));if(a.counted_at_ms!==a.activated_at_ms||a.actual_m===null)return deny("UNAVAILABLE");}return a;}

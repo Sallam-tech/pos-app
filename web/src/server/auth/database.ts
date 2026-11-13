@@ -69,7 +69,7 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
   try {
     const manifest = loadMigrations(config.migrationsDirectory);
     const marker=preflight.get("SELECT user_version FROM pragma_user_version")?.user_version;
-    if(typeof marker!=="bigint"||![BigInt(8),BigInt(18),BigInt(35),BigInt(36),BigInt(37),BigInt(38),BigInt(39),BigInt(40)].includes(marker))deny();
+    if(typeof marker!=="bigint"||![BigInt(8),BigInt(18),BigInt(35),BigInt(36),BigInt(37),BigInt(38),BigInt(39),BigInt(40),BigInt(41)].includes(marker))deny();
     const expected=config.database.mode==="test"?manifest.slice(0,Number(marker)):manifest;
     const history = preflight.all("SELECT version,name,checksum FROM schema_migrations ORDER BY version");
     if (history.length !== expected.length ||
@@ -102,10 +102,10 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
         native.pragma("quick_check", { simple: true }) !== "ok") deny();
     // Bounded64MiB SQLite page cache for the approved TEST38/39 report books. This is native
     // coherent page storage, never a cache of authorization/validation results.
-    if(options.mode==="test"&&[38,39,40].includes(native.pragma("user_version",{simple:true}) as number)){native.pragma("cache_size=-65536");if(native.pragma("cache_size",{simple:true})!==-65536)deny();}
+    if(options.mode==="test"&&[38,39,40,41].includes(native.pragma("user_version",{simple:true}) as number)){native.pragma("cache_size=-65536");if(native.pragma("cache_size",{simple:true})!==-65536)deny();}
     // Pure, direct-only Unicode text folding for admitted TEST report/history
     // searches. No SQL, I/O, authorization or persisted schema capability.
-    if(options.mode==="test"&&[38,39,40].includes(native.pragma("user_version",{simple:true}) as number))native.function("pos_lower",{deterministic:true,directOnly:true},value=>typeof value==="string"?value.toLowerCase():null);
+    if(options.mode==="test"&&[38,39,40,41].includes(native.pragma("user_version",{simple:true}) as number))native.function("pos_lower",{deterministic:true,directOnly:true},value=>typeof value==="string"?value.toLowerCase():null);
     // Pinned adapter converts boolean columns only when they are JS Numbers.
     // Its tables contain only 0/1 numeric fields. All authorization/business SQL
     // below opts into safeIntegers per statement; no financial Number reads.

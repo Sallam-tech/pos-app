@@ -1,3 +1,5 @@
+import {isTestProductControlsRender} from "@/server/hosting/product-controls-render";
+import {TestProductEditor} from "@/components/admin/test-product-editor";
 import { PageHeading } from "@/components/shell/page-heading";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
@@ -6,6 +8,7 @@ import { ProductOperationsPreview } from "@/components/admin/product-operations-
 import { Badge } from "@/components/ui/badge";
 import { mockInventory } from "@/lib/admin/mock-inventory";
 
+export const dynamic="force-dynamic";
 export const metadata: Metadata = { title: "Edit Product | Shop POS" };
 
 export function generateStaticParams() {
@@ -14,6 +17,7 @@ export function generateStaticParams() {
 
 export default async function EditProductPage({ params }: { params: Promise<{ productId: string }> }) {
   const { productId } = await params;
+  if(isTestProductControlsRender())return <div className="mx-auto w-full max-w-3xl"><div className="mb-4 flex flex-wrap items-center gap-3"><PageHeading route={"/admin/products/"+productId+"/edit"}>Edit Product</PageHeading><Badge>Isolated TEST</Badge></div><TestProductEditor id={productId}/></div>;
   const product = mockInventory.find((item) => item.id === productId);
   if (!product) notFound();
   return <div className="mx-auto w-full max-w-3xl">

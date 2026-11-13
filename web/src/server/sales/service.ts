@@ -1,3 +1,4 @@
+import {currentSettings,frozenBranding,receiptBranding,type Branding} from "../settings/model";
 import {cashSaleIntentHash} from "../cash/sale-intent";
 import {expenseBinding as recoveryBinding} from "../expenses/authority";
 import {verifiedJson} from "../db/verified-json";
@@ -17,7 +18,7 @@ import {MONEY_POLICY,SaleError,deny,lineAmounts,money,unsigned} from "./calculat
 export type SaleLineInput={productId:string;quantity:string;unitPricePaisa:string;discountPercent:string};
 export type SaleCommand={requestKey:string;context:string;lines:SaleLineInput[];cashPaisa:string|null;customerName:string;customerPhone:string;cashDate?:string};
 export type SafeLine={productId:string;code:string;name:string;sizeLabel:string|null;unit:string;quantity:string;unitPricePaisa:string;discountPercent:string;unitPayablePaisa:string;totalPaisa:string};
-export type Receipt={id:string;number:string;recordedAtMs:string;businessDate:string;policy:typeof MONEY_POLICY;shopName:string;customerName:string;customerPhone:string;lines:SafeLine[];totalPaisa:string;payment:null|{tenderedPaisa:string;changePaisa:string;receivedPaisa:string}};
+export type Receipt={branding?:Branding;id:string;number:string;recordedAtMs:string;businessDate:string;policy:typeof MONEY_POLICY;shopName:string;customerName:string;customerPhone:string;lines:SafeLine[];totalPaisa:string;payment:null|{tenderedPaisa:string;changePaisa:string;receivedPaisa:string}};
 export function parseSale(input:unknown):SaleCommand{
  const o=object(input,["requestKey","context","lines"],["cashPaisa","customerName","customerPhone","cashDate"]);
  if(typeof o.context!=="string"||!/^[0-9a-f]{64}$/.test(o.context)||!Array.isArray(o.lines)||o.lines.length<1||o.lines.length>50)return deny();
@@ -60,18 +61,20 @@ export async function readReceipt(tx:AuthorizedTransaction,id:string):Promise<Re
  const snap=await tx.get("SELECT * FROM invoice_snapshots WHERE invoice_id=?",[id]);if(!snap||snap.format_version!==BigInt(1)||snap.recorded_at_ms!==s.recorded_at_ms||typeof snap.receipt_json!=="string"||digest(JSON.parse(snap.receipt_json))!==snap.sha256)return deny("UNAVAILABLE");
  const stored=object(JSON.parse(snap.receipt_json),["id","number","recordedAtMs","businessDate","policy","shopName","customerName","customerPhone","lines","totalPaisa","payment"]);
  const result:Receipt={id,number:"TEST-"+id,recordedAtMs:big(s.recorded_at_ms).toString(),businessDate:String(s.business_date),policy:MONEY_POLICY,shopName:text(stored.shopName,80),customerName:command.customerName,customerPhone:command.customerPhone,lines,totalPaisa:total.toString(),payment};
- if(canonical(result)!==snap.receipt_json)return deny("UNAVAILABLE");return result;
+ if(canonical(result)!==snap.receipt_json)return deny("UNAVAILABLE");const branding=await receiptBranding(tx,id);return branding?{...result,branding}:result;
 }
 
 // The author is the authenticated original Staff requester. A recovery executor is
 // independently recorded in the exact Admin cash operation and resolution.
-async function persistPreparedSale(tx:AuthorizedTransaction,actor:Actor,command:SaleCommand,schema:36|37|38|39|40,shopName:string):Promise<Receipt>{
+async function persistPreparedSale(tx:AuthorizedTransaction,actor:Actor,command:SaleCommand,schema:36|37|38|39|40|41,shopName:string):Promise<Receipt>{
  if(actor.role!=="SALESPERSON"||actor.principalId!=="SALESPERSON")return deny("UNAVAILABLE");text(shopName,80);
    const c=command;if(schema<40&&c.cashDate!==undefined)return deny();if(c.context!==await salesContext(tx))return deny("CONFLICT");
    const previous=await tx.get("SELECT * FROM sale_operations WHERE request_key=?",[c.requestKey]);
    if(await tx.get("SELECT request_key FROM sale_cancellations WHERE request_key=?",[c.requestKey]))return deny("CONFLICT");
    if(previous){if(previous.payload_hash!==commandHash(c)||previous.payload_json!==canonical(c)||previous.actor_id!==actor.principalId)return deny("CONFLICT");return readReceipt(tx,String(previous.invoice_id));}
-   if(schema===40){if(c.cashPaisa!==null&&c.cashDate===undefined)return deny();const admission=await tx.get("SELECT payload_hash FROM counter_cash_admissions WHERE source_kind=\'SALE\' AND source_key=?",[c.requestKey]);if(admission){if(c.cashPaisa===null||admission.payload_hash!==cashSaleIntentHash(c))return deny("CONFLICT");}else if(c.cashPaisa!==null)return deny("CONFLICT");}
+   if(schema>=40){if(c.cashPaisa!==null&&c.cashDate===undefined)return deny();const admission=await tx.get("SELECT payload_hash FROM counter_cash_admissions WHERE source_kind=\'SALE\' AND source_key=?",[c.requestKey]);if(admission){if(c.cashPaisa===null||admission.payload_hash!==cashSaleIntentHash(c))return deny("CONFLICT");}else if(c.cashPaisa!==null)return deny("CONFLICT");}
+   let savedSettings:Awaited<ReturnType<typeof currentSettings>>=null;
+   if(schema===41){const admission=await tx.get("SELECT payload_json,payload_digest FROM counter_cash_admissions WHERE source_kind=\'SALE\' AND source_key=?",[c.requestKey]);if(admission){const a=verifiedJson(admission.payload_json,admission.payload_digest,true) as {shopName:string;settingsId?:string|null};shopName=text(a.shopName,80);if(a.settingsId)savedSettings={id:a.settingsId,settings:await frozenBranding(tx,a.settingsId),revision:"0",reason:"",recordedAtMs:"0"};}else{savedSettings=await currentSettings(tx);if(savedSettings)shopName=savedSettings.settings.shopName;}}
    const id=randomUUID(),operation=randomUUID(),t=now(),date=day(t),rows=[];
    let total=BigInt(0),cogs=BigInt(0);
    for(const l of c.lines){const current=await load(tx,l.productId);if(!current.dto.sellingActive||current.archived!==null||t<current.balanceUpdated)return deny("CONFLICT");const amount=lineAmounts(l.unitPricePaisa,l.quantity,l.discountPercent,current.cost);if(current.q<amount.count*SCALE)return deny("CONFLICT");total=int64(total+amount.charged);cogs=int64(cogs+amount.cogs);rows.push({current,amount,id:randomUUID()});}
@@ -88,9 +91,9 @@ async function persistPreparedSale(tx:AuthorizedTransaction,actor:Actor,command:
    }
    if(tender!==null)await tx.run("INSERT INTO sale_payments VALUES(?,?,?,?,?,?)",[randomUUID(),id,tender,int64(tender-total),total,t]);
    const result:Receipt={id,number:"TEST-"+id,recordedAtMs:t.toString(),businessDate:date,policy:MONEY_POLICY,shopName,customerName:c.customerName,customerPhone:c.customerPhone,lines:safe,totalPaisa:total.toString(),payment:tender===null?null:{tenderedPaisa:tender.toString(),changePaisa:(tender-total).toString(),receivedPaisa:total.toString()}};
-   await tx.run("INSERT INTO invoice_snapshots VALUES(?,?,?,?,?)",[id,BigInt(1),canonical(result),digest(result),t]);if(schema>=37)await postSaleLedgers(tx,id);return readReceipt(tx,id);
+   await tx.run("INSERT INTO invoice_snapshots VALUES(?,?,?,?,?)",[id,BigInt(1),canonical(result),digest(result),t]);if(savedSettings)await tx.run("INSERT INTO invoice_shop_snapshots VALUES(?,?,?,?,?,?)",[id,savedSettings.id,canonical(savedSettings.settings),digest(savedSettings.settings),BigInt(1),t]);if(schema>=37)await postSaleLedgers(tx,id);const saved=await readReceipt(tx,id);if(savedSettings&&canonical(saved.branding)!==canonical(savedSettings.settings))return deny("UNAVAILABLE");return saved;
 }
-export function createSalesService(gateway:AuthorizationGateway,shopName:string,schema:36|37|38|39|40=36){
+export function createSalesService(gateway:AuthorizationGateway,shopName:string,schema:36|37|38|39|40|41=36){
  text(shopName,80);
  async function scope<T>(request:Request,admin:boolean,work:(tx:AuthorizedTransaction,actor:Actor)=>Promise<T>){
   let failure:SaleError|undefined;
@@ -134,6 +137,6 @@ export async function finalizePreparedCashSale(tx:AuthorizedTransaction,admin:Ac
  if(q.action!=="RESOLVE_ADMISSION"||purpose.resolution!=="RECORD_PRIOR_SALE"||purpose.admissionId!==a.id||purpose.actualDate!==calendar(cashDate)||purpose.actualTenderPaisa!==tenderPaisa||purpose.actualChangePaisa!==changePaisa||g.session_ref!==admin.sessionId||g.credential_version!==b.credential_version||g.auth_epoch!==b.auth_epoch||g.boot_generation!==b.boot||b.now<big(g.issued_at_ms)||b.now>=big(g.expires_at_ms)||await tx.get("SELECT id FROM cash_action_operations WHERE authorization_id=?",[g.id]))return deny("CONFLICT");
  const stored=verifiedJson(a.payload_json,a.payload_digest,true) as {intent:Record<string,unknown>;shopName:string;expectedChargePaisa:string},c=parseSale({...stored.intent,cashPaisa:tenderPaisa,cashDate}),tender=money(tenderPaisa,false,BigInt("9223372036854775807")),change=money(changePaisa,true,BigInt("9223372036854775807"));
  if(c.requestKey!==a.source_key||cashSaleIntentHash(c)!==a.payload_hash||tender-change!==BigInt(stored.expectedChargePaisa)||await tx.get("SELECT id FROM sale_operations WHERE request_key=?",[c.requestKey]))return deny("CONFLICT");
- const receipt=await persistPreparedSale(tx,{role:"SALESPERSON",principalId:"SALESPERSON",sessionId:String(a.session_ref)},c,40,text(stored.shopName,80));
+ const receipt=await persistPreparedSale(tx,{role:"SALESPERSON",principalId:"SALESPERSON",sessionId:String(a.session_ref)},c,(await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version===BigInt(41)?41:40,text(stored.shopName,80));
  if(receipt.totalPaisa!==stored.expectedChargePaisa||receipt.payment?.changePaisa!==changePaisa)return deny("UNAVAILABLE");return receipt;
 }

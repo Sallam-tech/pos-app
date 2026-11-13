@@ -1,3 +1,5 @@
+import {settingsSteps} from "./settings-program";
+import {settingsMigrationTransaction} from "./settings-migrate";
 import {cashSteps} from "./cash-program";
 import {cashMigrationTransaction} from "./cash-migrate";
 import {invoicesSteps} from "./invoices-program";
@@ -23,6 +25,8 @@ export interface SqlTransaction extends SqlReader {
   run(sql: string, bindings?: readonly SqlValue[]): { changes: bigint; lastInsertRowid: bigint };
   setSchemaVersion(version: bigint): void;
 }
+const settingsExecutors=new WeakMap<object,()=>{applied:number;version:bigint}>();
+export function executeReviewedSettingsMigration41(connection:SqliteConnection){assertDisposableMigrationConnection(connection);const execute=settingsExecutors.get(connection);if(!execute)throw Error("TEST41 maintenance unavailable.");return execute();}
 const cashExecutors=new WeakMap<object,()=>{applied:number;version:bigint}>();
 export function executeReviewedCashMigration40(connection:SqliteConnection){assertDisposableMigrationConnection(connection);const execute=cashExecutors.get(connection);if(!execute)throw Error("TEST40 maintenance unavailable.");return execute();}
 const invoiceExecutors=new WeakMap<object,()=>{applied:number;version:bigint}>();
@@ -271,6 +275,11 @@ export function openDatabase(options: DatabaseOptions): SqliteConnection {
       native.pragma("foreign_keys=ON");
       if(native.pragma("foreign_keys",{simple:true})!==BigInt(1)){closed=true;try{native.close();}catch{}throw Error("Maintenance handle quarantined.");}
     }
+  });
+  if(options.mode==="test")settingsExecutors.set(connection,()=>{
+    outside();assertDisposableMigrationConnection(connection);const marker=native.pragma("user_version",{simple:true});
+    if((marker!==BigInt(40)&&marker!==BigInt(41))||native.prepare("SELECT id FROM auth_enrollment_binding LIMIT 1").get()!==undefined)fail("MIGRATION_INVALID","Only unenrolled TEST40/41 maintenance is admitted.");
+    return connection.transaction(tx=>settingsMigrationTransaction(tx,()=>{if(!active||tx!==currentScope||!native.inTransaction)throw Error();maintenanceFailed=true;for(const sql of settingsSteps())native.prepare(sql).run();maintenanceFailed=false;}));
   });
   return connection;
 }

@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.cash.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "src/server/**/*.ts",
+    "src/lib/cash/**/*.ts",
+    "src/components/admin/test-cash*.tsx",
+    "src/components/pos/test-*.tsx",
+    "src/app/admin/daily-closing/page.tsx",
+    "tests/integration/cash*.test.ts",
+    "tests/helpers/cash*.ts",
+    "vitest.cash.config.mts",
+    "src/lib/inventory/**/*.ts",
+    "src/components/admin/test-inventory*.tsx",
+    "src/components/admin/test-product*.tsx",
+    "src/components/settings/**/*.tsx",
+    "src/app/admin/products/**/*.tsx",
+    "src/app/admin/settings/**/*.tsx",
+    "tests/integration/admin-products-settings*.test.ts",
+    "tests/helpers/admin-products-settings*.ts",
+    "vitest.admin-products-settings.config.mts"
+  ]
+}

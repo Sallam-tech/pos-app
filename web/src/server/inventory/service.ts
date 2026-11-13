@@ -6,10 +6,10 @@ import { committedInventoryResult, inventoryKind, recoverInventoryOperation } fr
 import { load } from "./model";
 import { mutate } from "./mutations";
 import { events, list, movements } from "./reads";
-import { object, reject, uuid } from "./validation";
+import { canonical,parseCommand,object, reject, uuid } from "./validation";
 // Trusted server composition only. Requests never supply an actor, transaction or verifier.
 // Every method, including idempotent replay and reads, enters the SAME mandatory SQL gateway.
-export function createInventoryService(gateway: AuthorizationGateway, schema:35|36|37|38|39|40=35) {
+export function createInventoryService(gateway: AuthorizationGateway, schema:35|36|37|38|39|40|41=35) {
  if(!gateway || typeof gateway.withAdminTransaction!=="function") return reject("UNAVAILABLE");
  const authorize=gateway.withAdminTransaction.bind(gateway);
  async function execute<T>(request:Request,work:(tx:AuthorizedTransaction,actor:Actor)=>Promise<T>):Promise<T> {
@@ -23,7 +23,7 @@ export function createInventoryService(gateway: AuthorizationGateway, schema:35|
    });
   } catch {throw domain??new InventoryError("UNAVAILABLE");}
  }
- const change=(kind:Kind)=>(request:Request,input:unknown)=>execute(request,(tx,actor)=>mutate(tx,actor,kind,input));
+ const change=(kind:Kind)=>(request:Request,input:unknown)=>execute(request,async(tx,actor)=>{const command=parseCommand(kind,input),key=uuid(command.requestKey),old=await tx.get("SELECT id FROM inventory_operations WHERE request_key=?",[key]),result=await mutate(tx,actor,kind,input),saved=await committedInventoryResult(tx,actor,key,kind);if(canonical(saved)!==canonical(result)||!old&&canonical((await load(tx,result.product.id)).dto)!==canonical(result.product))return reject("UNAVAILABLE");return saved;});
  return Object.freeze({
   createProduct:change("CREATE"),updateProduct:change("EDIT"),setSellingPrice:change("SELLING_PRICE"),
   setSellingStatus:change("STATUS"),archiveProduct:change("ARCHIVE"),changeBuyingCost:change("REPRICE"),
@@ -33,7 +33,7 @@ export function createInventoryService(gateway: AuthorizationGateway, schema:35|
   getOperationResult:(request:Request,input:unknown)=>execute(request,async (tx,actor)=>{
    const o=object(input,["requestKey"]), key=uuid(o.requestKey);
    const row=await tx.get("SELECT id,product_id,kind,result_json FROM inventory_operations WHERE request_key=?",[key]);
-   if(!row || (row.kind!=="CREATE" && row.kind!=="RECEIVE")) return reject("NOT_FOUND");
+   if(!row) return reject("NOT_FOUND");
    if (await tx.get("SELECT request_key FROM inventory_cancellations WHERE request_key=?", [key])) return reject("UNAVAILABLE");
    return committedInventoryResult(tx,actor,key,inventoryKind(row.kind));
   }),

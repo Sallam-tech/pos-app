@@ -1,0 +1,20 @@
+import {createInvoicesService} from "../../src/server/invoices/service";
+import {beforeAll,test,expect} from "vitest";
+import {randomUUID} from "node:crypto";
+import {ready,seed,passwords,cashDay} from "../helpers/admin-products-settings-ready";
+import {credentials,settings} from "../helpers/admin-products-settings-fixture";
+import {createSettingsService} from "../../src/server/settings/service";
+import {createCashService} from "../../src/server/cash/service";
+import {createSalesService} from "../../src/server/sales/service";
+import {openAuthorizationGateway} from "../../src/server/auth/gateway";
+import {productId} from "../helpers/invoices-fixture";
+beforeAll(seed);
+test("admitted branding survives backend restart and fresh Admin actual prior-cash recovery after a later settings revision",async()=>{
+ const f=await ready(),settingsApi=createSettingsService(f.g,"TEST SHOP"),current=await settingsApi.current(f.admin,"ADMIN");if(!current.context)throw Error();const settingsContext=current.context;await settingsApi.save(f.admin,passwords.ADMIN,randomUUID(),settingsContext,{expectedRevision:"0",settings:settings("TEST Original Admitted Brand"),reason:"TEST explicit branding before admission"});
+ const key=randomUUID(),context=(await f.sales.context(f.staff)).context,actualDate=cashDay(),command={requestKey:key,context,lines:[{productId,quantity:"1",unitPricePaisa:"11000",discountPercent:"0"}],cashPaisa:"15000",customerName:"Synthetic customer",customerPhone:""};
+ const admitted=await f.cash.admit(f.staff,"SALESPERSON",{kind:"SALE",key,input:command});await settingsApi.save(f.admin,passwords.ADMIN,randomUUID(),settingsContext,{expectedRevision:"1",settings:settings("TEST New Current Brand"),reason:"TEST explicit later brand before recovery"});await f.g.close();
+ const g=await openAuthorizationGateway(f.config,41);try{const admin=await credentials(g,f.config,"ADMIN"),staff=await credentials(g,f.config,"SALESPERSON"),cash=createCashService(g,"DIFFERENT CURRENT CONFIG",41),sales=createSalesService(g,"DIFFERENT CURRENT CONFIG",41),ctx=(await cash.context(admin)).context,recoveryKey=randomUUID(),input={admissionId:admitted.id,resolution:"RECORD_PRIOR_SALE",actualDate,actualTenderPaisa:"20000",actualChangePaisa:"9000",evidence:"SYNTHETIC TEST independently verified actual prior cash, no new handover"};
+ await cash.prepare(admin,passwords.ADMIN,recoveryKey,ctx,"RESOLVE_ADMISSION",input);const r=await cash.execute(admin,recoveryKey,ctx,"ADMIN_VERIFIED_CASH_FACTS");expect(r.state).toBe("COMMITTED");const original=await sales.operation(staff,key,context);if(original.state!=="COMMITTED")throw Error();expect(original.receipt).toMatchObject({shopName:"TEST Original Admitted Brand",branding:settings("TEST Original Admitted Brand"),payment:{tenderedPaisa:"20000",changePaisa:"9000",receivedPaisa:"11000"}});expect(await cash.execute(admin,recoveryKey,ctx,"ADMIN_VERIFIED_CASH_FACTS")).toEqual(r);
+ const invoices=createInvoicesService(g,41),d=await invoices.detail(admin,original.receipt.id),ic=(await invoices.context(admin)).context,ik=randomUUID();await invoices.prepare(admin,passwords.ADMIN,ik,ic,{invoiceId:original.receipt.id,expectedRevision:d.version,lines:d.lines.map(l=>({saleLineId:l.saleLineId,quantity:l.quantity,unitPricePaisa:"12000",discountPercent:"0",physicalQuantity:l.ledgerQuantity})),reason:"TEST independently verified original price correction",stockEvidence:"TEST actual shelf stock unchanged and counted",settlementEvidence:"TEST original net received verified",settlementVerified:"YES",cashDate:cashDay(),cashEvidence:"TEST actual extra Rs10 received once",effectiveDate:cashDay()});const corrected=await invoices.execute(admin,ik,ic,"ACTUAL_STOCK_AND_CASH_VERIFIED",cashDay());if(corrected.state!=="COMMITTED"||!corrected.receipt)throw Error();expect(corrected.receipt.branding).toEqual(settings("TEST Original Admitted Brand"));expect(await sales.get(staff,original.receipt.id)).toEqual(original.receipt);
+ }finally{await g.close();}
+},180000);

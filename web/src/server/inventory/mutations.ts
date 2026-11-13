@@ -35,7 +35,7 @@ export async function mutate(tx:AuthorizedTransaction,actor:Actor,kind:Kind,inpu
   await load(tx,result.product.id); // Replay still fails closed on missing/corrupt current inventory.
   return result;
  }
- const salesProfile=[BigInt(36),BigInt(37),BigInt(38)].includes(BigInt(String((await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version)));
+ const salesProfile=[BigInt(36),BigInt(37),BigInt(38),BigInt(39),BigInt(40),BigInt(41)].includes(BigInt(String((await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version)));
  if(salesProfile)for(const field of ["buyingPricePaisa","sellingPricePaisa","unitBuyingPricePaisa"])if(typeof c[field]==="string"&&BigInt(c[field] as string)%BigInt(100))return reject();
  const t=now(), operationId=randomUUID();
  if(kind==="CREATE") {

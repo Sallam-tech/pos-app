@@ -13,7 +13,7 @@ import { PasswordSecurityPreview } from "./password-security-preview";
 import { saveShopSettings, useShopSettings } from "./use-shop-settings";
 import { normalizeShopSettings, validateShopSettings, type ShopDisplaySettings, type ShopSettingsErrors } from "@/lib/shop-display-settings";
 
-function ShopDetailsForm({ saved, onSaved, onEdit }: { saved: ShopDisplaySettings; onSaved: (success: boolean) => void; onEdit: () => void }) {
+export function ShopDetailsForm({ saved, onSaved, onEdit, persist, disabled=false }: { saved: ShopDisplaySettings; onSaved: (success: boolean) => void; onEdit: () => void;persist?:(v:ShopDisplaySettings)=>void;disabled?:boolean }) {
   const [values, setValues] = useState(saved);
   const [errors, setErrors] = useState<ShopSettingsErrors>({});
   const form = useRef<HTMLFormElement>(null);
@@ -22,7 +22,7 @@ function ShopDetailsForm({ saved, onSaved, onEdit }: { saved: ShopDisplaySetting
     const next = validateShopSettings(values); setErrors(next);
     const first = Object.keys(next)[0];
     if (first) { (form.current?.elements.namedItem(first) as HTMLInputElement | null)?.focus(); return; }
-    onSaved(saveShopSettings(values));
+    if(disabled)return;if(persist)persist(normalizeShopSettings(values));else onSaved(saveShopSettings(values));
   }
   function field(key: "shopName" | "address" | "phone" | "footer", label: string, limit: number, placeholder?: string) {
     const id = "shop-setting-" + key;
@@ -55,7 +55,7 @@ function ShopDetailsForm({ saved, onSaved, onEdit }: { saved: ShopDisplaySetting
           <p className="font-semibold">RECEIPT LAYOUT PREVIEW</p><p className="text-sm">No sale attached. No invoice issued.</p>
           <ReceiptShopFooter fallback="Thank you for shopping with us." /></article>
       </ReceiptPreview>
-      <Button type="submit" size="sm">Save Settings</Button>
+      <Button type="submit" size="sm" disabled={disabled}>Save Settings</Button>
     </div>
   </form>;
 }

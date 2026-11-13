@@ -1,3 +1,4 @@
+import {SETTINGS41_NAME,SETTINGS41_HASH} from "./settings-program";
 import {CASH40_NAME,CASH40_HASH} from "./cash-program";
 import {INVOICES39_NAME,INVOICES39_HASH} from "./invoices-program";
 import "server-only";
@@ -50,6 +51,7 @@ export function loadMigrations(directory: string): readonly Migration[] {
       if(entry===SALES36_NAME){if(hash(bytes)!==SALES36_HASH)throw Error("Reviewed Sales program changed.");migrations.push(Object.freeze({version:BigInt(36),name:entry,checksum:hash(bytes),sql,objectType:"program",objectName:"sales36_program",objectTable:""}));continue;}
       if(entry===RETURNS37_NAME){if(hash(bytes)!==RETURNS37_HASH)throw Error("Reviewed Returns program changed.");migrations.push(Object.freeze({version:BigInt(37),name:entry,checksum:hash(bytes),sql,objectType:"program",objectName:"returns37_program",objectTable:""}));continue;}
       if(entry===EXPENSES38_NAME){if(hash(bytes)!==EXPENSES38_HASH)throw Error();migrations.push(Object.freeze({version:BigInt(38),name:entry,checksum:hash(bytes),sql,objectType:"program",objectName:"expenses38_program",objectTable:""}));continue;}
+      if(entry===SETTINGS41_NAME){if(hash(bytes)!==SETTINGS41_HASH)throw Error();migrations.push(Object.freeze({version:BigInt(41),name:entry,checksum:hash(bytes),sql,objectType:"program",objectName:"settings41_program",objectTable:""}));continue;}
       if(entry===CASH40_NAME){if(hash(bytes)!==CASH40_HASH)throw Error();migrations.push(Object.freeze({version:BigInt(40),name:entry,checksum:hash(bytes),sql,objectType:"program",objectName:"cash40_program",objectTable:""}));continue;}
       if(entry===INVOICES39_NAME){if(hash(bytes)!==INVOICES39_HASH)throw Error();migrations.push(Object.freeze({version:BigInt(39),name:entry,checksum:hash(bytes),sql,objectType:"program",objectName:"invoices39_program",objectTable:""}));continue;}
       const source = sql.replace(/^(?:\s|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)+/, "");

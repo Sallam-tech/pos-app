@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { acknowledgeMarker, claimMarker, confirmMarker, readMarker, sameMarker, type RecoveryMarker } from "./recovery-store";
-import type { AdminProduct, InventoryTotals, MutationResult, RecoveryOutcome } from "@/server/inventory/contracts";
+import type { Kind,AdminProduct, InventoryTotals, MutationResult, RecoveryOutcome } from "@/server/inventory/contracts";
 export type { AdminProduct, MutationResult };
 export interface ProductPage { items: AdminProduct[]; nextCursor: string | null; overall: InventoryTotals; filtered: InventoryTotals }
 export class InventoryClientError extends Error { constructor(readonly code = "UNAVAILABLE", readonly status = 0) { super("Inventory unavailable."); } }
@@ -94,7 +94,7 @@ export function useInventoryMutation(onSaved: (result: MutationResult) => void) 
   admitted.current = true; setBusy(true); setError(null); publish({ ...view, busy: true });
   try {
    const context = await authenticatedContext();
-   const kind = path === "/api/admin/products" ? "CREATE" : /^\/api\/admin\/products\/[0-9a-f-]{36}\/receive$/.test(path) ? "RECEIVE" : undefined;
+   const suffix=/^\/api\/admin\/products\/[0-9a-f-]{36}\/(receive|edit|selling-price|status|archive|reprice|adjust)$/.exec(path)?.[1],kinds:Record<string,Kind>={receive:"RECEIVE",edit:"EDIT","selling-price":"SELLING_PRICE",status:"STATUS",archive:"ARCHIVE",reprice:"REPRICE",adjust:"ADJUST"},kind=path==="/api/admin/products"?"CREATE":suffix?kinds[suffix]:undefined;
    if (!kind) throw new InventoryClientError();
    const marker = await claimMarker({ v: 1, context, key: crypto.randomUUID(), kind, state: "PENDING" });
    ownedKey.current = marker.key;

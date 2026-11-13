@@ -1,3 +1,6 @@
+import {assertSettingsLedgers,currentSettings,settingsContext} from "../settings/model";
+import {uuid,object,text} from "../inventory/validation";
+import type {PasswordOperationKey} from "./types";
 import "server-only";
 
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -23,6 +26,7 @@ const processState = globalThis as typeof globalThis & { [key: symbol]: boolean 
 const roles = ["ADMIN", "SALESPERSON"] as const;
 const deny = (): never => { throw new AuthorizationDenied(); };
 const deniedGateway = (): AuthorizationGateway => Object.freeze({
+  publicShopName:async()=>deny(),
   verifyAdminPassword: async () => deny(),
   verifySalespersonPassword: async () => deny(),
   issueAdminSession: async () => deny(),
@@ -54,9 +58,9 @@ function boundSession(value: unknown): BoundSession {
 
 // No eager open, environment secret, default signing key, login or HTTP route.
 // Missing configuration is a usable deny-only foundation, never a bypass.
-export async function openAuthorizationGateway(config?: AuthorizationConfiguration, requiredSchema?: 35 | 36 | 37 | 38 | 39 | 40): Promise<AuthorizationGateway> {
+export async function openAuthorizationGateway(config?: AuthorizationConfiguration, requiredSchema?: 35 | 36 | 37 | 38 | 39 | 40 | 41): Promise<AuthorizationGateway> {
   if (!config) return deniedGateway();
-  if (requiredSchema !== undefined && ((requiredSchema !== 35 && requiredSchema !== 36 && requiredSchema !== 37 && requiredSchema !== 38 && requiredSchema !== 39 && requiredSchema !== 40) || config.database.mode !== "test")) return deny();
+  if (requiredSchema !== undefined && ((requiredSchema !== 35 && requiredSchema !== 36 && requiredSchema !== 37 && requiredSchema !== 38 && requiredSchema !== 39 && requiredSchema !== 40 && requiredSchema !== 41) || config.database.mode !== "test")) return deny();
   if (processState[ownerKey]) return deny();
   const origins = {} as Record<Role, string>;
   try {
@@ -133,7 +137,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
     // native handle, one consistent transaction, no manufactured Admin session.
     if (requiredSchema !== undefined) await owned.db.transaction().execute(requireSchema);
     const gatewayTransaction = <T>(adapter: typeof contexts.ADMIN.adapter, work: () => Promise<T>) =>
-      runWithTransaction(adapter, async () => { await requireSchema(); const result = await work(); await requireSchema(); return result; });
+      runWithTransaction(adapter, async () => { await requireSchema(); const guard=()=>{available();if(!owned.inTransaction())deny();};if(requiredSchema===41)await assertSettingsLedgers(owned.scope(guard));const result = await work();if(requiredSchema===41)await assertSettingsLedgers(owned.scope(guard));await requireSchema(); return result; });
     const makePortal = (role: Role) => betterAuth({
       baseURL: origins[role], secret: config.signingSecrets[role],
       database: { db: owned.db, type: "sqlite", transaction: true },
@@ -443,7 +447,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
         }
       }));
     };
-    const rotate = (target: Role, incoming: Request, value: unknown, password: unknown): Promise<void> => {
+    const rotate = (target: Role, incoming: Request, value: unknown, password: unknown, opKey?:PasswordOperationKey): Promise<void> => {
       let saved: ReceiptState, request: Request;
       try {
         if (!value || typeof value !== "object") return deny();
@@ -455,6 +459,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
         if (aborted || saved.role !== "ADMIN" || local.getStore() || closed || closing ||
             verification || issuing || rotating || owned.inTransaction()) return deny();
         receiptLive(saved); validateRequest("ADMIN", incoming);
+        if(requiredSchema===41){const o=object(opKey,["key","context"]);uuid(o.key);text(o.context,64);opKey=Object.freeze({key:String(o.key),context:String(o.context)});}else if(opKey!==undefined)return deny();
         request = new Request(incoming.url, { headers: new Headers(incoming.headers) });
       } catch { return Promise.reject(new AuthorizationDenied()); }
       const admitted = transition;
@@ -487,7 +492,9 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
                 owned.run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?", ["ADMIN"]);
                 authority("ADMIN", session);
                 if (!sameCredential(credentialState("ADMIN"), saved)) return deny();
+                if(requiredSchema===41){await requireSchema();await assertSettingsLedgers(owned.scope(live));if(!opKey||opKey.context!==await settingsContext(owned.scope(live))||owned.get("SELECT request_key FROM shop_settings_operations WHERE request_key=?",[opKey.key])||owned.get("SELECT request_key FROM shop_password_operations WHERE request_key=?",[opKey.key])||owned.get("SELECT request_key FROM shop_settings_cancellations WHERE request_key=?",[opKey.key]))return deny();}
                 const result = await work(session);
+                if(requiredSchema===41){await assertSettingsLedgers(owned.scope(live));await requireSchema();}
                 live(); if (!owned.inTransaction() || BigInt(session.expiresAt.getTime()) <= securityTime()) return deny();
                 if (!mutates) authority("ADMIN", session);
                 completed = true;
@@ -550,6 +557,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
                   "SELECT count(*) AS n FROM auth_session_authorizations WHERE principal_id=? AND revoked_at_ms IS NULL",
                   [target])?.n !== BigInt(0)) return deny();
             if (target !== "ADMIN") authority("ADMIN", session);
+            if(requiredSchema===41){if(!opKey)return deny();if(owned.run("INSERT INTO shop_password_operations VALUES(?,?,?,?,?,?,?,?,?,?,?)",[opKey.key,opKey.key,opKey.context,target,previous.credentialVersion,version,previous.authEpoch,epoch,"ADMIN",session.id,now]).changes!==BigInt(1))return deny();const audit=owned.get("SELECT * FROM shop_password_operations WHERE request_key=?",[opKey.key]);if(!audit||audit.context!==opKey.context||audit.target!==target||audit.before_version!==previous.credentialVersion||audit.after_version!==version||audit.before_epoch!==previous.authEpoch||audit.after_epoch!==epoch||audit.actor_id!=="ADMIN"||audit.session_ref!==session.id||audit.recorded_at_ms!==now)return deny();}
             // Self-rotation deliberately invalidates this Admin session at COMMIT.
           });
         } catch { return deny(); }
@@ -609,6 +617,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
       });
     };
     return Object.freeze({
+      publicShopName:()=>{if(requiredSchema!==41||local.getStore()||closed||closing)return Promise.reject(new AuthorizationDenied());return enqueue(()=>owned.db.transaction().execute(async()=>{available();await requireSchema();const guard=()=>{available();if(!owned.inTransaction())deny();};const tx=owned.scope(guard);await assertSettingsLedgers(tx);const value=await currentSettings(tx);guard();await requireSchema();return value?.settings.shopName??null;}));},
       withFreshAdminTransaction:fresh,
       verifyAdminPassword: (password: unknown) => verify("ADMIN", password),
       verifySalespersonPassword: (password: unknown) => verify("SALESPERSON", password),
@@ -616,8 +625,8 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
       issueSalespersonSession: (value: unknown) => issue("SALESPERSON", value),
       logoutAdmin: (request: Request) => logout("ADMIN", request),
       logoutSalesperson: (request: Request) => logout("SALESPERSON", request),
-      rotateAdminPassword: (request: Request, proof: unknown, password: unknown) => rotate("ADMIN", request, proof, password),
-      rotateSalespersonPassword: (request: Request, proof: unknown, password: unknown) => rotate("SALESPERSON", request, proof, password),
+      rotateAdminPassword: (request: Request, proof: unknown, password: unknown, operation?:PasswordOperationKey) => rotate("ADMIN", request, proof, password, operation),
+      rotateSalespersonPassword: (request: Request, proof: unknown, password: unknown, operation?:PasswordOperationKey) => rotate("SALESPERSON", request, proof, password, operation),
       authorizeAdmin: (request: Request) => execute("ADMIN", request, async (_tx, actor) => actor),
       authorizeSalesperson: (request: Request) => execute("SALESPERSON", request, async (_tx, actor) => actor),
       withAdminTransaction: <T>(request: Request, work: (tx: AuthorizedTransaction, actor: Actor) => Promise<T>) => execute("ADMIN", request, work),

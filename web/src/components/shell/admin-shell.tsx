@@ -18,7 +18,7 @@ import { DeveloperCredit } from "@/components/demo/developer-credit";
 function isProductEditPath(pathname: string) {
   return /^\/admin\/products\/[^/]+\/edit$/.test(pathname);
 }
-function Navigation({ mobile = false, onNavigate, invoices=false }: { mobile?: boolean; onNavigate?: () => void; invoices?:boolean }) {
+function Navigation({ mobile = false, onNavigate, invoices=false, privatePages=false }: { mobile?: boolean; onNavigate?: () => void; invoices?:boolean;privatePages?:boolean }) {
   const pathname = usePathname();
   const isDashboard = pathname === "/admin/dashboard" || pathname === "/admin/expenses";
   const isReports = ["/admin/reports", "/admin/reports/sales", "/admin/reports/profit", "/admin/profit/today", "/admin/sales/today"].includes(pathname);
@@ -28,17 +28,17 @@ function Navigation({ mobile = false, onNavigate, invoices=false }: { mobile?: b
   return <nav aria-label={mobile ? "Mobile navigation" : "Main navigation"} className="mt-8">
     <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">Manage shop</p>
     <ul className="grid gap-1">
-      <li><Link href="/admin/dashboard" aria-current={isDashboard ? (pathname === "/admin/dashboard" ? "page" : "location") : undefined} onClick={onNavigate} className={"app-nav-link " + (isDashboard ? activeClasses : "text-muted-foreground")}><Icon name="dashboard" />Dashboard</Link></li>
-      <li><Link href="/admin/products" aria-current={isProducts ? (pathname === "/admin/products" ? "page" : "location") : undefined} onClick={onNavigate} className={"app-nav-link " + (isProducts ? activeClasses : "text-muted-foreground")}><Icon name="box" />Products</Link></li>
-      <li><Link href="/admin/inventory/available-stock" aria-current={isInventory ? (pathname === "/admin/inventory/available-stock" ? "page" : "location") : undefined} onClick={onNavigate}
+      <li><Link prefetch={privatePages?false:undefined} href="/admin/dashboard" aria-current={isDashboard ? (pathname === "/admin/dashboard" ? "page" : "location") : undefined} onClick={onNavigate} className={"app-nav-link " + (isDashboard ? activeClasses : "text-muted-foreground")}><Icon name="dashboard" />Dashboard</Link></li>
+      <li><Link prefetch={privatePages?false:undefined} href="/admin/products" aria-current={isProducts ? (pathname === "/admin/products" ? "page" : "location") : undefined} onClick={onNavigate} className={"app-nav-link " + (isProducts ? activeClasses : "text-muted-foreground")}><Icon name="box" />Products</Link></li>
+      <li><Link prefetch={privatePages?false:undefined} href="/admin/inventory/available-stock" aria-current={isInventory ? (pathname === "/admin/inventory/available-stock" ? "page" : "location") : undefined} onClick={onNavigate}
         className={"app-nav-link " + (isInventory ? activeClasses : "text-muted-foreground")}><Icon name="layers" />Inventory</Link></li>
-      {invoices&&<li><Link href="/admin/sales" aria-current={pathname==="/admin/sales"?"page":undefined} onClick={onNavigate} className={"app-nav-link "+(pathname==="/admin/sales"?activeClasses:"text-muted-foreground")}><Icon name="chart"/>Sales History</Link></li>}
-      <li><Link href="/admin/reports" aria-current={isReports ? (pathname === "/admin/reports" ? "page" : "location") : undefined} onClick={onNavigate}
+      {invoices&&<li><Link prefetch={privatePages?false:undefined} href="/admin/sales" aria-current={pathname==="/admin/sales"?"page":undefined} onClick={onNavigate} className={"app-nav-link "+(pathname==="/admin/sales"?activeClasses:"text-muted-foreground")}><Icon name="chart"/>Sales History</Link></li>}
+      <li><Link prefetch={privatePages?false:undefined} href="/admin/reports" aria-current={isReports ? (pathname === "/admin/reports" ? "page" : "location") : undefined} onClick={onNavigate}
         className={"app-nav-link " + (isReports ? activeClasses : "text-muted-foreground")}><Icon name="chart" />Reports</Link></li>
-      <li className="mt-2 border-t pt-2"><Link href="/admin/investment" aria-current={pathname === "/admin/investment" ? "page" : undefined} onClick={onNavigate}
+      <li className="mt-2 border-t pt-2"><Link prefetch={privatePages?false:undefined} href="/admin/investment" aria-current={pathname === "/admin/investment" ? "page" : undefined} onClick={onNavigate}
         className={"app-nav-link " + (pathname === "/admin/investment" ? activeClasses : "text-muted-foreground")}><Icon name="wallet" />Stock Value</Link></li>
-      <li><Link href="/admin/daily-closing" aria-current={pathname === "/admin/daily-closing" ? "page" : undefined} onClick={onNavigate} className={"app-nav-link " + (pathname === "/admin/daily-closing" ? activeClasses : "text-muted-foreground")}><Icon name="calendar" />Daily Closing</Link></li>
-      <li><Link href="/admin/settings" aria-current={pathname === "/admin/settings" ? "page" : undefined} onClick={onNavigate} className={"app-nav-link " + (pathname === "/admin/settings" ? activeClasses : "text-muted-foreground")}><Icon name="settings" />Settings</Link></li>
+      <li><Link prefetch={privatePages?false:undefined} href="/admin/daily-closing" aria-current={pathname === "/admin/daily-closing" ? "page" : undefined} onClick={onNavigate} className={"app-nav-link " + (pathname === "/admin/daily-closing" ? activeClasses : "text-muted-foreground")}><Icon name="calendar" />Daily Closing</Link></li>
+      <li><Link prefetch={privatePages?false:undefined} href="/admin/settings" aria-current={pathname === "/admin/settings" ? "page" : undefined} onClick={onNavigate} className={"app-nav-link " + (pathname === "/admin/settings" ? activeClasses : "text-muted-foreground")}><Icon name="settings" />Settings</Link></li>
     </ul>
   </nav>;
 }
@@ -55,7 +55,7 @@ export function AdminShell({ children, testInventory = false, testInvoices=false
   return <div className="flex min-h-svh">
     <a href="#main-content" className="skip-link">Skip to content</a>
     <aside aria-label="Admin sidebar" className="app-sidebar sticky top-0 hidden h-svh w-[var(--sidebar-width)] shrink-0 flex-col overflow-y-auto border-r p-4 lg:flex">
-      <Brand /><Navigation key={pathname} invoices={testInvoices} />
+      <Brand /><Navigation key={pathname} invoices={testInvoices} privatePages={testInventory} />
       <div className="mt-auto border-t pt-4"><Badge>{testInventory ? "Isolated TEST" : "Demo Mode"}</Badge><p className="mt-2 text-xs leading-5 text-muted-foreground">{testInventory ? "Authenticated TEST workspace." : "Preview access. No sign-in."}</p>{testInventory ? <TestInventoryExit label="Exit TEST" /> : <DemoExitLink />}<DeveloperCredit variant="sidebar" /></div>
     </aside>
     <div className="min-w-0 flex-1">
@@ -69,7 +69,7 @@ export function AdminShell({ children, testInventory = false, testInvoices=false
       <main id="main-content" tabIndex={-1} className={"content-container outline-none" + (compactAdminPreview ? " pt-5" : "")}>{testInventory && <TestInventoryRecovery />}{children}</main>
     </div>
     <Dialog open={open} onOpenChange={setOpen} title="Admin navigation" description="Choose an Admin page." variant="drawer">
-      <Brand /><Navigation key={pathname} invoices={testInvoices} mobile onNavigate={() => setOpen(false)} /><div className="mt-5 border-t pt-3"><p className="text-xs text-muted-foreground">{testInventory ? "Authenticated TEST workspace." : "Preview only. No sign-in."}</p>{testInventory ? <TestInventoryExit label="Exit TEST" /> : <DemoExitLink />}<DeveloperCredit variant="sidebar" /></div>
+      <Brand /><Navigation key={pathname} invoices={testInvoices} privatePages={testInventory} mobile onNavigate={() => setOpen(false)} /><div className="mt-5 border-t pt-3"><p className="text-xs text-muted-foreground">{testInventory ? "Authenticated TEST workspace." : "Preview only. No sign-in."}</p>{testInventory ? <TestInventoryExit label="Exit TEST" /> : <DemoExitLink />}<DeveloperCredit variant="sidebar" /></div>
     </Dialog>
   </div>;
 }

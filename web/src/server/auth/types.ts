@@ -21,7 +21,9 @@ export interface VerifiedCredential {
   readonly [verifiedCredentialBrand]: true;
   readonly signal: AbortSignal;
 }
+export interface PasswordOperationKey {readonly key:string;readonly context:string}
 export interface AuthorizationGateway {
+  publicShopName():Promise<string|null>;
   verifyAdminPassword(password: unknown): Promise<VerifiedCredential>;
   verifySalespersonPassword(password: unknown): Promise<VerifiedCredential>;
   // Private response: signed cookies only in headers, never bearer-bearing JSON.
@@ -32,8 +34,8 @@ export interface AuthorizationGateway {
   logoutSalesperson(request: Request): Promise<Response>;
   // Both targets require a signed ADMIN session AND a fresh single-use ADMIN proof.
   // No cookie/token/hash response; self-rotation requires fresh login.
-  rotateAdminPassword(request: Request, proof: unknown, password: unknown): Promise<void>;
-  rotateSalespersonPassword(request: Request, proof: unknown, password: unknown): Promise<void>;
+  rotateAdminPassword(request: Request, proof: unknown, password: unknown, operation?:PasswordOperationKey): Promise<void>;
+  rotateSalespersonPassword(request: Request, proof: unknown, password: unknown, operation?:PasswordOperationKey): Promise<void>;
   authorizeAdmin(request: Request): Promise<Actor>;
   authorizeSalesperson(request: Request): Promise<Actor>;
   withFreshAdminTransaction<T>(request: Request, proof: unknown, work: (transaction: AuthorizedTransaction, actor: Actor) => Promise<T>): Promise<T>;

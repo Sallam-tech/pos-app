@@ -1,5 +1,14 @@
 # POS Module Checklist
 
+## Current Admin Products + Settings and performance gate
+
+- [x] Owner accepts TEST40 PASS/4ebfd614; authorizes coordinated existing Products/Settings plus related cash/invoice profiling. Reuse prior evidence.
+- [x] Prepare ONE [additive TEST41/Settings authority proposal](development/ADMIN_PRODUCTS_SETTINGS_SCHEMA41_AUTHORIZATION_CONTRACT.md).
+- [x] Owner explicitly APPROVED TEST41 contract IN FULL; additive Settings/receipt/password audit authority is settled. Implemented only on authorized disposable TEST fixtures.
+- [x] Coordinated TEST41 verified:44 distinct focused checks, final type/zero-warning lint/exact319-source build PASS. [Evidence and residual latency](development/ADMIN_PRODUCTS_SETTINGS_SCHEMA41_TEST_IMPLEMENTATION_REPORT.md).
+- [x] Verified PASS permits the reviewed related LOCAL checkpoint; consult live Git for actual hash/outcome.33 unrelated paths/data/secrets preserved; production DISABLED. No push/reset/clean or automatic next module.
+
+
 ## Current Daily Closing + Cash Management gate —13 November2026
 
 - [x] Owner accepts Reports40 TEST PASS at69017771; inspect live Git/source and reuse accepted modules/evidence.

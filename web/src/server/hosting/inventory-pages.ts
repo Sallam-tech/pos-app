@@ -1,3 +1,5 @@
+import {withTestSettingsRender} from "./settings-render";
+import {withTestProductControlsRender} from "./product-controls-render";
 import {withTestCashRender} from "./cash-render";
 import {withTestInvoicesRender} from "./invoices-render";
 import "server-only";
@@ -15,11 +17,12 @@ import type { LocalRequestContext } from "./https";
 const expensePages=["/admin/dashboard","/admin/expenses","/admin/reports/profit","/admin/profit/today","/admin/daily-closing"];
 const invoicePages=["/admin/reports","/admin/sales","/admin/reports/sales","/admin/sales/today"];
 const reportPages=["/admin/investment","/admin/reports/products","/admin/reports/expenses"];
-const pages = [...reportPages,...invoicePages,...expensePages,"/admin/returns", "/admin/products", "/admin/products/new", "/admin/inventory/available-stock", "/admin/inventory/low-stock"];
+const productEdit=/^\/admin\/products\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/edit$/;
+const pages = ["/admin/settings",...reportPages,...invoicePages,...expensePages,"/admin/returns", "/admin/products", "/admin/products/new", "/admin/inventory/available-stock", "/admin/inventory/low-stock"];
 export function isInventoryPagePath(raw: string) {
  if (raw.length > 1024 || raw.split("?").length > 2 || raw.includes("#") || raw.includes("\\")) return false;
  const [pathname, search] = raw.split("?");
- if (pathname === "/login" || pathname==="/pos" || pathname==="/pos/history" || pathname==="/pos/returns" || pathname==="/pos/expenses" || pages.includes(pathname)) return search === undefined || /^_rsc=[A-Za-z0-9_-]{1,80}$/.test(search);
+ if (productEdit.test(pathname) || pathname === "/login" || pathname==="/pos" || pathname==="/pos/history" || pathname==="/pos/returns" || pathname==="/pos/expenses" || pages.includes(pathname)) return search === undefined || /^_rsc=[A-Za-z0-9_-]{1,80}$/.test(search);
  // Built code/styles only; never arbitrary Next routes, data/image proxy, source
  // maps, public files, traversal, encoded slashes or user-selected filesystem paths.
  if (search !== undefined || !pathname.startsWith("/_next/static/")) return false;
@@ -27,11 +30,13 @@ export function isInventoryPagePath(raw: string) {
  return /^\/_next\/static\/[A-Za-z0-9_()[\].~/-]+\.(?:js|css|woff2?)$/.test(decoded) &&
   !decoded.slice(1).split("/").some(p => p === "." || p === ".." || p === "");
 }
-export function createInventoryPageDispatcher(gateway: AuthorizationGateway, render: (req: IncomingMessage, res: ServerResponse) => Promise<void>,schema:35|36|37|38|39|40=35, salesEnabled=false, returnsEnabled=false,expensesEnabled=false,invoicesEnabled=false,reportsEnabled=false,cashEnabled=false) {
+export function createInventoryPageDispatcher(gateway: AuthorizationGateway, render: (req: IncomingMessage, res: ServerResponse) => Promise<void>,schema:35|36|37|38|39|40|41=35, salesEnabled=false, returnsEnabled=false,expensesEnabled=false,invoicesEnabled=false,reportsEnabled=false,cashEnabled=false) {
  return async (request: IncomingMessage, response: ServerResponse, context: LocalRequestContext) => {
   const reject = (status: number) => { response.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store, private" }); response.end('{"error":"Inventory unavailable."}'); };
   if (!request.url || !isInventoryPagePath(request.url)) { reject(404); return; }
   if (request.method !== "GET") { response.setHeader("Allow", "GET"); reject(405); return; }
+  if(request.url.split("?")[0]==="/admin/settings"&&schema!==41){reject(404);return;}
+  if(productEdit.test(request.url.split("?")[0])&&schema<40){reject(404);return;}
   const login = request.url?.split("?")[0] === "/login", asset = request.url?.startsWith("/_next/static/");
   const pos=request.url?.split("?")[0]==="/pos"||request.url?.split("?")[0]==="/pos/history"||request.url?.split("?")[0]==="/pos/returns"||request.url?.split("?")[0]==="/pos/expenses";
   if((expensePages.includes(request.url.split("?")[0])||request.url.split("?")[0]==="/pos/expenses")&&!expensesEnabled){reject(404);return;}
@@ -65,7 +70,7 @@ export function createInventoryPageDispatcher(gateway: AuthorizationGateway, ren
     await Promise.race([render(request,response), closed]);
    } finally { response.removeListener("close", done); }
   };
-  const expenseRender=()=>withTestCashRender(cashEnabled,()=>withTestReportsRender(reportsEnabled,()=>withTestInvoicesRender(invoicesEnabled,()=>withTestExpensesRender(expensesEnabled,renderPage))));
+  const expenseRender=()=>withTestSettingsRender(schema===41,()=>withTestProductControlsRender(schema>=40,()=>withTestCashRender(cashEnabled,()=>withTestReportsRender(reportsEnabled,()=>withTestInvoicesRender(invoicesEnabled,()=>withTestExpensesRender(expensesEnabled,renderPage))))));
   if (login) await withTestLoginRender(context.role,()=>withTestSalesRender(salesEnabled,()=>withTestReturnsRender(returnsEnabled,expenseRender)));
   else if (asset) await renderPage();
   else await withTestSalesRender(salesEnabled,()=>withTestReturnsRender(returnsEnabled,()=>pos?expenseRender():withTestInventoryRender(expenseRender)));

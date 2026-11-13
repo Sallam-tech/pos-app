@@ -1,3 +1,4 @@
+import {isTestProductControlsRender} from "@/server/hosting/product-controls-render";
 import {readTestReturnsRender} from "@/server/hosting/returns-render";
 import {isTestSalesRender} from "@/server/hosting/sales-render";
 import {TestSalesRecovery} from "@/components/admin/test-sales-recovery";
@@ -27,7 +28,7 @@ export default function ProductsPage() {
         <Button asChild><Link href="/admin/products/new"><span aria-hidden="true">+</span> Add Product</Link></Button>
       </div>
     </div>
-    {live ? <TestInventory /> : <ProductListPreview products={mockInventory} />}
+    {live ? <TestInventory controls={isTestProductControlsRender()}/> : <ProductListPreview products={mockInventory} />}
     {live&&isTestSalesRender()&&<TestSalesRecovery/>}
   </div>;
 }

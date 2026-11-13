@@ -7,7 +7,7 @@ import {createReportsService,ReportError} from "../reports/service";
 const detail=/^\/api\/admin\/reports\/products\/([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/;
 const paths=["/api/admin/reports/overview","/api/admin/reports/products","/api/admin/reports/stock","/api/admin/reports/expenses"];
 export const isReportsApiPath=(raw:string)=>paths.includes(raw.split("?")[0])||detail.test(raw.split("?")[0]);
-export function createReportsDispatcher(gateway:AuthorizationGateway,schema:39|40=39){return async(req:IncomingMessage,res:ServerResponse,c:LocalRequestContext)=>{
+export function createReportsDispatcher(gateway:AuthorizationGateway,schema:39|40|41=39){return async(req:IncomingMessage,res:ServerResponse,c:LocalRequestContext)=>{
  const send=(status:number,value:unknown)=>{if(res.headersSent||res.destroyed)return;res.writeHead(status,{"Content-Type":"application/json","Cache-Control":"no-store, private","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer",Connection:"close"});res.end(JSON.stringify(value));};
  if(!req.url||req.url.length>1024||req.url.includes("#")||!isReportsApiPath(req.url)){send(404,{error:"Report unavailable."});return;}
  if(req.method!=="GET"){res.setHeader("Allow","GET");send(405,{error:"Report unavailable."});return;}

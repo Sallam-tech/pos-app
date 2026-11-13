@@ -9,6 +9,8 @@ Latest12 November: owner-approved FINAL OPTION2 and coordinated TEST36 Sales are
 
 Latest coordinated [TEST40 cash/closing evidence](DAILY_CLOSING_CASH_SCHEMA40_TEST_IMPLEMENTATION_REPORT.md):45 distinct focused cases, scoped type/zero-warning lint/exact306-source build PASS;12 added bounded APIs,78 cumulative. Next-day sales continue, unavailable evidence remains unreconciled and bridges never affect profit. Production remains DISABLED; safe LOCAL reviewed checkpoint only.
 
+Current continuation COMPLETE TEST-ONLY: owner-approved TEST41 Products + Settings;44 distinct scoped checks, final type/zero-warning lint/exact319-source build PASS. [Implementation and measured limits](ADMIN_PRODUCTS_SETTINGS_SCHEMA41_TEST_IMPLEMENTATION_REPORT.md). Commercial system PARTIAL; production DISABLED. Safe reviewed LOCAL checkpoint only;33 unrelated paths excluded. Consult live Git for outcome/hash; owner review before next module.
+
 ## Completion matrix
 
 | MODULE | IMPLEMENTED | TESTED | BLOCKED | NEXT ACTION |
@@ -189,3 +191,31 @@ Owner APPROVED A+B. Implemented under explicit confined testCash plus all accept
 | POST /api/admin/cash-operations/:uuid/recovery | Fresh Admin; explicit verified no-effect permanent fence; never automatic replay |
 
 Existing /admin/daily-closing and /pos reuse approved layouts with confined TEST cash wiring. One count pauses only physical admission for at most180seconds; expiry/cancel/restart release it. Next-day sales continue with prior days unclosed. Fresh Admin may complete an uncommitted original Staff-authored sale from durable intent plus independently verified prior actual tender/change/date; requester and recovery executor remain separately audited. An already saved UNRECORDED invoice cannot acquire an invented payment. Variance bridges are once-only non-profit ledger facts; no revenue/expense/profit or stock reset. Closing backup requests remain BLOCKED_NOT_CONFIGURED. Historical API descriptions above retain their original context.
+
+
+### Coordinated TEST41 Products + Settings (18 added;96 cumulative entries)
+
+Exact confined testSettings plus every prior flag;40 remains admitted under its original flag. Signed role/current SQL/CSRF/no-store/strict8KiB bodies/1024-byte URL/final guards retained. Only public name is anonymous. Bounded50-row histories; no generic SQL/mutation or production activation.
+
+|Method/path|Authority/effect|
+|---|---|
+|POST /api/admin/products/:uuid/edit|Admin; existing audited metadata/expected version|
+|POST /api/admin/products/:uuid/selling-price|Admin; whole-PKR/current cost floor|
+|POST /api/admin/products/:uuid/status|Admin; selling status, archive preserved|
+|POST /api/admin/products/:uuid/archive|Admin; stock/history retained, no deletion|
+|POST /api/admin/products/:uuid/reprice|Admin; explicit all-remaining valuation|
+|POST /api/admin/products/:uuid/adjust|Admin; explicit actual stock/reason/versions|
+|GET /api/admin/products/:uuid/events|Admin; paged audited product events|
+|GET /api/admin/products/:uuid/movements|Admin; paged stock/correction provenance|
+|GET /api/admin/cash/overview|Admin; one fully validated summary/history/closings snapshot|
+|GET /api/shop/name|Confined TEST public; configured/saved shop name only|
+|GET /api/shop/settings|Signed role; Staff public branding only|
+|GET /api/admin/settings|Admin; saved revision/context/unsaved fallback|
+|POST /api/admin/settings|Fresh Admin; expected revision/reason/original key|
+|GET /api/admin/settings/history|Admin; immutable50-row revisions/cursor|
+|GET /api/admin/settings/operations/:uuid|Admin; exact context/kind original outcome|
+|POST /api/admin/settings/operations/:uuid/recovery|Fresh Admin; verified absence permanent fence|
+|POST /api/admin/settings/password/ADMIN|Fresh Admin; atomic audited self-rotation; fresh Login|
+|POST /api/admin/settings/password/SALESPERSON|Fresh Admin; atomic audited Staff rotation/revocation|
+
+Existing receiving/recovery routes reused, not recounted. Protected /admin/products/:uuid/edit and /admin/settings retain approved designs. Frozen branding never rewrites historical/admitted/corrected receipts. D05/cost/stock/cash/profit and180-second physical-only count lease remain governed by existing approvals. Keys-only recovery/fresh-login UI; no plaintext browser password storage. Production/Backup/Restore/hardware gates remain.

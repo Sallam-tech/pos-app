@@ -46,7 +46,7 @@ function dispositionInput(input:unknown){
 async function refundQuote(tx:Tx,input:unknown){
  const c=refundInput(input),receipt=await readReceipt(tx,c.invoiceId);if(!receipt.payment)return deny("CONFLICT");
  const payment=await tx.get("SELECT * FROM sale_payments WHERE invoice_id=?",[c.invoiceId]);if(!payment||payment.net_received_m!==BigInt(receipt.totalPaisa))return deny("UNAVAILABLE");
- const modern=(await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version===BigInt(39)||(await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version===BigInt(40),basis=modern?await invoiceBasis(tx,c.invoiceId):undefined;
+ const modern=(await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version===BigInt(39)||(await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version===BigInt(40)||(await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version===BigInt(41),basis=modern?await invoiceBasis(tx,c.invoiceId):undefined;
  if(modern&&await tx.get("SELECT q.id FROM invoice_correction_requests q WHERE q.invoice_id=? AND NOT EXISTS(SELECT 1 FROM invoice_correction_operations o WHERE o.request_id=q.id) AND NOT EXISTS(SELECT 1 FROM invoice_correction_cancellations x WHERE x.request_key=q.request_key) LIMIT 1",[c.invoiceId]))return deny("CONFLICT");
  const privateLines=[],lines=[];let total=zero;
  for(const l of c.lines){
@@ -75,7 +75,7 @@ async function publicReturn(tx:Tx,id:string){
  const lines=await tx.all("SELECT l.id,l.sale_line_id,l.quantity_q,l.refund_m,s.name FROM return_lines l JOIN sale_lines s ON s.id=l.sale_line_id WHERE l.return_id=? ORDER BY l.id",[id]);
  return {id,invoiceId:String(r.invoice_id),totalPaisa:String(r.total_m),cashDate:String(r.cash_date),recordedAtMs:String(r.recorded_at_ms),lines:lines.map(l=>({returnLineId:String(l.id),saleLineId:String(l.sale_line_id),name:String(l.name),quantity:(big(l.quantity_q)/SCALE).toString(),refundPaisa:String(l.refund_m)})),inspection:"PENDING_OR_PARTLY_DISPOSED"};
 }
-export function createReturnsService(gateway:AuthorizationGateway,schema:37|38|39|40=37){
+export function createReturnsService(gateway:AuthorizationGateway,schema:37|38|39|40|41=37){
  const commitGuards=new WeakMap<Tx,()=>Promise<void>>();
  async function scope<T>(request:Request,role:Role,work:(tx:Tx,a:Actor)=>Promise<T>,proof?:unknown){
   let domain:ReturnError|undefined;const run=proof!==undefined?((w:(t:Tx,a:Actor)=>Promise<T>)=>gateway.withFreshAdminTransaction(request,proof,w)):((w:(t:Tx,a:Actor)=>Promise<T>)=>(role==="ADMIN"?gateway.withAdminTransaction(request,w):gateway.withSalespersonTransaction(request,w)));

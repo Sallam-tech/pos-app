@@ -12,7 +12,7 @@ import type { LocalRequestContext } from "./https";
 const id = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const operationRoute = new RegExp("^/api/admin/inventory/operations/(" + id + ")$");
 const recoveryRoute = new RegExp("^/api/admin/inventory/operations/(" + id + ")/recovery$");
-const route = new RegExp("^/api/admin/products(?:/(" + id + ")(/receive)?)?$");
+const route = new RegExp("^/api/admin/products(?:/(" + id + ")(/(?:receive|edit|selling-price|status|archive|reprice|adjust|events|movements))?)?$");
 export function isInventoryApiPath(url: string) {
   const pathname = url.split("?")[0];
   return pathname === "/api/admin/inventory/recovery-context" || pathname === "/api/admin/inventory" || route.test(pathname) || operationRoute.test(pathname) || recoveryRoute.test(pathname);
@@ -95,15 +95,16 @@ export function inventorySessionRequest(request: IncomingMessage, context: Local
 }
 // INTERNAL construction by the existing TEST-confined runtime only. Every call
 // re-enters the sole gateway transaction; schema validity is not cached authority.
-export function createInventoryDispatcher(gateway: AuthorizationGateway, schema:35|36|37|38|39|40=35) {
+export function createInventoryDispatcher(gateway: AuthorizationGateway, schema:35|36|37|38|39|40|41=35) {
   return async (request: IncomingMessage, response: ServerResponse, context: LocalRequestContext) => {
     const error = (status: number, code = "UNAVAILABLE", allow?: string) => send(response, status, { error: "Inventory operation unavailable.", code }, allow);
     if (!request.url || request.url.length > 1024 || request.url.includes("#") || !isInventoryApiPath(request.url)) { error(404); return; }
     const url = new URL(request.url, context.origin), match = route.exec(url.pathname);
     const contextRead = url.pathname === "/api/admin/inventory/recovery-context";
     const recovery = recoveryRoute.exec(url.pathname);
-    const productId = match?.[1], receive = !!match?.[2], operationKey = recovery?.[1] ?? operationRoute.exec(url.pathname)?.[1];
-    const allowed = recovery ? "GET, POST" : receive ? "POST" : productId || operationKey || contextRead || url.pathname === "/api/admin/inventory" ? "GET" : "GET, POST";
+    const productId = match?.[1], action=match?.[2]?.slice(1), receive=action==="receive", history=action==="events"||action==="movements", actions={edit:"updateProduct","selling-price":"setSellingPrice",status:"setSellingStatus",archive:"archiveProduct",reprice:"changeBuyingCost",adjust:"correctStock"} as const, extra=action&&Object.hasOwn(actions,action)?actions[action as keyof typeof actions]:undefined, operationKey = recovery?.[1] ?? operationRoute.exec(url.pathname)?.[1];
+    if(action&&action!=="receive"&&schema<40){error(404);return;}
+    const allowed = recovery ? "GET, POST" : receive||extra ? "POST" : productId || operationKey || contextRead || url.pathname === "/api/admin/inventory" ? "GET" : "GET, POST";
     if (!allowed.split(", ").includes(request.method ?? "")) { error(405, "INVALID_INPUT", allowed); return; }
     const mutation = request.method === "POST";
     const headerError = inventoryRequestHeaders(request, context, mutation);
@@ -137,12 +138,12 @@ export function createInventoryDispatcher(gateway: AuthorizationGateway, schema:
     const service = createInventoryService(guarded,schema);
     let input: unknown;
     try {
-      if (mutation) { if (url.search) throw failed(); input = await body(request); if (receive && (!input || typeof input !== "object" || (input as Record<string, unknown>).productId !== productId)) throw failed(); }
-      else { if ((productId || operationKey || contextRead) && url.search) throw failed(); input = query(url.searchParams); }
+      if (mutation) { if (url.search) throw failed(); input = await body(request); if ((receive||extra) && (!input || typeof input !== "object" || (input as Record<string, unknown>).productId !== productId)) throw failed(); }
+      else { if ((operationKey||contextRead||productId&&!history) && url.search) throw failed(); if(history){const out:Record<string,string>={productId:productId!};for(const [key,value]of url.searchParams){if(key!=="cursor"||Object.hasOwn(out,key)||value.length>80)throw failed();out[key]=value;}input=out;}else input=query(url.searchParams); }
     } catch { error(400, "INVALID_INPUT"); return; }
     try {
       live();
-      const result = recovery ? mutation ? await service.resolveOrCancel(session, { ...object(input,["kind","action"]), requestKey:operationKey, context:expected }) : await service.getRecovery(session,{requestKey:operationKey,kind:expectedKind,context:expected}) : contextRead ? await guarded.withAdminTransaction(session, async () => ({ context: recoveryContext })) : operationKey ? await service.getOperationResult(session, { requestKey: operationKey }) : receive ? await service.receiveStock(session, input) : mutation ? await service.createProduct(session, input) :
+      const result = recovery ? mutation ? await service.resolveOrCancel(session, { ...object(input,["kind","action"]), requestKey:operationKey, context:expected }) : await service.getRecovery(session,{requestKey:operationKey,kind:expectedKind,context:expected}) : contextRead ? await guarded.withAdminTransaction(session, async () => ({ context: recoveryContext })) : operationKey ? await service.getOperationResult(session, { requestKey: operationKey }) : extra ? await service[extra](session,input) : history ? action==="events"?await service.listProductEvents(session,input):await service.listMovements(session,input) : receive ? await service.receiveStock(session, input) : mutation ? await service.createProduct(session, input) :
         productId ? await service.getProduct(session, { productId }) : await service.listProducts(session, input);
       live();
       if (!recoveryContext) throw failed();

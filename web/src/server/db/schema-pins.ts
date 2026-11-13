@@ -41,4 +41,5 @@ export const PINNED_SCHEMA_MIGRATIONS = [
   ["0038_shop_expenses_and_ledgers.sql", "f9e4bef63fd6cad0cbdca8a9de76e4bf612d016a2f2e57491175e716a5e54658"],
   ["0039_invoice_corrections_and_ledgers.sql", "34ee8b1d37a9b75050ac078f2b5e1066135aebfc7961cea617a303a57ff9a566"],
   ["0040_daily_closing_and_cash.sql", "382ec22d06f862d3540ae6179e661cf1513eee4d870cdc40ba232d77617f03c2"],
+  ["0041_admin_products_and_settings.sql", "552fd86ef14c1eb2bf98a2d104ebbbfcb3e8eefd84b7ca4b967853c0a7e40211"],
 ] as const;
