@@ -22,6 +22,7 @@ interface NativeDatabase extends SqliteDatabase {
   exec(sql: string): void;
   pragma(sql: string, options?: { simple: boolean }): unknown;
   defaultSafeIntegers(enabled: boolean): void;
+  function(name:string,options:{deterministic:true;directOnly:true},fn:(value:unknown)=>string|null):void;
 }
 type Driver = new (filename: string, options: { timeout: number; fileMustExist: boolean }) => NativeDatabase;
 const deny = (): never => { throw new AuthorizationDenied(); };
@@ -99,9 +100,12 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
         native.pragma("synchronous", { simple: true }) !== 2 ||
         native.pragma("busy_timeout", { simple: true }) !== location.busyTimeoutMs ||
         native.pragma("quick_check", { simple: true }) !== "ok") deny();
-    // Bounded SQLite page cache for the approved TEST39 book. This is native
+    // Bounded64MiB SQLite page cache for the approved TEST38/39 report books. This is native
     // coherent page storage, never a cache of authorization/validation results.
-    if(options.mode==="test"&&native.pragma("user_version",{simple:true})===39){native.pragma("cache_size=-32768");if(native.pragma("cache_size",{simple:true})!==-32768)deny();}
+    if(options.mode==="test"&&[38,39].includes(native.pragma("user_version",{simple:true}) as number)){native.pragma("cache_size=-65536");if(native.pragma("cache_size",{simple:true})!==-65536)deny();}
+    // Pure, direct-only Unicode text folding for admitted TEST report/history
+    // searches. No SQL, I/O, authorization or persisted schema capability.
+    if(options.mode==="test"&&[38,39].includes(native.pragma("user_version",{simple:true}) as number))native.function("pos_lower",{deterministic:true,directOnly:true},value=>typeof value==="string"?value.toLowerCase():null);
     // Pinned adapter converts boolean columns only when they are JS Numbers.
     // Its tables contain only 0/1 numeric fields. All authorization/business SQL
     // below opts into safeIntegers per statement; no financial Number reads.

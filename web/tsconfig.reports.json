@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.invoices.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "src/server/**/*.ts",
+    "src/lib/reports/**/*.ts",
+    "src/components/admin/test-expense-financials.tsx",
+    "src/components/admin/test-reports*.tsx",
+    "src/app/admin/reports/**/*.tsx",
+    "src/app/admin/investment/page.tsx",
+    "tests/integration/reports*.test.ts",
+    "tests/helpers/reports*.ts",
+    "vitest.reports.config.mts",
+    "src/app/admin/dashboard/page.tsx",
+    "src/app/admin/daily-closing/page.tsx",
+    "src/components/pos/test-expenses.tsx"
+  ]
+}

@@ -1,5 +1,6 @@
 import {isInvoicesApiPath} from "./invoices-http";
 import "server-only";
+import {isReportsApiPath} from "./reports-http";
 import {isExpensesApiPath} from "./expenses-http";
 import {isReturnsApiPath} from "./returns-http";
 import {isSalesApiPath} from "./sales-http";
@@ -110,7 +111,7 @@ export function createLocalHttpsHost(port: number, origins: LocalOrigins, tls: L
     // Only these exact private auth paths can supplement public liveness. The
     // runtime supplies this dispatcher ONLY for validated isolated TEST storage.
     const authPath = authentication && (request.url === "/api/auth/login" || request.url === "/api/auth/logout" || request.url === "/api/auth/session");
-    const inventoryPath = inventory && request.url && (isInventoryApiPath(request.url)||(isSalesApiPath(request.url)||isReturnsApiPath(request.url)||isExpensesApiPath(request.url)||isInvoicesApiPath(request.url)));
+    const inventoryPath = inventory && request.url && (isInventoryApiPath(request.url)||(isSalesApiPath(request.url)||isReturnsApiPath(request.url)||isExpensesApiPath(request.url)||isInvoicesApiPath(request.url)||isReportsApiPath(request.url)));
     const pagePath = pages && request.url && isInventoryPagePath(request.url);
     const dispatch = request.url === "/api/health" ? handler : authPath ? authentication : inventoryPath ? inventory : pagePath ? pages : undefined;
     if (!dispatch) { respond(response, 404); return; }

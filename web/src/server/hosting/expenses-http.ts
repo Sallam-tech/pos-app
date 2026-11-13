@@ -8,7 +8,7 @@ import {object,uuid,text} from "../inventory/validation";
 import {createExpensesService,ExpenseError,type ExpenseKind} from "../expenses/service";
 const id="[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const detail=new RegExp("^/api/expenses/("+id+")$"),execute=new RegExp("^/api/(pos|admin)/expense-requests/("+id+")/execute$"),approve=new RegExp("^/api/admin/expense-requests/("+id+")/approve$"),status=new RegExp("^/api/expense-operations/("+id+")$"),recover=new RegExp("^/api/admin/expense-operations/("+id+")/recovery$");
-const paths=["/api/expenses/context","/api/expenses/history","/api/expenses/summary","/api/pos/expense-requests","/api/admin/expense-requests","/api/admin/financial-summary"];
+const paths=["/api/expenses/overview","/api/expenses/context","/api/expenses/history","/api/expenses/summary","/api/pos/expense-requests","/api/admin/expense-requests","/api/admin/financial-summary"];
 export const isExpensesApiPath=(raw:string)=>{const p=raw.split("?")[0];return paths.includes(p)||[detail,execute,approve,status,recover].some(x=>x.test(p));};
 export function createExpensesDispatcher(gateway:AuthorizationGateway,schema:38|39=38){return async(req:IncomingMessage,res:ServerResponse,c:LocalRequestContext)=>{
  const send=(code:number,value:unknown)=>{if(res.destroyed||res.headersSent)return;res.writeHead(code,{"Content-Type":"application/json","Cache-Control":"no-store, private","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer",Connection:"close"});res.end(JSON.stringify(value));};
@@ -21,7 +21,8 @@ export function createExpensesDispatcher(gateway:AuthorizationGateway,schema:38|
  try{await(role==="ADMIN"?gateway.authorizeAdmin(request):gateway.authorizeSalesperson(request));}catch{send(403,{error:"Expense unavailable."});return;}
  const api=createExpensesService(guarded,schema);
  try{live();let result:unknown;const q=(keys:string[])=>{if([...url.searchParams.keys()].some(k=>!keys.includes(k)||url.searchParams.getAll(k).length!==1))throw new ExpenseError();return Object.fromEntries(url.searchParams);};const ctx=()=>{const h=req.headers["x-expense-context"];if(typeof h!=="string"||!/^[0-9a-f]{64}$/.test(h)||req.rawHeaders.filter((v,i)=>i%2===0&&v.toLowerCase()==="x-expense-context").length!==1)throw new ExpenseError();return h;};
- if(p==="/api/expenses/history"){const o=q(["from","to","query","cursor"]);result=await api.history(request,role,{...o,query:o.query??""});}
+ if(p==="/api/expenses/overview"){const o=q(["from","to","query","date"]);const {date,...input}=o;result=await api.overview(request,role,{...input,query:input.query??""},date);}
+ else if(p==="/api/expenses/history"){const o=q(["from","to","query","cursor"]);result=await api.history(request,role,{...o,query:o.query??""});}
  else if(p==="/api/expenses/summary"){const o=q(["from","to"]);result=await api.summary(request,role,o.from,o.to);}
  else if(p==="/api/admin/financial-summary"){const o=q(["from","to","asOf"]);result=await api.financial(request,o.from,o.to,o.asOf);}
  else if(detail.test(p)){const o=q(["beforeRevision"]);result=await api.detail(request,role,detail.exec(p)![1],o.beforeRevision);}

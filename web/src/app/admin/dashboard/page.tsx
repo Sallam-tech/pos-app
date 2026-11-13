@@ -1,3 +1,4 @@
+import {readTestReportsRender} from "@/server/hosting/reports-render";
 import {connection} from "next/server";
 import {readTestExpensesRender} from "@/server/hosting/expenses-render";
 import {TestExpenseFinancials} from "@/components/admin/test-expense-financials";
@@ -18,7 +19,7 @@ import { Icon } from "@/components/ui/icon";
 
 export default async function DashboardPage() {
  await connection();
- if(readTestExpensesRender())return <TestExpenseFinancials mode="dashboard"/>;
+ if(readTestExpensesRender())return <TestExpenseFinancials authoritativeReports={readTestReportsRender()} mode="dashboard"/>;
   // Inventory counts share the same fixture as the mock inventory lists.
   // Profit uses separately labeled fictional sale-time costs, never current product prices.
   const revenuePaise = getMockRevenuePaise();

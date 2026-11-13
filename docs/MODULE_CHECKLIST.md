@@ -22,6 +22,9 @@
 - [x] Owner APPROVED complete39 A+B; Admin-only immutable revisions, verified cash/stock evidence, original COGS/current valuation separation, effective receipt/Returns and event-date Profit/Reports integration verified TEST-only.
 - [x]44 distinct focused cases, final scoped type/zero-warning lint/exact-source build and preservation PASS; [implementation/evidence](development/INVOICE_CORRECTIONS_SCHEMA39_COORDINATED_TEST_IMPLEMENTATION_REPORT.md). No production activation.
 - [x] After39 PASS, review all uncommitted paths and explicit backend dependency/hash manifest; independent experiments and unrelated cloud-plan whitespace remain excluded. Safe LOCAL checkpoint authorized; actual hash/status comes from live Git and final delivery. No push/reset/clean.
+- [x] Owner accepts TEST39 PASS/bc4e535; authoritative Reports40 verified on unchanged schema39. Existing sources/UI reused; complete Dashboard/Revenue/Profit/Expenses/current Stock Value/product history, source-bound pagination, Karachi filters and atomic saved totals.
+- [x]22 focused cases plus final scoped type/zero-warning lint/exact293-source build/preservation PASS. Safe50k improvements measured; full validation/privacy retained, invoice latency still material. [Evidence/limits](development/AUTHORITATIVE_REPORTS40_TEST_IMPLEMENTATION_REPORT.md).
+- [x] Reports40 safe LOCAL checkpoint reviewed after PASS;33 unrelated paths remain excluded/unchanged. Actual hash/status from live Git/final delivery; no push/reset/clean.
 - [ ] Production/recovery/custody and independent-restore gates. Sales36/Returns37 are TEST-only. No second Windows PC/profile available.
 
 Older dated module records below are retained history; current source/status and this matrix take precedence.

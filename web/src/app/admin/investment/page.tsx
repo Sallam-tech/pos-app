@@ -1,3 +1,6 @@
+import {connection} from "next/server";
+import {readTestReportsRender} from "@/server/hosting/reports-render";
+import {TestReportsExplorer} from "@/components/admin/test-reports";
 import { PageHeading } from "@/components/shell/page-heading";
 import type { Metadata } from "next";
 import { AdminInvestmentPreview } from "@/components/demo/admin-investment-preview";
@@ -5,7 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import "./investment.css";
 
 export const metadata: Metadata = { title: "Stock Value | Shop POS" };
-export default function InvestmentPage() {
+export default async function InvestmentPage() {
+ await connection();if(readTestReportsRender())return <TestReportsExplorer kind="stock"/>;
   return <div className="investment-workspace">
     <div className="mx-auto max-w-6xl">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">

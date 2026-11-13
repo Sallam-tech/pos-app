@@ -1,5 +1,6 @@
 import {withTestInvoicesRender} from "./invoices-render";
 import "server-only";
+import {withTestReportsRender} from "./reports-render";
 import {withTestExpensesRender} from "./expenses-render";
 import {withTestReturnsRender} from "./returns-render";
 import {withTestSalesRender} from "./sales-render";
@@ -12,7 +13,8 @@ import { withTestInventoryRender } from "./inventory-render";
 import type { LocalRequestContext } from "./https";
 const expensePages=["/admin/dashboard","/admin/expenses","/admin/reports/profit","/admin/profit/today","/admin/daily-closing"];
 const invoicePages=["/admin/reports","/admin/sales","/admin/reports/sales","/admin/sales/today"];
-const pages = [...invoicePages,...expensePages,"/admin/returns", "/admin/products", "/admin/products/new", "/admin/inventory/available-stock", "/admin/inventory/low-stock"];
+const reportPages=["/admin/investment","/admin/reports/products","/admin/reports/expenses"];
+const pages = [...reportPages,...invoicePages,...expensePages,"/admin/returns", "/admin/products", "/admin/products/new", "/admin/inventory/available-stock", "/admin/inventory/low-stock"];
 export function isInventoryPagePath(raw: string) {
  if (raw.length > 1024 || raw.split("?").length > 2 || raw.includes("#") || raw.includes("\\")) return false;
  const [pathname, search] = raw.split("?");
@@ -24,7 +26,7 @@ export function isInventoryPagePath(raw: string) {
  return /^\/_next\/static\/[A-Za-z0-9_()[\].~/-]+\.(?:js|css|woff2?)$/.test(decoded) &&
   !decoded.slice(1).split("/").some(p => p === "." || p === ".." || p === "");
 }
-export function createInventoryPageDispatcher(gateway: AuthorizationGateway, render: (req: IncomingMessage, res: ServerResponse) => Promise<void>,schema:35|36|37|38|39=35, salesEnabled=false, returnsEnabled=false,expensesEnabled=false,invoicesEnabled=false) {
+export function createInventoryPageDispatcher(gateway: AuthorizationGateway, render: (req: IncomingMessage, res: ServerResponse) => Promise<void>,schema:35|36|37|38|39=35, salesEnabled=false, returnsEnabled=false,expensesEnabled=false,invoicesEnabled=false,reportsEnabled=false) {
  return async (request: IncomingMessage, response: ServerResponse, context: LocalRequestContext) => {
   const reject = (status: number) => { response.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store, private" }); response.end('{"error":"Inventory unavailable."}'); };
   if (!request.url || !isInventoryPagePath(request.url)) { reject(404); return; }
@@ -32,6 +34,7 @@ export function createInventoryPageDispatcher(gateway: AuthorizationGateway, ren
   const login = request.url?.split("?")[0] === "/login", asset = request.url?.startsWith("/_next/static/");
   const pos=request.url?.split("?")[0]==="/pos"||request.url?.split("?")[0]==="/pos/history"||request.url?.split("?")[0]==="/pos/returns"||request.url?.split("?")[0]==="/pos/expenses";
   if((expensePages.includes(request.url.split("?")[0])||request.url.split("?")[0]==="/pos/expenses")&&!expensesEnabled){reject(404);return;}
+  if(reportPages.includes(request.url.split("?")[0])&&!reportsEnabled){reject(404);return;}
   if(invoicePages.includes(request.url.split("?")[0])&&!invoicesEnabled){reject(404);return;}
   const returnsPage=["/pos/returns","/admin/returns"].includes(request.url.split("?")[0]);if(returnsPage&&!returnsEnabled){reject(404);return;}
   if(pos&&!salesEnabled){reject(404);return;}
@@ -61,7 +64,7 @@ export function createInventoryPageDispatcher(gateway: AuthorizationGateway, ren
     await Promise.race([render(request,response), closed]);
    } finally { response.removeListener("close", done); }
   };
-  const expenseRender=()=>withTestInvoicesRender(invoicesEnabled,()=>withTestExpensesRender(expensesEnabled,renderPage));
+  const expenseRender=()=>withTestReportsRender(reportsEnabled,()=>withTestInvoicesRender(invoicesEnabled,()=>withTestExpensesRender(expensesEnabled,renderPage)));
   if (login) await withTestLoginRender(context.role,()=>withTestSalesRender(salesEnabled,()=>withTestReturnsRender(returnsEnabled,expenseRender)));
   else if (asset) await renderPage();
   else await withTestSalesRender(salesEnabled,()=>withTestReturnsRender(returnsEnabled,()=>pos?expenseRender():withTestInventoryRender(expenseRender)));

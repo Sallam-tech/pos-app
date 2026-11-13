@@ -1,3 +1,4 @@
+import {readTestReportsRender} from "@/server/hosting/reports-render";
 import {connection} from "next/server";
 import {readTestExpensesRender} from "@/server/hosting/expenses-render";
 import {TestExpenseFinancials} from "@/components/admin/test-expense-financials";
@@ -9,6 +10,6 @@ export const metadata: Metadata = { title: "Profit Report | Shop POS" };
 
 export default async function ProfitChartsPage() {
  await connection();
- if(readTestExpensesRender())return <TestExpenseFinancials mode="profit"/>;
+ if(readTestExpensesRender())return <TestExpenseFinancials authoritativeReports={readTestReportsRender()} mode="profit"/>;
   return <ReportChartsPreview kind="profit" sales={getFictionalProfitSales()} />;
 }

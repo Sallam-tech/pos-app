@@ -1,3 +1,4 @@
+import {readTestReportsRender} from "@/server/hosting/reports-render";
 import {connection} from "next/server";
 import {readTestInvoicesRender} from "@/server/hosting/invoices-render";
 import { PageHeading } from "@/components/shell/page-heading";
@@ -29,5 +30,6 @@ export default async function ReportsPage() {
         <Button asChild className="mt-4 w-full"><Link href="/admin/reports/profit">View Profit Report</Link></Button>
       </Card>
     </section>
+    {readTestReportsRender()&&<div className="mt-4 flex flex-wrap gap-3"><Button asChild variant="outline"><Link href="/admin/reports/products">Product-wise Report</Link></Button><Button asChild variant="outline"><Link href="/admin/reports/expenses">Expense Report</Link></Button><Button asChild variant="outline"><Link href="/admin/investment">Stock Value</Link></Button></div>}
   </div>;
 }
