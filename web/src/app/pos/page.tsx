@@ -1,3 +1,4 @@
+import {readTestCashRender} from "@/server/hosting/cash-render";
 import {connection} from "next/server";
 import {isTestSalesRender} from "@/server/hosting/sales-render";
 import {TestSales} from "@/components/pos/test-sales";
@@ -17,6 +18,6 @@ export default async function PosPage() {
       </div>
       <Badge className="mt-1">{live?"Isolated TEST":"Demo Mode"}</Badge>
     </div>
-    {live?<TestSales/>:<RecordSaleForm />}
+    {live?<TestSales cashManaged={readTestCashRender()}/>:<RecordSaleForm />}
   </div>;
 }

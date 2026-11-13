@@ -95,7 +95,7 @@ export function inventorySessionRequest(request: IncomingMessage, context: Local
 }
 // INTERNAL construction by the existing TEST-confined runtime only. Every call
 // re-enters the sole gateway transaction; schema validity is not cached authority.
-export function createInventoryDispatcher(gateway: AuthorizationGateway, schema:35|36|37|38|39=35) {
+export function createInventoryDispatcher(gateway: AuthorizationGateway, schema:35|36|37|38|39|40=35) {
   return async (request: IncomingMessage, response: ServerResponse, context: LocalRequestContext) => {
     const error = (status: number, code = "UNAVAILABLE", allow?: string) => send(response, status, { error: "Inventory operation unavailable.", code }, allow);
     if (!request.url || request.url.length > 1024 || request.url.includes("#") || !isInventoryApiPath(request.url)) { error(404); return; }

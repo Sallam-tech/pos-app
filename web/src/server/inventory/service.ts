@@ -9,7 +9,7 @@ import { events, list, movements } from "./reads";
 import { object, reject, uuid } from "./validation";
 // Trusted server composition only. Requests never supply an actor, transaction or verifier.
 // Every method, including idempotent replay and reads, enters the SAME mandatory SQL gateway.
-export function createInventoryService(gateway: AuthorizationGateway, schema:35|36|37|38|39=35) {
+export function createInventoryService(gateway: AuthorizationGateway, schema:35|36|37|38|39|40=35) {
  if(!gateway || typeof gateway.withAdminTransaction!=="function") return reject("UNAVAILABLE");
  const authorize=gateway.withAdminTransaction.bind(gateway);
  async function execute<T>(request:Request,work:(tx:AuthorizedTransaction,actor:Actor)=>Promise<T>):Promise<T> {

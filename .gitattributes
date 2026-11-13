@@ -1,2 +1,4 @@
 # Migrations are byte-pinned; preserve LF during Windows checkout.
 web/src/server/db/migrations/*.sql text eol=lf
+
+web/src/server/db/migrations/0040_daily_closing_and_cash.sql text eol=lf

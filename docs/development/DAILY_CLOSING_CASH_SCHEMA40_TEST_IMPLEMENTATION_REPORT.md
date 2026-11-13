@@ -1,0 +1,27 @@
+# TEST40 Daily Closing + Cash Management — verified TEST-only
+
+13 November2026, Asia/Karachi. **PASS for the owner-approved coordinated TEST module. Production DISABLED; commercial system PARTIAL.** Parent checkpoint69017771; the resulting safe LOCAL commit hash comes from live Git. No push, shop migration or production activation.
+
+Implemented the [approved A+B contract](DAILY_CLOSING_CASH_SCHEMA40_AUTHORIZATION_CONTRACT.md) in the existing closing/POS UI and accepted source writers: verified prospective zero/positive opening; source-bound admissions before handover; independently verified actual tender/change/date; signed sales/refunds/expenses/corrections;180-second physical-only count lease; shortage/excess; Karachi midnight and late signed reconciliation; once-only fresh-Admin non-profit bridges; immutable per-day history and append-only supplements; original-key crash recovery. Next-day sales remain independent. Missing evidence is NULL/UNRECONCILED. Saved unrecorded payments stay unrecorded; variance changes no revenue, expense, profit, stock or receipt history. Backup jobs explicitly remain BLOCKED_NOT_CONFIGURED.
+
+Added14 guarded STRICT tables and12 bounded TEST APIs (78 cumulative).0040 is confined to authorized unenrolled disposable TEST39→40,87 pinned steps; SHA256382ec22d06f862d3540ae6179e661cf1513eee4d870cdc40ba232d77617f03c2. Historical0001–0039 bytes and all old values/physical rowids are preserved. Fresh Admin grants bind original request/session/version/epoch/boot; private balances/history never reach Staff. Browser durable stores contain context/key/kind/state only, with no payload/password or automatic financial retry. Original Staff authorship and Admin recovery execution are separately audited.
+
+**Verification:**45 distinct focused passing cases across retained runs:33 native SQLite,4 real CA-validated HTTPS,3 Chromium,1 growing-data case,4 focused prior-module regressions. Coverage includes87 migration steps/history rollback, actual-state lost COMMIT, source failures and false successful writes, duplicate/concurrent close/sale/bridge, final authority expiry, real killed writer, browser/backend crash/restart, all14+ledger immutability/rowid/REPLACE/UPSERT guards, missing evidence, signed refunds/corrections/expenses, midnight and late counts, role/CSRF/no-leak controls and50k final-source-row forgery rejection. Earlier accepted full suites were reused.
+
+Resolved actual defects include unknown later-flow membership (M/A/variance remain NULL), later evidence contradicting untouched opening, pre-midnight count/future-boundary separation, stale variance after timing correction, once-only post-anchor corrected cash, and unstable count windows requiring recount. UI fresh-authorization races were fixed and Chromium recovery passed. One load-sensitive fixture opening failed during concurrent build/type/lint; its isolated rerun passed without changing authorization or lease limits. Diagnostic logs remain retained.
+
+Final scoped TypeScript type-8e04ba02-20a0-4756-84e1-de1b2026fbf3.log, zero-warning ESLint lint-9c1bb3ce-d8a6-4a0a-9d33-302cd37ff253.log and test-only follow-up lint-f6d858f0-9f6b-4193-a756-5e5703227264.log, isolated Next build build-aa985d67-9bff-4b95-ab6a-df876c8d352e.log and exact306-source match PASS. Final midnight/inherited-bridge/real HTTPS check: final-focused-8bfbeafd-8977-493c-b242-05f95634de68.log.
+
+Evidence directory: web/test-results/cash40-39c69911-d6ae-4039-9c7e-92163d29bcbb/ (ignored local evidence, not committed). Key retained passing logs: native-08fff2d0-b9f9-4b1b-a3bd-331dca3673b7 (failures/recovery/guards/actual killed writer), native-9f45a9dc-c305-454d-bec5-9d70991debe3 (two late-fact cases; retains the separate resolved fixture failure), native-f5eee2f8-b6cc-40b3-a09b-3640e86623fc (that isolated missing-payment case), https-5008d7ba-a06e-499d-baf4-842ba8717f2a (four HTTPS cases; retains earlier resolved browser diagnostic), browser-b017f6e6-08e2-4b46-ad97-0ccf3bfdd5ad (first two browser cases), browser-6e7789b9-06f3-4940-af6c-6391ce119c1f (crash/recovery), performance-e91bccbb-bc09-4cab-a6c5-d8f0c9b34fd9, regression-5a91adaa-bf35-4257-a44a-37b6e6f0922b and invoice-regression-5d9b1dd3-db20-4eef-8efe-b5f03cb75f73. Filenames have .log suffixes. All diagnostic runs remain available.
+
+Measured local synthetic SQLite data (seconds; count includes the authorization/count workflow):
+
+| Expense rows | Native summary | History | Count | Closing |
+| --- | ---: | ---: | ---: | ---: |
+|1,000|0.94|0.84|11.59|4.10|
+|10,000|0.92|0.48|7.50|3.40|
+|50,000|2.89|1.07|22.16|7.16|
+
+At50k, real HTTPS summary/history/count/closing:3.15/3.81/30.30/8.95s; Chromium summary/count/closing:6.62/40.98/16.04s. Original retained source hashes stayed unchanged; all new volume work used separate disposable copies. Measurements preceded the final timing guards; those guards have focused final-source verification. Full validation remains materially slow; target-machine capacity/power-loss acceptance is unverified.
+
+Reviewed related source/docs/tests only; review-manifest.json records explicit paths/hashes and verifies all33 original unrelated paths unchanged.643 baseline files were checked:610 unchanged and33 related edits; original requirements/prototype/package files and migrations preserved. Databases, TLS material, secrets, logs and ignored test evidence are excluded from the local checkpoint. No portable backup/independent restore, production custody/enrollment, target hardware, printing or production acceptance is claimed.

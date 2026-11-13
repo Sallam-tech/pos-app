@@ -1,3 +1,5 @@
+import {cashSteps} from "./cash-program";
+import {cashMigrationTransaction} from "./cash-migrate";
 import {invoicesSteps} from "./invoices-program";
 import {invoiceMigrationTransaction} from "./invoices-migrate";
 import "server-only";
@@ -21,6 +23,8 @@ export interface SqlTransaction extends SqlReader {
   run(sql: string, bindings?: readonly SqlValue[]): { changes: bigint; lastInsertRowid: bigint };
   setSchemaVersion(version: bigint): void;
 }
+const cashExecutors=new WeakMap<object,()=>{applied:number;version:bigint}>();
+export function executeReviewedCashMigration40(connection:SqliteConnection){assertDisposableMigrationConnection(connection);const execute=cashExecutors.get(connection);if(!execute)throw Error("TEST40 maintenance unavailable.");return execute();}
 const invoiceExecutors=new WeakMap<object,()=>{applied:number;version:bigint}>();
 export function executeReviewedInvoiceMigration39(connection:SqliteConnection){assertDisposableMigrationConnection(connection);const execute=invoiceExecutors.get(connection);if(!execute)throw Error("TEST maintenance unavailable.");return execute();}
 const maintenanceExecutors=new WeakMap<object,(tx:SqlTransaction,version:36|37|38)=>void>();
@@ -247,6 +251,22 @@ export function openDatabase(options: DatabaseOptions): SqliteConnection {
     try{return connection.transaction(tx=>invoiceMigrationTransaction(tx,()=>{
       if(!active||tx!==currentScope||!native.inTransaction)throw Error();
       maintenanceFailed=true;for(const sql of invoicesSteps())native.prepare(sql).run();maintenanceFailed=false;
+    }));}finally{
+      native.pragma("foreign_keys=ON");
+      if(native.pragma("foreign_keys",{simple:true})!==BigInt(1)){closed=true;try{native.close();}catch{}throw Error("Maintenance handle quarantined.");}
+    }
+  });
+  if(options.mode==="test")cashExecutors.set(connection,()=>{
+    outside();assertDisposableMigrationConnection(connection);
+    const marker=native.pragma("user_version",{simple:true});
+    if((marker!==BigInt(39)&&marker!==BigInt(40))||native.prepare("SELECT id FROM auth_enrollment_binding LIMIT 1").get()!==undefined)fail("MIGRATION_INVALID","Only unenrolled TEST39/40 maintenance is admitted.");
+    // SQLite's documented rebuild procedure: enforcement is disabled only on
+    // this confined maintenance handle, outside BEGIN. Source/target FK checks
+    // and full preservation execute in the same atomic writer transaction.
+    native.pragma("foreign_keys=OFF");
+    try{return connection.transaction(tx=>cashMigrationTransaction(tx,()=>{
+      if(!active||tx!==currentScope||!native.inTransaction)throw Error();
+      maintenanceFailed=true;for(const sql of cashSteps())native.prepare(sql).run();maintenanceFailed=false;
     }));}finally{
       native.pragma("foreign_keys=ON");
       if(native.pragma("foreign_keys",{simple:true})!==BigInt(1)){closed=true;try{native.close();}catch{}throw Error("Maintenance handle quarantined.");}

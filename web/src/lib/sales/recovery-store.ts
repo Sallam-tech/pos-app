@@ -1,7 +1,7 @@
 "use client";
 type Kind="SALE";
 // The ONLY persisted business-operation data is this <=512-byte, non-bearer marker.
-export interface RecoveryMarker { v: 1; context: string; key: string; kind: Kind; state: "PENDING" | "CONFIRMED" }
+export interface RecoveryMarker { v: 1; context: string; key: string; kind: Kind; state: "PENDING" | "ATTEMPTED" | "CONFIRMED" }
 const database = "pos-test-sales-recovery-v1", storeName = "marker", slot = "active";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const fail = () => new Error("Recovery storage unavailable. Mutations blocked.");
@@ -10,7 +10,7 @@ export function validateMarker(value: unknown): RecoveryMarker {
  const m = value as RecoveryMarker;
  if (Object.keys(m).sort().join(",") !== "context,key,kind,state,v" || m.v !== 1 ||
      typeof m.context !== "string" || !/^[0-9a-f]{64}$/.test(m.context) || typeof m.key !== "string" || !uuid.test(m.key) ||
-     (!["SALE"].includes(m.kind)) || (m.state !== "PENDING" && m.state !== "CONFIRMED") ||
+     (!["SALE"].includes(m.kind)) || (m.state !== "PENDING" && m.state !== "ATTEMPTED" && m.state !== "CONFIRMED") ||
      new TextEncoder().encode(JSON.stringify(m)).length > 512) throw fail();
  return m;
 }
@@ -68,3 +68,5 @@ export const confirmMarker = (expected: RecoveryMarker) => access(true, current 
 export const acknowledgeMarker = (expected: RecoveryMarker) => access(true, current => {
  if (expected.state !== "CONFIRMED" || !sameMarker(current, expected)) throw fail(); return { value: undefined, next: null };
 });
+
+export const armMarker=(expected:RecoveryMarker)=>access(true,current=>{if(expected.state!=="PENDING"||!sameMarker(current,expected))throw fail();const next={...expected,state:"ATTEMPTED" as const};return {value:next,next};});

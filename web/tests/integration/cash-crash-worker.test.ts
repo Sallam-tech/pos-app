@@ -1,0 +1,9 @@
+import {test,vi} from "vitest";
+import {createRequire} from "node:module";
+import {readFileSync,writeFileSync} from "node:fs";
+import {openAuthorizationGateway} from "../../src/server/auth/gateway";
+import {createCashService} from "../../src/server/cash/service";
+import type {AuthorizationConfiguration} from "../../src/server/auth/types";
+interface Raw{prepare(s:string):unknown}
+const Driver=createRequire(import.meta.url)("better-sqlite3") as {prototype:Raw};
+test.skipIf(!process.env.TEST40_CRASH_INPUT)("isolated native TEST40 closing writer is killed before COMMIT",async()=>{const x=JSON.parse(readFileSync(process.env.TEST40_CRASH_INPUT!,"utf8")) as {config:AuthorizationConfiguration;password:string;key:string;context:string;observed:string;cleanup:string},g=await openAuthorizationGateway(x.config,40);try{const response=await g.issueAdminSession(await g.verifyAdminPassword(x.password)),r=new Request(x.config.origins.ADMIN+"/private",{headers:{origin:x.config.origins.ADMIN,cookie:response.headers.getSetCookie().map(v=>v.split(";")[0]).join("; ")}}),cash=createCashService(g),q=await cash.operation(r,x.key,x.context);if(q.state!=="READY")throw Error();await cash.prepare(r,x.password,x.key,x.context,q.action as "CLOSE_DAY",q.input);const prepare=Driver.prototype.prepare;vi.spyOn(Driver.prototype,"prepare").mockImplementation(function(this:Raw,s:string){if(s.startsWith("INSERT INTO closing_backup_jobs")){writeFileSync(x.observed,JSON.stringify({pid:process.pid,after:"daily_closings insert",before:"backup/operation/COMMIT"}),{flag:"wx"});process.kill(process.pid,"SIGKILL");throw Error("TEST kill hook missed");}return prepare.call(this,s);});await cash.execute(r,x.key,x.context,"ADMIN_VERIFIED_CASH_FACTS");throw Error("TEST writer survived");}finally{writeFileSync(x.cleanup,"unexpected graceful cleanup");await g.close();}});

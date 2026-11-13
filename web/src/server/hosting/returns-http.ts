@@ -10,7 +10,7 @@ const id="[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const execution=new RegExp("^/api/pos/returns/("+id+")/execute$"),status=new RegExp("^/api/pos/return-operations/("+id+")$"),approval=new RegExp("^/api/admin/returns/requests/("+id+")/approve$"),detail=new RegExp("^/api/admin/returns/("+id+")$"),disposition=new RegExp("^/api/admin/returns/("+id+")/dispositions$"),recovery=new RegExp("^/api/admin/return-operations/("+id+")/recovery$");
 const paths=["/api/returns/context","/api/returns/invoices","/api/returns/quote","/api/pos/returns/requests","/api/admin/returns/requests","/api/admin/returns"];
 export const isReturnsApiPath=(raw:string)=>{const p=raw.split("?")[0];return paths.includes(p)||[execution,status,approval,detail,disposition,recovery].some(x=>x.test(p));};
-export function createReturnsDispatcher(gateway:AuthorizationGateway,schema:37|38|39=37){
+export function createReturnsDispatcher(gateway:AuthorizationGateway,schema:37|38|39|40=37){
  return async(req:IncomingMessage,res:ServerResponse,c:LocalRequestContext)=>{
   const send=(code:number,value:unknown)=>{if(res.destroyed||res.headersSent)return;res.writeHead(code,{"Content-Type":"application/json","Cache-Control":"no-store, private","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer",Connection:"close"});res.end(JSON.stringify(value));};
   if(!req.url||req.url.length>1024||req.url.includes("#")||!isReturnsApiPath(req.url)){send(404,{error:"Return unavailable."});return;}

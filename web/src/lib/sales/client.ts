@@ -1,6 +1,6 @@
 "use client";
 import type {Receipt,SaleLineInput} from "@/server/sales/service";
-import {readMarker,claimMarker,confirmMarker,acknowledgeMarker,sameMarker,type RecoveryMarker} from "./recovery-store";
+import {readMarker,claimMarker,armMarker,confirmMarker,acknowledgeMarker,sameMarker,type RecoveryMarker} from "./recovery-store";
 export type CatalogProduct={id:string;code:string;name:string;sizeLabel:string|null;unit:string;sellingPricePaisa:string};
 export async function salesFetch(path:string,body?:unknown,context?:string){
  const response=await fetch(path,{method:body===undefined?"GET":"POST",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{...(body===undefined?{}:{"Content-Type":"application/json"}),...(context?{"X-Sales-Context":context}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(15000)});
@@ -35,4 +35,12 @@ export async function acknowledgeSale(expected:RecoveryMarker,invoiceId?:string)
  const current=await readMarker();if(!sameMarker(current,expected)||expected.state!=="CONFIRMED")throw Error();
  const fresh=await terminal(expected);if(fresh.state==="COMMITTED"&&fresh.receipt.id!==invoiceId)throw Error();
  await acknowledgeMarker(expected);
+}
+
+export async function prepareCashSale(lines:SaleLineInput[],cashPaisa:string,customerName:string,customerPhone:string){
+ const context=(await salesFetch("/api/pos/sales/context")).context;const marker=await claimMarker({v:1,context,key:crypto.randomUUID(),kind:"SALE",state:"PENDING"});const command={requestKey:marker.key,context,lines,cashPaisa,customerName,customerPhone};
+ const response=await fetch("/api/counter-cash/admissions",{method:"POST",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind:"SALE",key:marker.key,input:command}),signal:AbortSignal.timeout(60000)});if(!response.ok)throw Error("Physical cash admission unavailable. Retain the original key; do not collect cash.");const admission=await response.json();if(admission.key!==marker.key||admission.admitted!==true)throw Error();const armed=await armMarker(marker);return {marker:armed,command};
+}
+export async function submitCashSale(expected:RecoveryMarker,command:{requestKey:string;context:string;lines:SaleLineInput[];cashPaisa:string;customerName:string;customerPhone:string},cashDate:string,actualTenderPaisa:string){
+ const current=await readMarker();if(expected.state!=="ATTEMPTED"||!sameMarker(current,expected)||command.requestKey!==expected.key||command.context!==expected.context)throw Error("Original sale changed.");await salesFetch("/api/pos/sales",{...command,cashDate,cashPaisa:actualTenderPaisa});return restoreSale();
 }

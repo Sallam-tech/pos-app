@@ -33,7 +33,7 @@ export function readSalesBody(req:IncomingMessage,limit=65536):Promise<unknown>{
   req.on("data",data);req.once("end",end);req.once("aborted",abort);req.once("error",abort);if(req.aborted)abort();
  });
 }
-export function createSalesDispatcher(gateway:AuthorizationGateway,shopName:string,schema:36|37|38|39=36){
+export function createSalesDispatcher(gateway:AuthorizationGateway,shopName:string,schema:36|37|38|39|40=36){
  return async(req:IncomingMessage,res:ServerResponse,context:LocalRequestContext)=>{
   const send=(status:number,data:unknown)=>{if(res.destroyed||res.headersSent)return;res.writeHead(status,{"Content-Type":"application/json","Cache-Control":"no-store, private","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer",Connection:"close"});res.end(JSON.stringify(data));};
   if(!req.url||req.url.length>1024||req.url.includes("#")||!isSalesApiPath(req.url)){send(404,{error:"Sale unavailable."});return;}

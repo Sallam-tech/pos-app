@@ -1,5 +1,15 @@
 # POS Module Checklist
 
+## Current Daily Closing + Cash Management gate —13 November2026
+
+- [x] Owner accepts Reports40 TEST PASS at69017771; inspect live Git/source and reuse accepted modules/evidence.
+- [x] Prepare ONE [cash/schema/authority approval contract](development/DAILY_CLOSING_CASH_SCHEMA40_AUTHORIZATION_CONTRACT.md); P08 midnight/continued sales/signed reconstruction already approved.
+- [x] Owner explicitly APPROVED complete A+B: verified opening/timed admissions, explicit optional non-profit variance authority, elapsed-date/unreconciled closing rules and preserving TEST schema40.
+- [x] Complete existing UI + secure APIs/SQLite ledgers/calculations/idempotency/recovery;45 distinct focused cases, scoped type/zero-warning lint/exact-source build PASS. [Evidence/limits](development/DAILY_CLOSING_CASH_SCHEMA40_TEST_IMPLEMENTATION_REPORT.md).
+- [x] Verified PASS permits the reviewed LOCAL checkpoint; explicit related path/hash manifest and staged diff required before commit.33 unrelated paths/secrets/DBs/logs excluded. Read live Git for the actual checkpoint. Production DISABLED; no push/reset/clean.
+
+A+B is approved and the coordinated module is verified TEST-only. Safe LOCAL checkpoint remains subject to the final index/hash review. Historical acceptance statements below retain their original context.
+
 **FINAL OWNER UPDATE: OPTION2 APPROVED - per-unit final-payable HALF_UP first, multiply quantity, then sum lines. Complete coordinated TEST Sales36 contract APPROVED; implementation VERIFIED TEST ONLY. Earlier extended-line recommendation/approval-pending text below is historical and superseded. No production activation.**
 
 ## Active master execution - 12 November 2026

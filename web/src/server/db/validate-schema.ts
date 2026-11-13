@@ -1,3 +1,5 @@
+import {CASH_AUTO,CASH_INDEXES,CASH_TABLES} from "./cash-manifest";
+import {cashObjects} from "./cash-program";
 import {INVOICE_AUTO,INVOICE_INDEXES,INVOICE_TABLES,invoicesObjects} from "./invoices-program";
 import "server-only";
 import {EXPENSE_AUTO,EXPENSE_INDEXES,EXPENSE_TABLES,expensesObjects} from "./expenses-program";
@@ -8,7 +10,7 @@ import { AUTO_INDEXES, EXPLICIT_INDEXES, HISTORY_DEFINITION, reviewedMigrations,
 import { immutableInventoryTables, storedTriggerSql } from "./inventory-trigger-policy";
 import { schemaTokens } from "./schema-sql";
 
-export type ReviewedSchemaVersion = 8 | 18 | 35 | 36 | 37 | 38 | 39;
+export type ReviewedSchemaVersion = 8 | 18 | 35 | 36 | 37 | 38 | 39 | 40;
 export type SchemaFailure = "UNSUPPORTED_VERSION" | "MANIFEST_UNAVAILABLE" | "READ_FAILED" |
   "VERSION_MISMATCH" | "HISTORY_MISMATCH" | "MISSING_OBJECT" | "UNEXPECTED_OBJECT" |
   "OBJECT_CHANGED" | "METADATA_MISMATCH" | "AMBIGUOUS_SNAPSHOT" | "LIMIT_EXCEEDED";
@@ -25,7 +27,7 @@ interface ObjectDefinition { type: "table" | "index" | "trigger"; table: string;
 interface IndexDefinition { table: string; origin: string; unique: bigint; partial: bigint; columns: readonly string[] }
 
 export async function validateReviewedSchema(reader: ReadScope, version: ReviewedSchemaVersion): Promise<SchemaValidation> {
-  if (version !== 8 && version !== 18 && version !== 35 && version !== 36 && version !== 37 && version !== 38 && version !== 39) return Object.freeze({ ok: false, code: "UNSUPPORTED_VERSION" });
+  if (version !== 8 && version !== 18 && version !== 35 && version !== 36 && version !== 37 && version !== 38 && version !== 39 && version !== 40) return Object.freeze({ ok: false, code: "UNSUPPORTED_VERSION" });
   let reviewed;
   try { reviewed = reviewedMigrations().slice(0, version); }
   catch { return Object.freeze({ ok: false, code: "MANIFEST_UNAVAILABLE" }); }
@@ -51,8 +53,9 @@ export async function validateReviewedSchema(reader: ReadScope, version: Reviewe
     if(version>=36){for(const[n,v]of salesObjects())expected.set(n,v);for(const[n,v]of Object.entries(SALES_INDEXES))indexes.set(n,{...v,origin:"c"});}
     if(version>=37){for(const[n,v]of returnsObjects())expected.set(n,v);for(const[n,v]of Object.entries(RETURN_INDEXES))indexes.set(n,{...v,origin:"c"});}
     if(version>=38){for(const[n,v]of expensesObjects())expected.set(n,v);for(const[n,v]of Object.entries(EXPENSE_INDEXES))indexes.set(n,{...v,origin:"c"});}
-    if(version===39){for(const[n,v]of invoicesObjects())expected.set(n,v);for(const[n,v]of Object.entries(INVOICE_INDEXES))indexes.set(n,{...v,origin:"c"});}
-    for (const [table, definitions] of Object.entries({...AUTO_INDEXES,...(version>=36?SALES_AUTO:{}),...(version>=37?RETURN_AUTO:{}),...(version>=38?EXPENSE_AUTO:{}),...(version===39?INVOICE_AUTO:{})})) {
+    if(version>=39){for(const[n,v]of invoicesObjects())expected.set(n,v);for(const[n,v]of Object.entries(INVOICE_INDEXES))indexes.set(n,{...v,origin:"c"});}
+    if(version===40){for(const[n,v]of cashObjects())expected.set(n,v);for(const[n,v]of Object.entries(CASH_INDEXES))indexes.set(n,{...v,origin:"c"});}
+    for (const [table, definitions] of Object.entries({...AUTO_INDEXES,...(version>=36?SALES_AUTO:{}),...(version>=37?RETURN_AUTO:{}),...(version>=38?EXPENSE_AUTO:{}),...(version>=39?INVOICE_AUTO:{}),...(version===40?CASH_AUTO:{})})) {
       if (!expected.has(table)) continue;
       definitions.forEach(([origin, ...columns], i) => {
         const name = "sqlite_autoindex_" + table + "_" + (i + 1);
@@ -62,8 +65,8 @@ export async function validateReviewedSchema(reader: ReadScope, version: Reviewe
     }
     const objects = await reader.all(
       "SELECT type,substr(name,1,129) AS name,substr(tbl_name,1,129) AS tbl_name," +
-      "length(CAST(sql AS BLOB)) AS sql_bytes,substr(sql,1,65537) AS sql,rootpage FROM main.sqlite_schema LIMIT "+(version===39?513:version>=37?385:129));
-    if (objects.length > (version===39?512:version>=37?384:128)) reject("LIMIT_EXCEEDED");
+      "length(CAST(sql AS BLOB)) AS sql_bytes,substr(sql,1,65537) AS sql,rootpage FROM main.sqlite_schema LIMIT "+(version===40?769:version>=39?513:version>=37?385:129));
+    if (objects.length > (version===40?768:version>=39?512:version>=37?384:128)) reject("LIMIT_EXCEEDED");
     const pageCount = (await reader.get("SELECT page_count FROM pragma_page_count"))?.page_count;
     if (typeof pageCount !== "bigint" || pageCount < BigInt(1)) reject("METADATA_MISMATCH");
     const seen = new Set<string>(), rootPages = new Set<bigint>();
@@ -97,8 +100,8 @@ export async function validateReviewedSchema(reader: ReadScope, version: Reviewe
 
     const tables = [...expected].filter(([, d]) => d.type === "table").map(([name]) => name);
     for (const name of Object.keys(STATISTICS_DEFINITIONS)) if (seen.has(name)) tables.push(name);
-    const tableMetadata = await reader.all("SELECT name,type,wr,strict FROM pragma_table_list WHERE schema='main' LIMIT 49");
-    if (tableMetadata.length !== tables.length + 1 || tableMetadata.length > 48) reject("METADATA_MISMATCH");
+    const tableMetadata = await reader.all("SELECT name,type,wr,strict FROM pragma_table_list WHERE schema='main' LIMIT "+(version===40?81:49));
+    if (tableMetadata.length !== tables.length + 1 || tableMetadata.length > (version===40?80:48)) reject("METADATA_MISMATCH");
     for (const table of [...tables, "sqlite_schema"]) {
       const rows = tableMetadata.filter(r => r.name === table);
       const internal = table === "sqlite_schema" || Object.hasOwn(STATISTICS_DEFINITIONS, table);
@@ -125,7 +128,7 @@ export async function validateReviewedSchema(reader: ReadScope, version: Reviewe
     if (history.length !== reviewed.length || history.some((r, i) => r.version !== reviewed[i].version ||
       r.name !== reviewed[i].name || r.checksum !== reviewed[i].checksum ||
       typeof r.applied_at !== "bigint" || r.applied_at <= BigInt(0) || r.applied_at > BigInt("9223372036854775807"))) reject("HISTORY_MISMATCH");
-    if (version === 35 || version >= 36) for (const table of [...immutableInventoryTables,...(version>=36?SALES_TABLES:[]),...(version>=37?RETURN_TABLES:[]),...(version>=38?EXPENSE_TABLES:[]),...(version===39?INVOICE_TABLES:[])]) {
+    if (version === 35 || version >= 36) for (const table of [...immutableInventoryTables,...(version>=36?SALES_TABLES:[]),...(version>=37?RETURN_TABLES:[]),...(version>=38?EXPENSE_TABLES:[]),...(version>=39?INVOICE_TABLES:[]),...(version===40?CASH_TABLES:[])]) {
       if (await reader.get("SELECT rowid FROM " + table + " WHERE rowid<=0 LIMIT 1")) reject("METADATA_MISMATCH");
     }
     if ((await reader.get("SELECT schema_version FROM pragma_schema_version"))?.schema_version !== generation ||

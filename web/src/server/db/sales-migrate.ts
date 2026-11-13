@@ -1,3 +1,5 @@
+import {CASH_AUTO,CASH_INDEXES,CASH_TABLES} from "./cash-manifest";
+import {cashObjects} from "./cash-program";
 import {INVOICE_AUTO,INVOICE_INDEXES,INVOICE_TABLES,invoicesObjects} from "./invoices-program";
 import "server-only";
 import {EXPENSE_AUTO,EXPENSE_INDEXES,EXPENSE_TABLES,expensesObjects} from "./expenses-program";
@@ -8,7 +10,7 @@ import { SALES_AUTO,SALES_INDEXES,salesObjects,SALES_TABLES } from "./sales-prog
 import { schemaTokens } from "./schema-sql";
 import { storedTriggerSql } from "./inventory-trigger-policy";
 import { DatabaseFoundationError } from "./errors";
-export function assertSalesSchemaSnapshot(tx:SqlTransaction,version:35|36|37|38|39){
+export function assertSalesSchemaSnapshot(tx:SqlTransaction,version:35|36|37|38|39|40){
  const databases=tx.all("SELECT name FROM pragma_database_list LIMIT 4");if(databases.length>2||databases.some(r=>r.name!=="main"&&r.name!=="temp")||(databases.some(r=>r.name==="temp")&&tx.all("SELECT name FROM temp.sqlite_schema LIMIT 1").length))throw Error("Ambiguous schema scope.");
  const history=reviewedMigrations().slice(0,version),objects=new Map<string,{type:string;table:string;sql:string|null}>();
  objects.set("schema_migrations",{type:"table",table:"schema_migrations",sql:HISTORY_DEFINITION});
@@ -16,13 +18,14 @@ export function assertSalesSchemaSnapshot(tx:SqlTransaction,version:35|36|37|38|
  if(version>=36)for(const [n,v]of salesObjects())objects.set(n,v);
  if(version>=37)for(const [n,v]of returnsObjects())objects.set(n,v);
  if(version>=38)for(const[n,v]of expensesObjects())objects.set(n,v);
- if(version===39)for(const[n,v]of invoicesObjects())objects.set(n,v);
- const auto:Record<string,readonly(readonly string[])[]>={...AUTO_INDEXES,...(version>=36?SALES_AUTO:{}),...(version>=37?RETURN_AUTO:{}),...(version>=38?EXPENSE_AUTO:{}),...(version===39?INVOICE_AUTO:{})};
- const explicit:Record<string,{table:string;columns:readonly string[];unique:bigint;partial:bigint}>={...EXPLICIT_INDEXES,...(version>=36?SALES_INDEXES:{}),...(version>=37?RETURN_INDEXES:{}),...(version>=38?EXPENSE_INDEXES:{}),...(version===39?INVOICE_INDEXES:{})};
+ if(version>=39)for(const[n,v]of invoicesObjects())objects.set(n,v);
+ if(version===40)for(const[n,v]of cashObjects())objects.set(n,v);
+ const auto:Record<string,readonly(readonly string[])[]>={...AUTO_INDEXES,...(version>=36?SALES_AUTO:{}),...(version>=37?RETURN_AUTO:{}),...(version>=38?EXPENSE_AUTO:{}),...(version>=39?INVOICE_AUTO:{}),...(version===40?CASH_AUTO:{})};
+ const explicit:Record<string,{table:string;columns:readonly string[];unique:bigint;partial:bigint}>={...EXPLICIT_INDEXES,...(version>=36?SALES_INDEXES:{}),...(version>=37?RETURN_INDEXES:{}),...(version>=38?EXPENSE_INDEXES:{}),...(version>=39?INVOICE_INDEXES:{}),...(version===40?CASH_INDEXES:{})};
  const indices=new Map<string,{table:string;columns:readonly string[];origin:string;unique:bigint;partial:bigint}>();
  for(const[n,v]of Object.entries(explicit))if(objects.has(n))indices.set(n,{...v,origin:"c"});
  for(const [table,defs]of Object.entries(auto))if(objects.has(table))defs.forEach(([origin,...cols],i)=>{const n="sqlite_autoindex_"+table+"_"+(i+1);objects.set(n,{type:"index",table,sql:null});indices.set(n,{table,columns:cols,origin,unique:BigInt(1),partial:BigInt(0)});});
- const actual=tx.all("SELECT type,name,tbl_name,sql FROM main.sqlite_schema LIMIT "+(version===39?513:version>=37?385:129));if(actual.length>(version===39?512:version>=37?384:128))throw Error();
+ const actual=tx.all("SELECT type,name,tbl_name,sql FROM main.sqlite_schema LIMIT "+(version===40?769:version>=39?513:version>=37?385:129));if(actual.length>(version===40?768:version>=39?512:version>=37?384:128))throw Error();
  const seen=new Set<string>();
  for(const r of actual){
   const n=String(r.name);let e=objects.get(n);
@@ -39,7 +42,7 @@ export function assertSalesSchemaSnapshot(tx:SqlTransaction,version:35|36|37|38|
  }
  const rows=tx.all("SELECT version,name,checksum,applied_at FROM schema_migrations ORDER BY version LIMIT 40");
  if(rows.length!==history.length||rows.some((r,i)=>r.version!==history[i].version||r.name!==history[i].name||r.checksum!==history[i].checksum||typeof r.applied_at!=="bigint"||r.applied_at<=BigInt(0))||tx.get("SELECT user_version FROM pragma_user_version")?.user_version!==BigInt(version))throw Error();
- for(const table of ["inventory_operations","stock_movements","product_events","inventory_cancellations",...(version>=36?SALES_TABLES:[]),...(version>=37?RETURN_TABLES:[]),...(version>=38?EXPENSE_TABLES:[]),...(version===39?INVOICE_TABLES:[])])if(tx.get("SELECT rowid FROM "+table+" WHERE rowid<=0 LIMIT 1"))throw Error();
+ for(const table of ["inventory_operations","stock_movements","product_events","inventory_cancellations",...(version>=36?SALES_TABLES:[]),...(version>=37?RETURN_TABLES:[]),...(version>=38?EXPENSE_TABLES:[]),...(version>=39?INVOICE_TABLES:[]),...(version===40?CASH_TABLES:[])])if(tx.get("SELECT rowid FROM "+table+" WHERE rowid<=0 LIMIT 1"))throw Error();
  if(tx.get("SELECT p.id FROM products p LEFT JOIN stock_balances b ON b.product_id=p.id WHERE b.product_id IS NULL OR b.cost_m<>p.current_cost_m OR b.sellable_q<>(SELECT coalesce(sum(delta_q),0) FROM stock_movements WHERE product_id=p.id) OR EXISTS(SELECT 1 FROM (SELECT before_q,lag(after_q,1,0) OVER(ORDER BY balance_version) AS previous FROM stock_movements WHERE product_id=p.id) WHERE before_q<>previous) OR NOT EXISTS(SELECT 1 FROM inventory_operations o WHERE o.id=b.opening_operation_id AND o.product_id=p.id AND o.kind='CREATE') LIMIT 1"))throw Error("Inventory conservation unavailable.");
  if(tx.all("SELECT * FROM pragma_foreign_key_check").length||tx.get("SELECT * FROM pragma_integrity_check")?.integrity_check!=="ok")throw Error();
 }

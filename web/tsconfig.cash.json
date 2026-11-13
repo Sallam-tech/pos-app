@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.reports.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "src/server/**/*.ts",
+    "src/lib/cash/**/*.ts",
+    "src/components/admin/test-cash*.tsx",
+    "src/components/pos/test-*.tsx",
+    "src/app/admin/daily-closing/page.tsx",
+    "tests/integration/cash*.test.ts",
+    "tests/helpers/cash*.ts",
+    "vitest.cash.config.mts"
+  ]
+}

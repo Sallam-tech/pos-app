@@ -1,3 +1,4 @@
+import {createCashDispatcher,isCashApiPath} from "./cash-http";
 import {createInvoicesDispatcher,isInvoicesApiPath} from "./invoices-http";
 import "server-only";
 import {createReportsDispatcher,isReportsApiPath} from "./reports-http";
@@ -27,6 +28,7 @@ export interface LocalRuntimeConfiguration {
   readonly testExpenses?:true;
   readonly testInvoiceCorrections?:true;
   readonly testReports?:true;
+  readonly testCash?:true;
   readonly testSales?:Readonly<{shopName:string}>;
 }
 export interface LocalRuntime {
@@ -87,7 +89,8 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     if(input.testExpenses!==undefined&&(input.testExpenses!==true||!testAuthentication||!input.testReturns))return reject();
     if(input.testInvoiceCorrections!==undefined&&(input.testInvoiceCorrections!==true||!testAuthentication||!input.testExpenses))return reject();
     if(input.testReports!==undefined&&(input.testReports!==true||!testAuthentication||!input.testInvoiceCorrections))return reject();
-    const schema=input.testInvoiceCorrections?39:input.testExpenses?38:input.testReturns?37:salesShop?36:35;
+    if(input.testCash!==undefined&&(input.testCash!==true||!testAuthentication||!input.testReports))return reject();
+    const schema=input.testCash?40:input.testInvoiceCorrections?39:input.testExpenses?38:input.testReturns?37:salesShop?36:35;
     const conf = applicationConfig(input.applicationDirectory);
     ownership = await acquireRuntimeOwnership(location.filename);
     const liveGuard = ownership;
@@ -99,7 +102,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
       await authentication(request, response, context);
     } : undefined, testAuthentication ? async (request, response, context) => {
       liveGuard.assertHeld();
-      if(reports&&request.url&&isReportsApiPath(request.url))await reports(request,response,context);else if(invoices&&request.url&&isInvoicesApiPath(request.url))await invoices(request,response,context);else if(expenses&&request.url&&isExpensesApiPath(request.url))await expenses(request,response,context);else if(returns&&request.url&&isReturnsApiPath(request.url))await returns(request,response,context);else if(sales&&request.url&&isSalesApiPath(request.url))await sales(request,response,context);else await inventory(request, response, context);
+      if(cash&&request.url&&isCashApiPath(request.url))await cash(request,response,context);else if(reports&&request.url&&isReportsApiPath(request.url))await reports(request,response,context);else if(invoices&&request.url&&isInvoicesApiPath(request.url))await invoices(request,response,context);else if(expenses&&request.url&&isExpensesApiPath(request.url))await expenses(request,response,context);else if(returns&&request.url&&isReturnsApiPath(request.url))await returns(request,response,context);else if(sales&&request.url&&isSalesApiPath(request.url))await sales(request,response,context);else await inventory(request, response, context);
     } : undefined, testAuthentication ? async (request, response, context) => {
       liveGuard.assertHeld();
       await pages(request, response, context);
@@ -107,11 +110,12 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     gateway = await openAuthorizationGateway(config, testAuthentication ? schema : undefined); // SAME existing single native owner.
     const authentication = createAuthenticationDispatcher(gateway);
     const inventory = createInventoryDispatcher(gateway,schema);
-    const sales=salesShop?createSalesDispatcher(gateway,salesShop,schema===39?39:schema===38?38:schema===37?37:36):undefined;
-    const returns=input.testReturns?createReturnsDispatcher(gateway,schema===39?39:schema===38?38:37):undefined;
-    const expenses=input.testExpenses?createExpensesDispatcher(gateway,schema===39?39:38):undefined;
-    const invoices=input.testInvoiceCorrections?createInvoicesDispatcher(gateway):undefined;
-    const reports=input.testReports?createReportsDispatcher(gateway):undefined;
+    const sales=salesShop?createSalesDispatcher(gateway,salesShop,schema===40?40:schema===39?39:schema===38?38:schema===37?37:36):undefined;
+    const returns=input.testReturns?createReturnsDispatcher(gateway,schema===40?40:schema===39?39:schema===38?38:37):undefined;
+    const expenses=input.testExpenses?createExpensesDispatcher(gateway,schema===40?40:schema===39?39:38):undefined;
+    const invoices=input.testInvoiceCorrections?createInvoicesDispatcher(gateway,schema===40?40:39):undefined;
+    const cash=input.testCash?createCashDispatcher(gateway,salesShop):undefined;
+    const reports=input.testReports?createReportsDispatcher(gateway,schema===40?40:39):undefined;
     app = next({ dir: input.applicationDirectory, dev: false, quiet: true,
       hostname: "localhost", port, httpServer: host.server, conf });
     // Next16 custom-server prepare installs a process error listener which its
@@ -122,7 +126,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
       ownedErrorListeners = process.listeners("uncaughtException").filter(listener => !beforeListeners.has(listener));
     }
     const handler = app.getRequestHandler();
-    const pages = createInventoryPageDispatcher(gateway, async (request, response) => { await handler(request, response); },schema,!!salesShop,!!input.testReturns,!!input.testExpenses,!!input.testInvoiceCorrections,!!input.testReports);
+    const pages = createInventoryPageDispatcher(gateway, async (request, response) => { await handler(request, response); },schema,!!salesShop,!!input.testReturns,!!input.testExpenses,!!input.testInvoiceCorrections,!!input.testReports,!!input.testCash);
     liveGuard.assertHeld();
     await host.listen(); // Nothing accepts HTTP until every startup check succeeded.
     let closePromise: Promise<void> | undefined;
