@@ -151,6 +151,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
   const local = new AsyncLocalStorage<boolean>();
   const boot = randomUUID(); // Non-secret, non-credential process generation.
   let protectedWriter = false;
+  let admissionFacts: ReturnType<typeof assertProtectedWriterAdmission> | undefined;
   const admission = (full = true) => { if (protectedWriter) try { assertProtectedWriterAdmission(config.protectedAdmission, config.database, config.signingSecrets, full); } catch { deny(); } };
   const available = () => { if (closed) deny(); admission(false); };
   const track = <T>(operation: Promise<T>) => {
@@ -192,14 +193,20 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
     owner = openAsyncOwner(config);
     const owned = owner;
     const marker = owned.get("SELECT user_version FROM pragma_user_version")?.user_version;
-    protectedWriter = typeof marker === "bigint" && marker >= BigInt(35) && !!owned.get("SELECT 1 AS present FROM auth_enrollment_binding LIMIT 1");
-    if (protectedWriter && requiredSchema !== 41) return deny();
+    protectedWriter = !!owned.get("SELECT 1 AS present FROM auth_enrollment_binding LIMIT 1");
+    if (protectedWriter) {
+      let facts; try { facts = assertProtectedWriterAdmission(config.protectedAdmission, config.database, config.signingSecrets, true); } catch { return deny(); }
+      admissionFacts = facts;
+      if (facts.restored && !config.protectedHistory) return deny();
+      if (BigInt(facts.schema) !== marker || (facts.schema === 41 ? requiredSchema !== 41 : requiredSchema !== undefined)) return deny();
+    } else if (config.protectedAdmission !== undefined) return deny();
     admission(); // An enrolled candidate cannot opt in through generic TEST flags.
     const requireSchema = async () => {
       admission();
-      if (requiredSchema !== undefined && !(await validateReviewedSchema({
+      const schema = protectedWriter && marker === BigInt(8) ? 8 : requiredSchema;
+      if (schema !== undefined && !(await validateReviewedSchema({
         get: async (sql, values) => owned.get(sql, values), all: async (sql, values) => owned.all(sql, values),
-      }, requiredSchema)).ok) return deny();
+      }, schema)).ok) return deny();
     };
     // Startup is private and precedes session portals or request admission. Same
     // native handle, one consistent transaction, no manufactured Admin session.
@@ -682,7 +689,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
       }
       return closePromise;
     };
-    const sourceConfiguration = Object.freeze({ database: Object.freeze({ ...config.database, create: false }), migrationsDirectory: config.migrationsDirectory, restoreProof: config.restoreProof });
+    const sourceConfiguration = Object.freeze({ database: Object.freeze({ ...config.database, create: false }), migrationsDirectory: config.migrationsDirectory, restoreProof: config.restoreProof, protectedHistory: config.protectedHistory, protectedAdmission: config.protectedAdmission });
     const maintenance: MaintenanceHook = async <T>(value: unknown, runtime: unknown, input: AdminMaintenanceOperation, work: (source: AdminMaintenanceSource, lease: BootstrapLease) => Promise<T>): Promise<T> => {
       let saved: ReceiptState, operation: AdminMaintenanceOperation;
       try {
@@ -753,6 +760,15 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
       withSalespersonTransaction: <T>(request: Request, work: (tx: AuthorizedTransaction, actor: Actor) => Promise<T>) => execute("SALESPERSON", request, work),
       close: () => closeGateway(),
     });
+    if (admissionFacts?.maintenanceOnly) {
+      const recovery = Object.freeze({ ...deniedGateway(), verifyAdminPassword: gateway.verifyAdminPassword, close: gateway.close });
+      maintenanceGateways.set(recovery, maintenance); return recovery;
+    }
+    if (admissionFacts?.generation === "READBACK_ONLY") {
+      return Object.freeze({ ...deniedGateway(), verifyAdminPassword: gateway.verifyAdminPassword, verifySalespersonPassword: gateway.verifySalespersonPassword,
+        issueAdminSession: gateway.issueAdminSession, issueSalespersonSession: gateway.issueSalespersonSession, authorizeAdmin: gateway.authorizeAdmin,
+        authorizeSalesperson: gateway.authorizeSalesperson, logoutAdmin: gateway.logoutAdmin, logoutSalesperson: gateway.logoutSalesperson, close: gateway.close });
+    }
     maintenanceGateways.set(gateway, maintenance);
     return gateway;
   } catch {

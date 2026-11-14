@@ -16,6 +16,11 @@ const state = globalThis as typeof globalThis & { [key: symbol]: boolean | undef
 // namespace rejects a second runtime EVEN with another DB or HTTPS port. It is
 // machine-wide (deliberately stricter than per-Windows-user). Collisions deny.
 const leases=new WeakSet<object>();
+const pins=new WeakMap<object,number>();
+export function pinRuntimeOwnership(lease:unknown):()=>void {
+ assertRuntimeOwnership(lease);const owned=lease as object;pins.set(owned,(pins.get(owned)??0)+1);let released=false;
+ return ()=>{if(released)return reject();assertRuntimeOwnership(owned);const n=pins.get(owned);if(!n)return reject();released=true;if(n===1)pins.delete(owned);else pins.set(owned,n-1);};
+}
 export function assertRuntimeOwnership(lease:unknown){if(!lease||typeof lease!=="object"||!leases.has(lease))return reject();(lease as {assertHeld():void}).assertHeld();}
 export async function acquireRuntimeOwnership(filename: string): Promise<{ assertHeld(): void; close(): Promise<void> }> {
   try {
@@ -44,6 +49,7 @@ export async function acquireRuntimeOwnership(filename: string): Promise<{ asser
   const lease = Object.freeze({
     assertHeld() { if (broken || !server.listening || !state[marker]) return reject(); },
     close() {
+      if(pins.get(lease))return Promise.reject(new LocalRuntimeRejected());
       closing ??= new Promise<void>((resolve, fail) => server.close(error => {
         if (error || broken) { fail(new LocalRuntimeRejected()); return; }
         delete state[marker]; resolve();

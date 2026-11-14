@@ -1,4 +1,6 @@
 import "server-only";
+import { assertProtectedWriterAdmission, type ProtectedWriterAdmission } from "../bootstrap/writer-admission";
+import { protectedRestoredHistory, type ProtectedRestoredHistory } from "./protected-history";
 import { createHash } from "node:crypto";
 import { lstatSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -31,7 +33,7 @@ const authorities=new WeakMap<object,{gateway:AuthorizationGateway;request:Reque
 const fileIdentity=(filename:string):Identity=>{const s=lstatSync(filename,{bigint:true});if(!s.isFile()||s.isSymbolicLink()||s.nlink!==BigInt(1))return fail();return {filename:path.resolve(filename).toLowerCase(),device:String(s.dev),inode:String(s.ino)};};
 const same=(a:unknown,b:unknown)=>canonical(a)===canonical(b);
 export function testSourceNamespace(filename:string){const i=fileIdentity(filename);return createHash("sha256").update(JSON.stringify(["pos-test-inventory-file-v1",i.filename,i.device,i.inode])).digest("hex");}
-function history(value:unknown):HistoricalSettings {
+export function validateHistoricalSettings(value:unknown):HistoricalSettings {
  if(!value||typeof value!=="object"||Array.isArray(value))return fail();
  const h=value as HistoricalSettings;
  if(Object.keys(h).sort().join(",")!=="context,namespace,tables"||!/^([a-f0-9]{64})$/.test(h.context)||!/^([a-f0-9]{64})$/.test(h.namespace)||!Array.isArray(h.tables)||h.tables.length!==5)return fail();
@@ -60,9 +62,9 @@ async function settingsOrigin(db:ProofDatabase,namespace:string):Promise<Histori
  const p=db.prepare("SELECT completed_at_ms FROM auth_provisioning WHERE id=1").get(),m=db.prepare("SELECT checksum FROM schema_migrations WHERE version=41").get();
  if(!p||!m)return fail();
  const tables=SETTINGS_HISTORY_TABLES.map(name=>fingerprintTable(db,name));
- return history({namespace,context:digest(["settings41-v1",namespace,String(p.completed_at_ms),m.checksum]),tables});
+ return validateHistoricalSettings({namespace,context:digest(["settings41-v1",namespace,String(p.completed_at_ms),m.checksum]),tables});
 }
-async function verifySnapshot(db:ProofDatabase,namespace:string,prior:readonly HistoricalSettings[]){
+export async function verifyProtectedSnapshotContents(db:ProofDatabase,namespace:string,prior:readonly HistoricalSettings[]){
  await verifySchema41(db);const tx=scope(db);await verifyHistoricalPrefixes(tx,prior);
  const origin=await settingsOrigin(db,namespace);
  await assertStoredSettingsLedgers(tx,origin.context,prior);
@@ -91,29 +93,36 @@ async function cleanupStaging(directory:string,names:readonly string[]){
   if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1)return fail();await unlink(filename);
  }
 }
-export async function createTestArchive(custody:BackupCustody,database:DatabaseOptions,directory:string,priorProof?:VerifiedTestRestore,signal?:AbortSignal,archiveId?:string){
- if(database.mode!=="test")return fail();testDirectory(directory);
+async function createArchive(custody:BackupCustody,database:DatabaseOptions,directory:string,prior:readonly HistoricalSettings[],guard:()=>void,signal?:AbortSignal,archiveId?:string){
+ guard();if(database.mode!=="test")return fail();testDirectory(directory);
  await storage(directory,"initialize");
  try{
  const source=resolveDatabaseLocation({...database,create:false}).filename,identity=fileIdentity(source),namespace=testSourceNamespace(source);
- const prior=restoredHistory(priorProof,database);
  const raw=openProofDatabase(source),snapshot=path.join(directory,"snapshot.sqlite3");
  try{raw.exec("BEGIN");const pages=raw.prepare("SELECT page_count*page_size AS bytes FROM pragma_page_count,pragma_page_size").get()?.bytes;
  if(typeof pages!=="bigint"||pages<=BigInt(0)||pages>BigInt(1024*1024*1024))return fail();
  const available=await storage(directory,"space");if(typeof available!=="string"||BigInt(available)<pages*BigInt(4)+BigInt(16*1024*1024))return fail();
- await raw.backup(snapshot,{progress:()=>{if(signal?.aborted)return fail();return 64;}});if(!same(identity,fileIdentity(source)))return fail();raw.exec("ROLLBACK");}finally{raw.close();}
- const copied=openProofDatabase(snapshot);let facts:Awaited<ReturnType<typeof verifySnapshot>>;
- try{copied.exec("BEGIN");facts=await verifySnapshot(copied,namespace,prior);copied.exec("ROLLBACK");}finally{copied.close();}
+ await raw.backup(snapshot,{progress:()=>{guard();if(signal?.aborted)return fail();return 64;}});if(!same(identity,fileIdentity(source)))return fail();raw.exec("ROLLBACK");}finally{raw.close();}
+ const copied=openProofDatabase(snapshot);let facts:Awaited<ReturnType<typeof verifyProtectedSnapshotContents>>;
+ try{copied.exec("BEGIN");facts=await verifyProtectedSnapshotContents(copied,namespace,prior);copied.exec("ROLLBACK");}finally{copied.close();}
  const free=await storage(directory,"space");if(typeof free!=="string"||BigInt(free)<lstatSync(snapshot,{bigint:true}).size*BigInt(4)+BigInt(16*1024*1024))return fail();
  const pending=path.join(directory,"archive.pending");
  const manifest=await encryptSnapshot(custody,snapshot,pending,namespace,facts.fingerprint,signal,[...prior],archiveId);
  const verification=path.join(directory,"verification.sqlite3"),decoded=await decryptSnapshot(custody,pending,verification,signal);
  if(!same(decoded,manifest))return fail();
- const check=openProofDatabase(verification);try{check.exec("BEGIN");const result=await verifySnapshot(check,namespace,prior);if(!same(result.fingerprint,manifest.fingerprint))return fail();check.exec("ROLLBACK");}finally{check.close();}
- const name=manifest.archiveId+".age";await storage(directory,"publish",{source:"archive.pending",target:name});
+ const check=openProofDatabase(verification);try{check.exec("BEGIN");const result=await verifyProtectedSnapshotContents(check,namespace,prior);if(!same(result.fingerprint,manifest.fingerprint))return fail();check.exec("ROLLBACK");}finally{check.close();}
+ guard();const name=manifest.archiveId+".age";await storage(directory,"publish",{source:"archive.pending",target:name});
+ guard();
  // SNAPSHOT_VERIFIED is deliberately distinct from app/independent restore PASS.
  return Object.freeze({archive:path.join(directory,name),manifest,state:"SNAPSHOT_VERIFIED_APP_RESTORE_PENDING" as const,keyId:custodyMetadata(custody).id});
  }finally{await cleanupStaging(directory,["snapshot.sqlite3","snapshot.sqlite3-wal","snapshot.sqlite3-shm","snapshot.sqlite3-journal","verification.sqlite3","verification.sqlite3-wal","verification.sqlite3-shm","verification.sqlite3-journal"]);}
+}
+export function createTestArchive(custody:BackupCustody,database:DatabaseOptions,directory:string,priorProof?:VerifiedTestRestore,signal?:AbortSignal,archiveId?:string){
+ return createArchive(custody,database,directory,restoredHistory(priorProof,database),()=>{},signal,archiveId);
+}
+export function createProtectedArchive41(custody:BackupCustody,database:DatabaseOptions,directory:string,admission:ProtectedWriterAdmission,history?:ProtectedRestoredHistory,signal?:AbortSignal,archiveId?:string){
+ const guard=()=>{const facts=assertProtectedWriterAdmission(admission,database,undefined,true);if(facts.schema!==41||facts.maintenanceOnly||facts.restored&&!history)return fail();};
+ guard();const prior=protectedRestoredHistory(history,database);return createArchive(custody,database,directory,prior,guard,signal,archiveId);
 }
 export async function restoreTestArchive(custody:BackupCustody,authority:TestRestoreAuthority,archive:string,directory:string,signal?:AbortSignal){
  const a=authorities.get(authority);authorities.delete(authority);
@@ -122,8 +131,8 @@ export async function restoreTestArchive(custody:BackupCustody,authority:TestRes
  await storage(directory,"initialize");
  try{
  const pending=path.join(directory,"restored.pending"),manifest=await decryptSnapshot(custody,archive,pending,signal,undefined,a.archiveHash);
- const prior=manifest.history.map(history),db=openProofDatabase(pending);let origin:HistoricalSettings;
- try{db.exec("BEGIN");const result=await verifySnapshot(db,manifest.sourceNamespace,prior);if(!same(result.fingerprint,manifest.fingerprint))return fail();origin=result.origin;db.exec("ROLLBACK");}finally{db.close();}
+ const prior=manifest.history.map(validateHistoricalSettings),db=openProofDatabase(pending);let origin:HistoricalSettings;
+ try{db.exec("BEGIN");const result=await verifyProtectedSnapshotContents(db,manifest.sourceNamespace,prior);if(!same(result.fingerprint,manifest.fingerprint))return fail();origin=result.origin;db.exec("ROLLBACK");}finally{db.close();}
  const histories=[...prior,origin];if(histories.length>16)return fail();
  if(signal?.aborted||a.expires<=performance.now())return fail();
  if((await a.gateway.authorizeAdmin(a.request)).role!=="ADMIN")return fail();
@@ -142,8 +151,8 @@ export async function reopenTestRestore(custody:BackupCustody,directory:string){
   if(!verifyProtectedEvidence(custody,record,envelope.signature)||record.format!=="POS_TEST_RESTORE_V1"||!record.state||!Array.isArray(record.state.history)||record.state.history.length>16)return fail();
   const database={directory,filename:"restored.sqlite3",mode:"test" as const,create:false},location=resolveDatabaseLocation(database);
   if(!same(record.state.identity,fileIdentity(location.filename)))return fail();
-  const histories=record.state.history.map(history),db=openProofDatabase(location.filename);
-  try{db.exec("BEGIN");await verifySnapshot(db,testSourceNamespace(location.filename),histories);db.exec("ROLLBACK");}finally{db.close();}
+  const histories=record.state.history.map(validateHistoricalSettings),db=openProofDatabase(location.filename);
+  try{db.exec("BEGIN");await verifyProtectedSnapshotContents(db,testSourceNamespace(location.filename),histories);db.exec("ROLLBACK");}finally{db.close();}
   return Object.freeze({database,proof:mint({...record.state,history:Object.freeze(histories)})});
  }catch{return fail();}finally{b.fill(0);}
 }
@@ -152,8 +161,8 @@ export async function inspectTestPortableArchive(custody:BackupCustody,archive:s
  testDirectory(directory);if(readdirSync(directory).length)return fail();await storage(directory,"initialize");
  const pending=path.join(directory,"restored.pending");
  try{
-  const bound=await hashFile(archive),manifest=await decryptSnapshot(custody,archive,pending,undefined,undefined,bound.sha256),prior=manifest.history.map(history),db=openProofDatabase(pending);
-  try{db.exec("BEGIN");const result=await verifySnapshot(db,manifest.sourceNamespace,prior);if(!same(result.fingerprint,manifest.fingerprint))return fail();db.exec("ROLLBACK");
+  const bound=await hashFile(archive),manifest=await decryptSnapshot(custody,archive,pending,undefined,undefined,bound.sha256),prior=manifest.history.map(validateHistoricalSettings),db=openProofDatabase(pending);
+  try{db.exec("BEGIN");const result=await verifyProtectedSnapshotContents(db,manifest.sourceNamespace,prior);if(!same(result.fingerprint,manifest.fingerprint))return fail();db.exec("ROLLBACK");
    return Object.freeze({state:"READ_ONLY_PORTABLE_TEST_VERIFIED" as const,schema:41,archiveId:manifest.archiveId,archiveSha256:bound.sha256,archiveBytes:bound.bytes,snapshotSha256:manifest.databaseSha256,fingerprint:result.fingerprint,productionActivation:false as const});
   }finally{db.close();}
  }finally{await cleanupStaging(directory,["restored.pending","restored.pending-wal","restored.pending-shm","restored.pending-journal"]);}

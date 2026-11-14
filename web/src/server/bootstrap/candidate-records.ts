@@ -103,6 +103,16 @@ export function classifyCandidateLedger(facts: CandidateLedgerFacts) {
   return Object.freeze({ status: unresolved ? "RECOVERY_REVIEW_REQUIRED" as const : current ? "RECORDED_CURRENT" as const : facts.records.length ? "QUARANTINED_ONLY" as const : facts.pending.length ? "RECOVERY_REVIEW_REQUIRED" as const : "ABSENT" as const,
     recordedCurrent: current ?? null, quarantinedOperations: Object.freeze([...operations].filter(([, s]) => s.status === "QUARANTINED_NO_ADMISSION").map(([id]) => id)) });
 }
+// Retain every orphan. Native terminal CURRENT/quarantine fences its helper;
+// an authenticated COMMITTED may be deliberately finalized for that same op.
+// Unbound or INTENT-only pending files never permit ordinary admission.
+export function candidatePendingCompatible(facts: CandidateLedgerFacts, completingOperation?: string): boolean {
+  classifyCandidateLedger(facts);
+  return facts.pending.every(p => { const match = pendingName.exec(p.name); if (!match) return false;
+    const last = facts.records.filter(r => r.operationId === match[1]).at(-1);
+    return last?.kind === "QUARANTINED_NO_ADMISSION" || last?.kind === "CURRENT" || (last?.kind === "COMMITTED" && last.operationId === completingOperation);
+  });
+}
 function entries(directory: string): string[] {
   const handle = opendirSync(directory), names: string[] = [];
   try { for (let item = handle.readSync(); item; item = handle.readSync()) { if (names.length >= 96 || !item.isFile() || (!publishedName.test(item.name) && !pendingName.test(item.name))) return rejectBootstrap(); names.push(item.name); } } finally { handle.closeSync(); }

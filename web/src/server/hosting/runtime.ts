@@ -1,5 +1,7 @@
+import { createProtectedRestoredHistory } from "../backup/protected-history";
+import { assertProtectedWriterAdmission } from "../bootstrap/writer-admission";
 import { assertPatchedLocalRuntime } from "./runtime-policy";
-import {startTestBackupWorker,type TestBackupConfiguration,type TestBackupWorker} from "../backup/worker";
+import {rebindProtectedBackupAdmission,startTestBackupWorker,type TestBackupConfiguration,type TestBackupWorker} from "../backup/worker";
 import {createBackupDispatcher,isBackupApiPath} from "./backup-http";
 import {createSettingsDispatcher,isSettingsApiPath} from "./settings-http";
 import {createCashDispatcher,isCashApiPath} from "./cash-http";
@@ -15,6 +17,10 @@ import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import next from "next";
 import type { AuthorizationConfiguration, AuthorizationGateway } from "../auth/types";
+import { createProtectedRootWriterAdmission, createSelectedWriterAdmission } from "../bootstrap/writer-admission";
+import { withProtectedLocalKeys, type LocalKeyConfiguration } from "../bootstrap/keys";
+import { withAdminMaintenanceSource, type AdminMaintenanceOperation, type AdminMaintenanceSource } from "../auth/gateway";
+import { assertNoAuthorizationOwner, type BootstrapLease } from "../bootstrap/ownership";
 import { openAuthorizationGateway } from "../auth/gateway";
 import { confinedTestAuthentication, createAuthenticationDispatcher } from "./auth-http";
 import { createInventoryPageDispatcher } from "./inventory-pages";
@@ -24,6 +30,7 @@ import { acquireRuntimeOwnership, LocalRuntimeRejected } from "./ownership";
 import { createLocalHttpsHost, validateLocalOrigins, type LocalOrigins, type LocalTlsMaterial } from "./https";
 
 export interface LocalRuntimeConfiguration {
+  readonly protectedIdentity?: Readonly<{ root: LocalKeyConfiguration; selected?: LocalKeyConfiguration }>;
   readonly applicationDirectory: string;
   readonly port: number;
   readonly authorization: AuthorizationConfiguration;
@@ -43,6 +50,14 @@ export interface LocalRuntime {
   // True ONLY for validated isolated TEST storage; persistent deployments stay false.
   readonly authenticationEnabled: boolean;
   close(): Promise<void>;
+}
+type RuntimeMaintenance = <T>(password: unknown, operation: AdminMaintenanceOperation, work: (source: AdminMaintenanceSource, lease: BootstrapLease) => Promise<T>) => Promise<T>;
+const maintenanceRuntimes = new WeakMap<object, RuntimeMaintenance>();
+// Trusted local adapter only. No HTTP endpoint, serialized capability or new
+// account writer; the SAME lease remains held while transport and worker drain.
+export function withLocalRuntimeMaintenance<T>(runtime: LocalRuntime, password: unknown, operation: AdminMaintenanceOperation, work: (source: AdminMaintenanceSource, lease: BootstrapLease) => Promise<T>): Promise<T> {
+  const hook = maintenanceRuntimes.get(runtime); if (!hook) return Promise.reject(new LocalRuntimeRejected());
+  return hook(password, operation, work);
 }
 const reject = (): never => { throw new LocalRuntimeRejected(); };
 
@@ -88,6 +103,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
       signingSecrets: Object.freeze({ ...input.authorization.signingSecrets }),
       sessionLifetimeSeconds: input.authorization.sessionLifetimeSeconds,
       restoreProof: input.authorization.restoreProof,
+      protectedHistory: input.authorization.protectedHistory,
     };
     // Existing authoritative path validation, no creation/adoption/migration.
     const location = resolveDatabaseLocation(config.database);
@@ -105,6 +121,17 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     const conf = applicationConfig(input.applicationDirectory);
     ownership = await acquireRuntimeOwnership(location.filename);
     const liveGuard = ownership;
+    if (input.protectedIdentity) {
+      const identity = input.protectedIdentity, selected = identity.selected ?? identity.root;
+      if (Object.keys(identity).some(k => k !== "root" && k !== "selected") || schema !== 41 ||
+          resolveDatabaseLocation(selected.database).filename.toLowerCase() !== location.filename.toLowerCase()) return reject();
+      await withProtectedLocalKeys(selected, async keys => {
+        if (!input.tls.key.equals(keys.tls.key) || !input.tls.certificate.equals(keys.tls.certificate) || !input.tls.trustAnchor.equals(keys.tls.trustAnchor) ||
+            config.signingSecrets.ADMIN !== keys.signingSecrets.ADMIN || config.signingSecrets.SALESPERSON !== keys.signingSecrets.SALESPERSON) return reject();
+      });
+      config.protectedAdmission = identity.selected ? await createSelectedWriterAdmission(identity.root, identity.selected, liveGuard) : await createProtectedRootWriterAdmission(identity.root, liveGuard, 41);
+      if (assertProtectedWriterAdmission(config.protectedAdmission, config.database).restored) config.protectedHistory = createProtectedRestoredHistory(config.protectedAdmission, config.database);
+    }
     host = createLocalHttpsHost(port, origins, input.tls, async (request, response) => {
       liveGuard.assertHeld();
       await handler(request, response);
@@ -119,8 +146,9 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
       await pages(request, response, context);
     } : undefined);
     gateway = await openAuthorizationGateway(config, testAuthentication ? schema : undefined); // SAME existing single native owner.
-    if(input.testBackups)backupWorker=await startTestBackupWorker(input.testBackups,liveGuard,config.database);
-    const backups=input.testSettings?createBackupDispatcher(gateway,config.database,backupWorker,input.testBackups):undefined;
+    const backupConfiguration=input.testBackups&&config.protectedAdmission?rebindProtectedBackupAdmission(input.testBackups,config.protectedAdmission,config.protectedHistory):input.testBackups;
+    if(backupConfiguration)backupWorker=await startTestBackupWorker(backupConfiguration,liveGuard,config.database);
+    const backups=input.testSettings?createBackupDispatcher(gateway,config.database,backupWorker,backupConfiguration):undefined;
     const authentication = createAuthenticationDispatcher(gateway);
     const settings=input.testSettings?createSettingsDispatcher(gateway,salesShop!):undefined;
     const inventory = createInventoryDispatcher(gateway,schema);
@@ -145,9 +173,11 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     await host.listen(); // Nothing accepts HTTP until every startup check succeeded.
     let closePromise: Promise<void> | undefined;
     const liveHost = host, liveGateway = gateway, liveOwnership = ownership;
-    return Object.freeze({
+    let maintenanceStarted = false, finishingMaintenance = false;
+    const result = Object.freeze({
       address: Object.freeze({ address: "127.0.0.1" as const, port }), origins, authenticationEnabled: testAuthentication,
       close() {
+        if (maintenanceStarted && !finishingMaintenance) return Promise.reject(new LocalRuntimeRejected());
         closePromise ??= (async () => {
           // close() stops transport admission immediately, drains admitted HTTP,
           // then the gateway rejects/drains its own work, clears RAM and closes SQLite.
@@ -155,11 +185,21 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
           await backupWorker?.stop();
           await liveGateway.close();
           await closeApp();
-          await liveOwnership.close(); // Release cross-process guard LAST.
+          assertNoAuthorizationOwner(); await liveOwnership.close(); // Release cross-process guard LAST.
         })().catch(() => reject()); // Keep ownership on uncertain closure.
         return closePromise;
       },
     });
+    maintenanceRuntimes.set(result, async (password, operation, work) => {
+      if (maintenanceStarted || closePromise || typeof work !== "function") return reject();
+      maintenanceStarted = true;
+      try {
+        await liveHost.close(); await backupWorker?.stop(); await closeApp(); liveOwnership.assertHeld();
+        const proof = await liveGateway.verifyAdminPassword(password); password = undefined;
+        return await withAdminMaintenanceSource(liveGateway, proof, liveOwnership, operation, work);
+      } finally { finishingMaintenance = true; await result.close(); }
+    });
+    return result;
   } catch {
     // Partial startup: no ready listener, no returned gateway, no secret-bearing error.
     try {
@@ -167,7 +207,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
       await backupWorker?.stop();
       await gateway?.close();
       await closeApp();
-      await ownership?.close();
+      if(ownership)assertNoAuthorizationOwner(); await ownership?.close();
     } catch { return reject(); } // Never release an uncertain owner's fence early.
     return reject();
   }

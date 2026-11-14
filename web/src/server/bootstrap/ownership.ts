@@ -1,13 +1,14 @@
 import "server-only";
 
 import { lstatSync } from "node:fs";
-import { acquireRuntimeOwnership, assertRuntimeOwnership } from "../hosting/ownership";
+import { acquireRuntimeOwnership, assertRuntimeOwnership, pinRuntimeOwnership } from "../hosting/ownership";
 import { resolveDatabaseLocation, type DatabaseOptions } from "../db/location";
 import { rejectBootstrap } from "./windows";
 
 const ownerKey = Symbol.for("shop-pos.authorization.single-process-owner");
 const state = globalThis as typeof globalThis & { [key: symbol]: boolean | undefined };
 const leases = new WeakMap<object, { filename: string; device: bigint; inode: bigint; retain: () => void; assertHeld: () => void }>();
+export function assertNoAuthorizationOwner():void { if(state[ownerKey])return rejectBootstrap(); }
 export function retainBootstrapLease(lease: BootstrapLease): void { const owned = leases.get(lease); if (!owned) return rejectBootstrap(); owned.retain(); }
 export interface BootstrapLease { readonly __bootstrapLease: unique symbol }
 export function hasActiveBootstrapLease(lease: unknown, database: DatabaseOptions): lease is BootstrapLease {
@@ -63,6 +64,7 @@ export async function withHeldBootstrapOwnership<T>(database: DatabaseOptions, r
   assertRuntimeOwnership(runtime);
   const filename = resolveDatabaseLocation({ ...database, create: false }).filename;
   const identity = lstatSync(filename, { bigint: true });
+  const unpin = pinRuntimeOwnership(runtime);
   state[ownerKey] = true;
   let releasable = true;
   const lease = Object.freeze({}) as BootstrapLease;
@@ -79,6 +81,6 @@ export async function withHeldBootstrapOwnership<T>(database: DatabaseOptions, r
     // Retention is fail-closed; the caller must retain its runtime fence too.
     if (!releasable) return rejectBootstrap();
     assertRuntimeOwnership(runtime);
-    delete state[ownerKey];
+    delete state[ownerKey]; unpin();
   }
 }

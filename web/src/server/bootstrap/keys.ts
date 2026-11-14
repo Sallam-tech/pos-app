@@ -50,9 +50,10 @@ function storedFile(directory: string) {
   rejectRedirectedPath(directory);
   const entries = readdirSync(directory);
   if (realpathSync.native(directory).toLowerCase() !== path.resolve(directory).toLowerCase() ||
-      !entries.includes("identity.dpapi") || entries.some(name => name !== "identity.dpapi" && name !== "enrollment" && name !== "maintenance" && name !== "candidate-authority")) return rejectBootstrap();
+      !entries.includes("identity.dpapi") || entries.some(name => name !== "identity.dpapi" && name !== "enrollment" && name !== "maintenance" && name !== "candidate-authority" && name !== "restore41")) return rejectBootstrap();
   if (entries.includes("enrollment")) rejectRedirectedPath(path.join(directory, "enrollment"));
   if (entries.includes("maintenance")) rejectRedirectedPath(path.join(directory, "maintenance"));
+  if (entries.includes("restore41")) rejectRedirectedPath(path.join(directory, "restore41"));
   if (entries.includes("candidate-authority")) rejectRedirectedPath(path.join(directory, "candidate-authority"));
   const filename = path.join(directory, "identity.dpapi"), stat = lstatSync(filename, { bigint: true });
   if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== BigInt(1) || stat.size < BigInt(9) || stat.size > BigInt(131072)) return rejectBootstrap();
@@ -78,6 +79,7 @@ function tlsBuffers(value: StoredIdentity): LocalTlsMaterial {
   return { key: Buffer.from(value.tls.key), certificate: Buffer.from(value.tls.certificate), trustAnchor: Buffer.from(value.tls.trustAnchor) };
 }
 const clearTls = (tls: LocalTlsMaterial) => { tls.key.fill(0); tls.certificate.fill(0); tls.trustAnchor.fill(0); };
+function tlsPublicKeyDigest(certificate: string | Buffer): string { return createHash("sha256").update(new X509Certificate(certificate).publicKey.export({type:"spki",format:"der"})).digest("hex"); }
 function metadata(value: StoredIdentity): LocalIdentityMetadata {
   return Object.freeze({ installationId: value.installationId, deviceId: value.deviceId, createdAt: value.createdAt,
     certificateFingerprint: new X509Certificate(value.tls.certificate).fingerprint256, productionActivation: false });
@@ -121,7 +123,7 @@ export async function withProtectedLocalKeys(
   try {
     if (typeof consume !== "function") return rejectBootstrap();
     const location = locations(config), before = storedFile(location.directory);
-    const opened = await windowsProtection({ operation: "open", directory: location.directory });
+    const opened = await windowsProtection({ operation: "open", directory: location.directory, applicationDirectory: path.resolve(config.directory), databaseDirectory: path.dirname(location.binding.filename), databaseFilename: path.basename(location.binding.filename) });
     if (!exact(opened, ["sid", "payload"]) || typeof opened.payload !== "string" ||
         !/^[A-Za-z0-9+/]*={0,2}$/.test(opened.payload) || opened.payload.length > 90000) return rejectBootstrap();
     bytes = Buffer.from(opened.payload, "base64");
@@ -141,12 +143,13 @@ export async function withProtectedLocalKeys(
 }
 
 export async function inspectLocalVault(config: LocalKeyConfiguration) {
-  const location = locations(config), metadata = await withProtectedLocalKeys(config, async () => {});
+  let publicKey: string | undefined;
+  const location = locations(config), metadata = await withProtectedLocalKeys(config, async keys => { publicKey=tlsPublicKeyDigest(keys.tls.certificate); });
   const before = storedFile(location.directory), bytes = readFileSync(path.join(location.directory, "identity.dpapi"));
   try {
     const after = storedFile(location.directory);
     if (before.ino !== after.ino || before.size !== after.size || before.mtimeNs !== after.mtimeNs || before.ctimeNs !== after.ctimeNs) return rejectBootstrap();
-    return Object.freeze({ metadata, directory: location.directory,
+    return Object.freeze({ metadata, tlsPublicKeyDigest: publicKey ?? rejectBootstrap(), directory: location.directory,
       vaultDigest: createHash("sha256").update(bytes).digest("hex"),
       databaseFingerprint: createHash("sha256").update(JSON.stringify(location.binding)).digest("hex") });
   } finally { bytes.fill(0); }
@@ -155,13 +158,17 @@ export async function inspectLocalVault(config: LocalKeyConfiguration) {
 
 // Additive approved candidate path. The pristine enrollment path above retains
 // all its original checks; this path never rewrites accounts, latch or binding.
-export async function createCandidateProtectedLocalKeys(config: LocalKeyConfiguration, tls: LocalTlsMaterial,
-  candidate: import("./candidate-copy8").UnadmittedCandidateCopy8): Promise<LocalIdentityMetadata> {
+export async function createCandidateProtectedLocalKeys(config: LocalKeyConfiguration, tls: LocalTlsMaterial, candidate: import("./candidate-copy8").UnadmittedCandidateCopy8): Promise<LocalIdentityMetadata> {
+  const { candidate41KeyEvidence } = await import("./candidate-copy8"); return createDerivedLocalKeys(config, tls, () => candidate41KeyEvidence(candidate, config));
+}
+export async function createRestoredCandidateProtectedLocalKeys(config: LocalKeyConfiguration, tls: LocalTlsMaterial, candidate: import("./restore41").ProtectedRestoreCandidate41): Promise<LocalIdentityMetadata> {
+  const { restoredCandidate41KeyEvidence } = await import("./restore41"); return createDerivedLocalKeys(config, tls, () => restoredCandidate41KeyEvidence(candidate, config));
+}
+async function createDerivedLocalKeys(config: LocalKeyConfiguration, tls: LocalTlsMaterial, validateEvidence: () => Promise<Readonly<{ originalCertificateFingerprint: string; originalInstallationId: string; originalDeviceId: string; forbiddenTlsPublicKeyDigests: readonly string[] }>>): Promise<LocalIdentityMetadata> {
   try {
-    const { candidate41KeyEvidence } = await import("./candidate-copy8");
-    const evidence = await candidate41KeyEvidence(candidate, config), initial = locations(config);
+    const evidence = await validateEvidence(), initial = locations(config);
     assertLocalTlsMaterial(tls);
-    if (new X509Certificate(tls.certificate).fingerprint256 === evidence.originalCertificateFingerprint) return rejectBootstrap();
+    if (new X509Certificate(tls.certificate).fingerprint256 === evidence.originalCertificateFingerprint || !Array.isArray(evidence.forbiddenTlsPublicKeyDigests) || !evidence.forbiddenTlsPublicKeyDigests.length || evidence.forbiddenTlsPublicKeyDigests.length>64 || evidence.forbiddenTlsPublicKeyDigests.some(d=>! /^[a-f0-9]{64}$/.test(d)) || evidence.forbiddenTlsPublicKeyDigests.includes(tlsPublicKeyDigest(tls.certificate))) return rejectBootstrap();
     const sid = await windowsProtection({ operation: "context" });
     if (typeof sid !== "string" || sid === "S-1-5-18") return rejectBootstrap();
     const value: StoredIdentity = { format: "POS_LOCAL_KEYS_V1", installationId: randomUUID(), deviceId: randomUUID(), windowsSid: sid, createdAt: Date.now(),
@@ -174,7 +181,28 @@ export async function createCandidateProtectedLocalKeys(config: LocalKeyConfigur
     try { if (await windowsProtection({ operation: "seal", directory: initial.directory, payload: payload.toString("base64") }) !== true) return rejectBootstrap(); }
     finally { payload.fill(0); }
     const metadata = await withProtectedLocalKeys(config, async () => {});
-    await candidate41KeyEvidence(candidate, config);
+    await validateEvidence();
     return metadata;
   } catch { throw new BootstrapRejected(); }
+}
+
+
+// Historical custody inspection ONLY. An expired source TLS certificate may
+// authenticate its immutable archived identity but can never serve new HTTPS.
+// The normal live-key consumer above still enforces current TLS validity.
+export async function inspectHistoricalLocalVault(config: LocalKeyConfiguration) {
+  let plain: Buffer | undefined;
+  try {
+    const location = locations(config), before = storedFile(location.directory), cipher = readFileSync(path.join(location.directory, "identity.dpapi"));
+    try {
+      const opened = await windowsProtection({ operation: "open", directory: location.directory, applicationDirectory: path.resolve(config.directory), databaseDirectory: path.dirname(location.binding.filename), databaseFilename: path.basename(location.binding.filename) });
+      if (!exact(opened, ["sid", "payload"]) || typeof opened.payload !== "string" || opened.payload.length > 90000 || !/^[A-Za-z0-9+/]*={0,2}$/.test(opened.payload)) return rejectBootstrap();
+      plain = Buffer.from(opened.payload, "base64"); const value = validate(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(plain)), opened.sid, location.binding);
+      const after = storedFile(location.directory), reread = readFileSync(path.join(location.directory, "identity.dpapi"));
+      try {
+        if (before.dev !== after.dev || before.ino !== after.ino || before.size !== after.size || before.mtimeNs !== after.mtimeNs || before.ctimeNs !== after.ctimeNs || !cipher.equals(reread) || JSON.stringify(locations(config).binding) !== JSON.stringify(location.binding)) return rejectBootstrap();
+        return Object.freeze({ metadata: metadata(value), tlsPublicKeyDigest: tlsPublicKeyDigest(value.tls.certificate), directory: location.directory, vaultDigest: createHash("sha256").update(cipher).digest("hex"), databaseFingerprint: createHash("sha256").update(JSON.stringify(location.binding)).digest("hex") });
+      } finally { reread.fill(0); }
+    } finally { cipher.fill(0); }
+  } catch { return rejectBootstrap(); } finally { plain?.fill(0); }
 }

@@ -110,6 +110,20 @@ export async function encryptSnapshot(custody: BackupCustody, snapshot: string, 
     return Object.freeze(manifest);
   } catch { input.destroy(); return fail(); }
 }
+const decryptedSnapshots = new WeakMap<object, { custody: BackupCustody; archive: string; plaintext: string; device: string; inode: string; ciphertextSha256: string; canonicalManifest: string }>();
+// A decoder result is evidence only when the actual authenticated stream issued
+// it. Serializing/copying/mutating a manifest never reconstructs this authority.
+export async function verifiedDecryptedSnapshotEvidence(value: unknown, custody: BackupCustody, archive: string, plaintext: string) {
+  testDirectory(path.dirname(archive)); testDirectory(path.dirname(plaintext));
+  const v = value && typeof value === "object" ? decryptedSnapshots.get(value) : undefined;
+  if (!v || v.custody !== custody || v.plaintext !== path.resolve(plaintext).toLowerCase() || canonical(value) !== v.canonicalManifest) return fail();
+  const stat = lstatSync(plaintext, { bigint: true });
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== BigInt(1) || String(stat.dev) !== v.device || String(stat.ino) !== v.inode) return fail();
+  const manifest = JSON.parse(v.canonicalManifest) as SnapshotFacts;
+  if ((await hashFile(archive)).sha256 !== v.ciphertextSha256 || (await hashFile(plaintext)).sha256 !== manifest.databaseSha256 || canonical(value) !== v.canonicalManifest) return fail();
+  return Object.freeze({ manifest: Object.freeze(manifest), ciphertextSha256: v.ciphertextSha256 });
+}
+
 export async function decryptSnapshot(custody: BackupCustody, archive: string, pending: string, signal?: AbortSignal, testIdentity?: string, expectedArchiveSha256?:string, expectedSchema: 8 | 41 = 41): Promise<Readonly<SnapshotFacts>> {
   testDirectory(path.dirname(archive)); testDirectory(path.dirname(pending));
   if (expectedSchema !== 8 && expectedSchema !== 41) return fail();
@@ -157,7 +171,10 @@ export async function decryptSnapshot(custody: BackupCustody, archive: string, p
     // Full authenticated EOF is required. Early plaintext is always unpublished.
     if (!manifest || String(bytes) !== manifest.databaseBytes || hash.digest("hex") !== manifest.databaseSha256) return fail();
     const actualArchiveSha256=cipherHash.digest("hex");if(expectedArchiveSha256!==undefined&&actualArchiveSha256!==expectedArchiveSha256)return fail();
-    await file.sync(); return Object.freeze(manifest);
+    await file.sync();
+    const st = await file.stat({ bigint: true });
+    decryptedSnapshots.set(manifest, { custody, archive: path.resolve(archive).toLowerCase(), plaintext: path.resolve(pending).toLowerCase(), device: String(st.dev), inode: String(st.ino), ciphertextSha256: actualArchiveSha256, canonicalManifest: canonical(manifest) });
+    return Object.freeze(manifest);
   } catch { return fail(); }
   finally { input.destroy(); ciphertext.destroy(); await reader?.cancel().catch(() => {}); reader?.releaseLock(); await file.close(); }
 }

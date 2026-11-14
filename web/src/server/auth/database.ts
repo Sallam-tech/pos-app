@@ -1,4 +1,6 @@
 import "server-only";
+import { protectedRestoredHistory } from "../backup/protected-history";
+import { assertProtectedWriterAdmission } from "../bootstrap/writer-admission";
 import {restoredHistory,verifyHistoricalPrefixes,type HistoricalSettings} from "../backup/service";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
@@ -66,10 +68,11 @@ export function assertBootstrapReadScope(value: unknown, lease: BootstrapLease, 
 
 // Internal module, not a connection exported by the authorization gateway.
 // Kysely owns its ONLY native handle; it never receives Part 1's private handle.
-export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "database" | "migrationsDirectory" | "restoreProof">) {
+export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "database" | "migrationsDirectory" | "restoreProof" | "protectedHistory" | "protectedAdmission">) {
   const options = { ...config.database, create: false };
   // Issuer/consumer both reject persistent mode and wrong target identities.
-  const historical:readonly HistoricalSettings[]=restoredHistory(config.restoreProof,options);
+  if(config.restoreProof !== undefined && config.protectedHistory !== undefined) return deny();
+  const historical:readonly HistoricalSettings[]=config.protectedHistory === undefined ? restoredHistory(config.restoreProof,options) : protectedRestoredHistory(config.protectedHistory,options);
   const preflight = openDatabase(options);
   try {
     const manifest = loadMigrations(config.migrationsDirectory);
@@ -159,14 +162,14 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
         async run(sql: string, values: readonly SqlValue[] = []) { guard(); return run(sql, values); },
       });
       fileScopes.set(transaction, () => {
-        guard(); if (options.mode !== "test" || !native.open || !native.inTransaction || closingReads) return deny();
-        sameFile();
+        guard(); if ((options.mode !== "test" && !config.protectedAdmission) || !native.open || !native.inTransaction || closingReads) return deny();
+        sameFile(); if(config.protectedAdmission)assertProtectedWriterAdmission(config.protectedAdmission,options,undefined,true);
         return createHash("sha256").update(JSON.stringify(["pos-test-inventory-file-v1",
           location.filename.toLowerCase(), identity.dev.toString(), identity.ino.toString()])).digest("hex");
       });
       restoredScopes.set(transaction,async()=>{
-        guard();if(options.mode!=="test"||!native.open||!native.inTransaction||closingReads)return deny();sameFile();
-        await verifyHistoricalPrefixes(transaction,historical);guard();sameFile();
+        guard();if((options.mode!=="test"&&!config.protectedAdmission)||!native.open||!native.inTransaction||closingReads)return deny();sameFile();
+        if(config.protectedHistory)protectedRestoredHistory(config.protectedHistory,options);await verifyHistoricalPrefixes(transaction,historical);guard();sameFile();
         return historical;
       });
       return transaction;

@@ -5,7 +5,7 @@ import { execFile, fork } from "node:child_process";
 import { promisify } from "node:util";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { beforeAll, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import { openDatabase } from "../../src/server/db/connection";
 import { applyMigrations } from "../../src/server/db/migrate";
 import { applySalesMigration36 } from "../../src/server/db/sales-migrate";
@@ -20,14 +20,18 @@ import { runTrustedFirstRunSetup } from "../../src/server/auth/provision";
 import { passwordCallbacks } from "../../src/server/auth/password";
 import type { LocalTlsMaterial } from "../../src/server/hosting/https";
 
-const fault = vi.hoisted(() => ({ sql: false, lostCommit: false, anchor: false, copyAfterBackup: false, afterClose: undefined as undefined | (() => void) }));
+const fault = vi.hoisted(() => ({ sql: false, lostCommit: false, anchor: false, copyAfterBackup: false, lostCurrent: false, currentPublications: 0, afterClose: undefined as undefined | (() => void) }));
 vi.mock("../../src/server/bootstrap/windows", async original => {
   const actual = await original<typeof import("../../src/server/bootstrap/windows")>();
   return { ...actual, windowsProtection: async (message: Readonly<Record<string, string>>) => {
     if (fault.anchor && message.operation === "record-create" && message.name === "enrolled.dpapi") {
       fault.anchor = false; throw new actual.BootstrapRejected();
     }
-    return actual.windowsProtection(message);
+    const result = await actual.windowsProtection(message);
+    if (message.operation === "candidate-append" && message.payload && JSON.parse(Buffer.from(message.payload,"base64").toString("utf8")).kind === "CURRENT") {
+      fault.currentPublications++; if (fault.lostCurrent) { fault.lostCurrent=false; throw new actual.BootstrapRejected(); }
+    }
+    return result;
   } };
 });
 vi.mock("../../src/server/auth/database", async original => {
@@ -71,6 +75,7 @@ const run = mkdtempSync(path.join(root, "production-security41-"));
 const migrations = path.resolve("src/server/db/migrations");
 let tls: LocalTlsMaterial;
 let candidateTls: LocalTlsMaterial;
+let reissuedSourceTls: LocalTlsMaterial;
 let blank41: string;
 const stable = (value: unknown) => JSON.stringify(value, (_, v) => typeof v === "bigint" ? v.toString() : v);
 
@@ -86,6 +91,8 @@ beforeAll(async () => {
   await openssl("req", "-newkey", "rsa:2048", "-passout", "stdin", "-subj", "/CN=localhost", "-keyout", "candidate.key", "-out", "candidate.csr");
   await openssl("x509", "-req", "-in", "candidate.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-passin", "stdin", "-CAcreateserial", "-days", "1", "-sha256", "-extfile", "leaf.ext", "-out", "candidate.pem");
   candidateTls = { key: Buffer.from(createPrivateKey({ key: readFileSync(path.join(cert, "candidate.key")), passphrase }).export({ type: "pkcs8", format: "pem" })), certificate: readFileSync(path.join(cert, "candidate.pem")), trustAnchor: readFileSync(path.join(cert, "ca.pem")) };
+  await openssl("x509","-req","-in","leaf.csr","-CA","ca.pem","-CAkey","ca.key","-passin","stdin","-CAcreateserial","-days","1","-sha256","-extfile","leaf.ext","-out","reissued-source.pem");
+  reissuedSourceTls={key:Buffer.from(tls.key),certificate:readFileSync(path.join(cert,"reissued-source.pem")),trustAnchor:Buffer.from(tls.trustAnchor)};
   const base = path.join(run, "blank41"); mkdirSync(base);
   const db = openDatabase({ directory: base, filename: "test.sqlite3", mode: "test", create: true });
   try { applyMigrations(db, migrations); applySalesMigration36(db); applyReturnsMigration37(db); applyExpensesMigration38(db); applyInvoicesMigration39(db); applyCashMigration40(db); applySettingsMigration41(db); } finally { db.close(); }
@@ -93,7 +100,8 @@ beforeAll(async () => {
 });
 
 async function fixture(version: 8 | 41 = 41) {
-  const directory = mkdtempSync(path.join(run, "case-")), data = path.join(directory, "data"); mkdirSync(data);
+  const directory = mkdtempSync(path.join(run, "case-")), data = path.join(directory, "data");
+  const { storage } = await import("../../src/server/backup/storage"); await storage(directory,"initialize"); mkdirSync(data); await storage(data,"initialize");
   let manifest = migrations;
   if (version === 41) copyFileSync(blank41, path.join(data, "test.sqlite3"));
   else {
@@ -315,6 +323,7 @@ it("exact8 pre-maintenance archive preserves protected abort history, source row
   const custody = await createTestCustody(custodyDirectory), archiveId = (await import("node:crypto")).randomUUID(), archive = path.join(directory, archiveId + ".age");
   stage("custody-ready");
   let result!: Awaited<ReturnType<typeof createAuthenticationBackup8>>, savedLease!: Parameters<typeof authenticationBackup8Evidence>[2];
+  let decoded: unknown, portableCustody!: typeof custody;
   await withBootstrapOwnership(f.config.database, async (_retain, lease) => {
     stage("lease-held"); savedLease = lease;
     result = await createAuthenticationBackup8(f.config, lease, custody, directory, archiveId);
@@ -330,6 +339,7 @@ it("exact8 pre-maintenance archive preserves protected abort history, source row
     await expect(decryptSnapshot(portable, archive, path.join(restoredDirectory, "wrong-schema.pending"))).rejects.toThrow("Backup or recovery unavailable.");
     stage("default41-rejected-auth8"); const restored = path.join(restoredDirectory, "restored8.sqlite3");
     const manifest = await decryptSnapshot(portable, archive, restored, undefined, undefined, evidence.ciphertextSha256, 8);
+    decoded = manifest; portableCustody = portable;
     stage("portable-readback"); expect(manifest.format).toBe("POS_AUTH8_SNAPSHOT_V1"); expect(manifest.schema).toBe(8);
     const facts = manifest.fingerprint as { database: unknown; enrollmentRecords: readonly unknown[] };
     expect(facts.enrollmentRecords).toHaveLength(5);
@@ -343,12 +353,21 @@ it("exact8 pre-maintenance archive preserves protected abort history, source row
     expect(state()).toBe(before); stage("tampered-proof-rejected");
   });
   await expect(authenticationBackup8Evidence(result, f.config, savedLease)).rejects.toThrow("Backup or recovery unavailable.");
-  stage("lease-closed"); const gateway = await openAuthorizationGateway({ database: { directory: restoredDirectory, filename: "restored8.sqlite3", mode: "test", create: false }, migrationsDirectory: f.config.migrationsDirectory,
-    origins: { ADMIN: "https://localhost:7443", SALESPERSON: "https://127.0.0.1:7443" }, signingSecrets: { ADMIN: randomBytes(48).toString("base64url"), SALESPERSON: randomBytes(48).toString("base64url") }, sessionLifetimeSeconds: 120 });
+  stage("lease-closed");
+  const { acquireRuntimeOwnership } = await import("../../src/server/hosting/ownership"), { createAuthentication8ReadbackAdmission } = await import("../../src/server/bootstrap/writer-admission");
+  const dbOptions = { directory: restoredDirectory, filename: "restored8.sqlite3", mode: "test" as const, create: false }, config = { directory: restoredDirectory, database: dbOptions, migrationsDirectory: f.config.migrationsDirectory };
+  const signingSecrets = { ADMIN: randomBytes(48).toString("base64url"), SALESPERSON: randomBytes(48).toString("base64url") };
+  const runtime = await acquireRuntimeOwnership(path.join(restoredDirectory, "restored8.sqlite3"));
   try {
-    const admin = await gateway.verifyAdminPassword(f.values.ADMIN), adminResponse = await gateway.issueAdminSession(admin); expect(adminResponse.status).toBe(200);
-    const staff = await gateway.verifySalespersonPassword(f.values.SALESPERSON), staffResponse = await gateway.issueSalespersonSession(staff); expect(staffResponse.status).toBe(200);
-  } finally { await gateway.close(); }
+    const admission = await createAuthentication8ReadbackAdmission(config, runtime, decoded, portableCustody, path.join(restoredDirectory, "retained.age"), signingSecrets);
+    const gateway = await openAuthorizationGateway({ database: dbOptions, migrationsDirectory: f.config.migrationsDirectory, protectedAdmission: admission,
+      origins: { ADMIN: "https://localhost:7443", SALESPERSON: "https://127.0.0.1:7443" }, signingSecrets, sessionLifetimeSeconds: 120 });
+    try {
+      const admin = await gateway.verifyAdminPassword(f.values.ADMIN); expect((await gateway.issueAdminSession(admin)).status).toBe(200);
+      const staff = await gateway.verifySalespersonPassword(f.values.SALESPERSON); expect((await gateway.issueSalespersonSession(staff)).status).toBe(200);
+      await expect(gateway.withAdminTransaction(new Request("https://localhost:7443"), async () => {})).rejects.toThrow("Access denied.");
+    } finally { await gateway.close(); }
+  } finally { await runtime.close(); }
   expect(state()).toBe(before); stage("fresh-logins-and-source-preserved");
 });
 
@@ -529,10 +548,10 @@ async function adminHandoffFixture(version: 8 | 41 = 8) {
   const { openAuthorizationGateway } = await import("../../src/server/auth/gateway");
   const filename = path.join(f.config.database.directory, f.config.database.filename);
   const runtime = await acquireRuntimeOwnership(filename);
-  if (version === 41) {
+  {
     const { createProtectedRootWriterAdmission } = await import("../../src/server/bootstrap/writer-admission"), { withProtectedLocalKeys } = await import("../../src/server/bootstrap/keys");
     await withProtectedLocalKeys(f.config, async keys => { authorization.signingSecrets = { ...keys.signingSecrets }; });
-    authorization.protectedAdmission = await createProtectedRootWriterAdmission(f.config, runtime);
+    authorization.protectedAdmission = await createProtectedRootWriterAdmission(f.config, runtime, version);
   }
   let gateway;
   try { gateway = await openAuthorizationGateway(authorization, version === 41 ? 41 : undefined); }
@@ -663,7 +682,7 @@ it("Admin maintenance actual child death releases only its runtime fence and pre
   const output: Buffer[] = []; let size = 0;
   child.stderr!.on("data", (b: Buffer) => { size += b.length; if (size < 16384) output.push(b); });
   const message = once(child, "message"), exited = once(child, "exit");
-  child.send({ action: "pause-maintenance", filename: f.filename, authorization: f.authorization, password: f.values.ADMIN, operation });
+  child.send({ action: "pause-maintenance", filename: f.filename, config: f.config, authorization: { ...f.authorization, protectedAdmission: undefined }, password: f.values.ADMIN, operation });
   try {
     const [reply] = await message;
     expect(reply).toMatchObject({ status: "MAINTENANCE_SOURCE_HELD", schema: 8, productionActivation: false });
@@ -673,7 +692,8 @@ it("Admin maintenance actual child death releases only its runtime fence and pre
     const { openAuthorizationGateway } = await import("../../src/server/auth/gateway");
     const runtime = await acquireRuntimeOwnership(f.filename);
     try {
-      const gateway = await openAuthorizationGateway(f.authorization);
+      const { createProtectedRootWriterAdmission } = await import("../../src/server/bootstrap/writer-admission");
+      const gateway = await openAuthorizationGateway({ ...f.authorization, protectedAdmission: await createProtectedRootWriterAdmission(f.config, runtime, 8) });
       try {
         for (const role of ["ADMIN", "SALESPERSON"] as const) {
           const proof = await (role === "ADMIN" ? gateway.verifyAdminPassword(f.values[role]) : gateway.verifySalespersonPassword(f.values[role]));
@@ -837,6 +857,7 @@ it("candidate migration8 executes the actual reviewed41 programs once and indepe
 });
 
 
+let knownSelectionFixture: Awaited<ReturnType<typeof candidateCopyFixture>> | undefined;
 it("candidate fresh keys require genuine known41 completion and fresh TLS without rewriting original SQL binding", async () => {
   const f = await candidateCopyFixture();
   const { createAuthenticationBackup8 } = await import("../../src/server/bootstrap/authentication-backup");
@@ -877,7 +898,7 @@ it("candidate fresh keys require genuine known41 completion and fresh TLS withou
     const authorization = { ...f.authorization, database: destination.database, migrationsDirectory: migrations };
     await expect(openAuthorizationGateway(authorization, 41)).rejects.toThrow("Access denied.");
     await expect(openAuthorizationGateway({ ...authorization, protectedAdmission: {} as NonNullable<typeof authorization.protectedAdmission> }, 41)).rejects.toThrow("Access denied.");
-    f.runtime.assertHeld();
+    f.runtime.assertHeld(); knownSelectionFixture = f;
   } finally { await f.gateway.close().catch(() => {}); await f.runtime.close(); }
 });
 
@@ -923,25 +944,32 @@ it("candidate unknown actual final COMMIT is never adopted or replayed and delib
 });
 
 
-it("candidate actual child killed after final COMMIT requires authenticated original archive for restart quarantine and never reconstructs completion", async () => {
-  const f = await adminHandoffFixture(), { randomUUID } = await import("node:crypto");
-  const operation = { operationId: randomUUID(), purpose: "UPGRADE8" as const }, target = path.join(f.config.directory, operation.operationId), precopy = path.join(f.config.directory, "crash-precopy");
-  const custodyDirectory = path.join(f.config.directory, "crash-custody"), archiveId = randomUUID(); mkdirSync(target); mkdirSync(precopy);
-  await f.gateway.close(); await f.runtime.close();
-  const child = fork(path.resolve("tests/helpers/maintenance-runtime-probe.mjs"), [], { cwd: process.cwd(), execArgv: ["--experimental-transform-types", "--disable-warning=ExperimentalWarning", "--disable-warning=MODULE_TYPELESS_PACKAGE_JSON"], env: { ...process.env, NODE_ENV: "test" }, stdio: ["ignore", "ignore", "pipe", "ipc"], windowsHide: true });
-  const errors: Buffer[] = []; child.stderr!.on("data", b => errors.push(Buffer.from(b)));
-  const exited = once(child, "exit");
-  try {
-    const pending = new Promise<{ status: string; sourceState: string }>((resolve, reject) => { child.once("message", resolve); child.once("error", reject); child.once("exit", () => reject(Error("TEST candidate child exited before final COMMIT"))); });
-    child.send({ action: "pause-candidate-final-commit", filename: f.filename, config: f.config, authorization: f.authorization, password: f.values.ADMIN, operation, target, precopy, archiveId, custodyDirectory });
-    const observed = await pending; expect(observed.status).toBe("ACTUAL_FINAL_COMMIT_UNACKNOWLEDGED");
-    child.kill("SIGTERM"); await exited;
-    expect(f.state()).toBe(observed.sourceState);
-    const { openProofDatabase, fingerprint } = await import("../../src/server/backup/snapshot"), { enrollmentDigest } = await import("../../src/server/bootstrap/database");
-    const state = () => { const db = openProofDatabase(path.join(target, "candidate8.sqlite3")); try { expect(db.prepare("PRAGMA user_version").get()?.user_version).toBe(BigInt(41)); return enrollmentDigest(fingerprint(db)); } finally { db.close(); } };
-    const candidateState = state();
+let schema8CrashFixture: (Awaited<ReturnType<typeof adminHandoffFixture>> & { operation: {operationId:string;purpose:"UPGRADE8"}; target:string;precopy:string;custodyDirectory:string;archiveId:string;candidateState?:string }) | undefined;
+it("auth8 crash prerequisite enrolls and closes the original source before a new disposable operation",async()=>{
+ const f=await adminHandoffFixture(),{randomUUID}=await import("node:crypto"),operation={operationId:randomUUID(),purpose:"UPGRADE8" as const};
+ const target=path.join(f.config.directory,operation.operationId),precopy=path.join(f.config.directory,"crash-precopy"),custodyDirectory=path.join(f.config.directory,"crash-custody"),archiveId=randomUUID();mkdirSync(target);mkdirSync(precopy);
+ await f.gateway.close();await f.runtime.close();schema8CrashFixture={...f,operation,target,precopy,custodyDirectory,archiveId};
+});
+it("candidate actual child killed after final COMMIT leaves exact source and no reconstructed completion",async()=>{
+ const f=schema8CrashFixture;if(!f)throw Error("TEST enrolled auth8 crash fixture required");const {operation,target,precopy,custodyDirectory,archiveId}=f;
+ const child=fork(path.resolve("tests/helpers/maintenance-runtime-probe.mjs"),[],{cwd:process.cwd(),execArgv:["--experimental-transform-types","--disable-warning=ExperimentalWarning","--disable-warning=MODULE_TYPELESS_PACKAGE_JSON"],env:{...process.env,NODE_ENV:"test"},stdio:["ignore","ignore","pipe","ipc"],windowsHide:true});
+ const errors:Buffer[]=[];child.stderr!.on("data",b=>errors.push(Buffer.from(b)));const exited=once(child,"exit");
+ try{
+  const pending=new Promise<{status:string;sourceState:string}>((resolve,reject)=>{child.once("message",resolve);child.once("error",reject);child.once("exit",()=>reject(Error("TEST candidate child exited before final COMMIT")));});
+  child.send({action:"pause-candidate-final-commit",filename:f.filename,config:f.config,authorization:{...f.authorization,protectedAdmission:undefined},password:f.values.ADMIN,operation,target,precopy,archiveId,custodyDirectory});
+  const observed=await pending;expect(observed.status).toBe("ACTUAL_FINAL_COMMIT_UNACKNOWLEDGED");expect(child.kill("SIGTERM")).toBe(true);await exited;expect(f.state()).toBe(observed.sourceState);
+  const {openProofDatabase,fingerprint}=await import("../../src/server/backup/snapshot"),{enrollmentDigest}=await import("../../src/server/bootstrap/database"),db=openProofDatabase(path.join(target,"candidate8.sqlite3"));
+  try{expect(db.prepare("PRAGMA user_version").get()?.user_version).toBe(BigInt(41));f.candidateState=enrollmentDigest(fingerprint(db));}finally{db.close();}
+ }finally{if(child.exitCode===null&&child.signalCode===null){child.kill("SIGTERM");await exited;}writeFileSync(path.join(f.config.directory,"candidate-crash-child-stderr.log"),Buffer.concat(errors));}
+});
+it("auth8 interrupted COMMIT restart requires original authenticated archive and permanent no-admission quarantine",async()=>{
+ const f=schema8CrashFixture;if(!f?.candidateState)throw Error("TEST actual unacknowledged auth8 COMMIT required");const {operation,target,precopy,custodyDirectory,archiveId}=f;
+ const {openProofDatabase,fingerprint}=await import("../../src/server/backup/snapshot"),{enrollmentDigest}=await import("../../src/server/bootstrap/database");
+ const state=()=>{const db=openProofDatabase(path.join(target,"candidate8.sqlite3"));try{return enrollmentDigest(fingerprint(db));}finally{db.close();}};
     const { acquireRuntimeOwnership } = await import("../../src/server/hosting/ownership"), { openAuthorizationGateway, withAdminMaintenanceSource } = await import("../../src/server/auth/gateway");
-    const runtime = await acquireRuntimeOwnership(f.filename), gateway = await openAuthorizationGateway(f.authorization);
+    const runtime = await acquireRuntimeOwnership(f.filename);
+    const { createProtectedRootRecoveryAdmission } = await import("../../src/server/bootstrap/writer-admission");
+    const gateway = await openAuthorizationGateway({ ...f.authorization, protectedAdmission: await createProtectedRootRecoveryAdmission(f.config, runtime, 8) });
     try {
       const proof = await gateway.verifyAdminPassword(f.values.ADMIN);
       let failure: unknown;
@@ -960,15 +988,11 @@ it("candidate actual child killed after final COMMIT requires authenticated orig
             { archiveId: intent.backupArchiveId, ciphertextSha256: intent.backupCiphertextSha256, sourceStateDigest: intent.sourceStateDigest, originalAnchorDigest: intent.originalAnchorDigest });
           expect(readdirSync(staging)).toEqual([]);
           expect(await quarantineNeverAdmittedCandidate8(f.config, source, lease, operation.operationId, interaction, recovery)).toMatchObject({ status: "QUARANTINED_NO_ADMISSION", sqlOutcome: "UNKNOWN", productionActivation: false });
-          expect(state()).toBe(candidateState); expect(confirm).toHaveBeenCalledTimes(1);
+          expect(state()).toBe(f.candidateState); expect(confirm).toHaveBeenCalledTimes(1);
           expect((await readProtectedCandidateLedger(vault, enrollmentDigest(anchor))).records.map(r => r.kind)).toEqual(["INTENT", "QUARANTINED_NO_ADMISSION"]);
         } catch (error) { failure = error; throw error; }
       }).catch(error => { throw failure ?? error; });
     } finally { await gateway.close().catch(() => {}); await runtime.close(); }
-  } finally {
-    if (child.exitCode === null && child.signalCode === null) { child.kill("SIGTERM"); await exited; }
-    writeFileSync(path.join(f.config.directory, "candidate-crash-child-stderr.log"), Buffer.concat(errors));
-  }
 });
 
 
@@ -1034,4 +1058,291 @@ it("protected root41 admission requires genuine runtime, actual keys and DPAPI a
     await expect(gateway.verifyAdminPassword(f.values.ADMIN)).rejects.toThrow("Access denied.");
     await expect(createProtectedRootWriterAdmission(f.config, runtime)).rejects.toThrow("Protected setup unavailable.");
   } finally { await gateway?.close().catch(() => {}); await runtime.close(); }
+});
+
+
+let boundedSelectionSetup: Awaited<ReturnType<typeof candidateCopyFixture>> | undefined;
+it("selection disposable source enrolls both roles and binds the original writer", async () => {
+  boundedSelectionSetup = await candidateCopyFixture();
+  expect(boundedSelectionSetup.authorization.protectedAdmission).toBeDefined();
+});
+afterAll(async () => { if (boundedSelectionSetup) { await boundedSelectionSetup.gateway.close().catch(() => {}); await boundedSelectionSetup.runtime.close().catch(() => {}); } });
+it("selection prerequisite records a fresh known completed candidate without admission", async () => {
+  const f = boundedSelectionSetup; if (!f) throw Error("TEST requires enrolled source fixture"); console.info("SELECTION_TEST_STAGE", "fixture-ready");
+  const { createAuthenticationBackup8 } = await import("../../src/server/bootstrap/authentication-backup");
+  const { withUnadmittedCandidateCopy8, migrateUnadmittedCandidate8, recordKnownCandidateCompletion8, bindTrustedCandidateCopyInteraction } = await import("../../src/server/bootstrap/candidate-copy8");
+  const { createCandidateProtectedLocalKeys } = await import("../../src/server/bootstrap/keys");
+  const destination: LocalKeyConfiguration = { directory: f.target, database: { directory: f.target, filename: "candidate8.sqlite3", mode: "test", create: false }, migrationsDirectory: migrations };
+  try {
+    await copyTestHandoff(f, await f.gateway.verifyAdminPassword(f.values.ADMIN), async (source, lease) => {
+      const backup = await createAuthenticationBackup8(f.config, lease, f.custody, f.precopy, (await import("node:crypto")).randomUUID()); console.info("SELECTION_TEST_STAGE", "archive-ready");
+      await withUnadmittedCandidateCopy8(f.config, source, lease, backup, f.target, bindTrustedCandidateCopyInteraction({ confirm: async () => "CONFIRM_NEW_UNADMITTED_COPY8" }), async copy => {
+        await migrateUnadmittedCandidate8(copy); console.info("SELECTION_TEST_STAGE", "migration-ready");
+        await createCandidateProtectedLocalKeys(destination, candidateTls, copy); console.info("SELECTION_TEST_STAGE", "keys-ready");
+        expect(await recordKnownCandidateCompletion8(copy, destination)).toMatchObject({ status: "COMMITTED_UNADMITTED" }); console.info("SELECTION_TEST_STAGE", "committed");
+      });
+    }); knownSelectionFixture = f;
+  } finally { await f.gateway.close().catch(() => {}); await f.runtime.close(); }
+});
+
+it("CURRENT selects only known completed generation, retires original writer and survives owner restart with fresh role sessions", async () => {
+  const f = knownSelectionFixture; expect(f).toBeDefined(); if (!f) throw Error("TEST requires verified known-completion fixture");
+  const { withProtectedLocalKeys, inspectLocalVault } = await import("../../src/server/bootstrap/keys");
+  const { bindTrustedCandidateSelectionInteraction, selectKnownCompletedCandidate8 } = await import("../../src/server/bootstrap/candidate-selection");
+  const { createSelectedWriterAdmission, createProtectedRootWriterAdmission, createProtectedRootRecoveryAdmission } = await import("../../src/server/bootstrap/writer-admission");
+  const { openAuthorizationGateway, withAdminMaintenanceSource } = await import("../../src/server/auth/gateway");
+  const { acquireRuntimeOwnership } = await import("../../src/server/hosting/ownership");
+  const { readProtectedCandidateLedger } = await import("../../src/server/bootstrap/candidate-records"), { readEnrollmentJournal } = await import("../../src/server/bootstrap/journal"), { protectedManifestDigest } = await import("../../src/server/bootstrap/maintenance-journal"), { enrollmentDigest } = await import("../../src/server/bootstrap/database");
+  const { verifyAuthentication8Recovery } = await import("../../src/server/bootstrap/authentication-backup");
+  const destination: LocalKeyConfiguration = { directory: f.target, database: { directory: f.target, filename: "candidate8.sqlite3", mode: "test", create: false }, migrationsDirectory: migrations };
+  const runtime = await acquireRuntimeOwnership(f.filename); let gateway: Awaited<ReturnType<typeof openAuthorizationGateway>> | undefined;
+  try {
+    const admission = await createProtectedRootRecoveryAdmission(f.config, runtime, 8);
+    gateway = await openAuthorizationGateway({ ...f.authorization, protectedAdmission: admission });
+    await expect(gateway.issueAdminSession({})).rejects.toThrow("Access denied.");
+    await expect(gateway.verifySalespersonPassword(f.values.SALESPERSON)).rejects.toThrow("Access denied.");
+    const proof = await gateway.verifyAdminPassword(f.values.ADMIN), originalState = f.state();
+    await withAdminMaintenanceSource(gateway, proof, runtime, f.operation, async (source, lease) => {
+      const vault = await inspectLocalVault(f.config), anchor = (await readEnrollmentJournal(vault, protectedManifestDigest(8))).find(r => r.kind === "ENROLLED")!;
+      const intent = (await readProtectedCandidateLedger(vault, enrollmentDigest(anchor))).records[0];
+      const staging = path.join(f.config.directory, "selection-restart-validation"); mkdirSync(staging);
+      const recovery = await verifyAuthentication8Recovery(f.config, lease, f.custody, path.join(f.precopy, intent.backupArchiveId + ".age"), staging,
+        { archiveId: intent.backupArchiveId, ciphertextSha256: intent.backupCiphertextSha256, sourceStateDigest: intent.sourceStateDigest, originalAnchorDigest: intent.originalAnchorDigest });
+      expect(await selectKnownCompletedCandidate8(f.config, source, lease, f.operation.operationId, destination,
+        bindTrustedCandidateSelectionInteraction({ confirm: async () => "CONFIRM_TEST_WRITER_SELECTION" }), recovery)).toMatchObject({ generation: "1", sourceRetired: true, productionActivation: false });
+    });
+    expect(f.state()).toBe(originalState);
+    await expect(createProtectedRootWriterAdmission(f.config, runtime, 8)).rejects.toThrow();
+    await expect(openAuthorizationGateway(f.authorization)).rejects.toThrow("Access denied.");
+    let secrets!: typeof f.authorization.signingSecrets; await withProtectedLocalKeys(destination, async keys => { secrets = { ...keys.signingSecrets }; });
+    const selected = await createSelectedWriterAdmission(f.config, destination, runtime);
+    const config = { ...f.authorization, database: destination.database, migrationsDirectory: destination.migrationsDirectory, protectedAdmission: selected, signingSecrets: secrets };
+    await expect(openAuthorizationGateway({ ...config, protectedAdmission: undefined }, 41)).rejects.toThrow("Access denied.");
+    gateway = await openAuthorizationGateway(config, 41);
+    expect((await gateway.issueAdminSession(await gateway.verifyAdminPassword(f.values.ADMIN))).status).toBe(200);
+    expect((await gateway.issueSalespersonSession(await gateway.verifySalespersonPassword(f.values.SALESPERSON))).status).toBe(200);
+    expect(f.state()).toBe(originalState);
+  } finally { await gateway?.close(); await runtime.close(); }
+});
+
+
+let protectedRestoreFixture: (Awaited<ReturnType<typeof adminHandoffFixture>> & { custody: import("../../src/server/backup/crypto").BackupCustody; archive: string; originalRequest: Request; staffRequest: Request; saleId: string; receipt: unknown; settingsContext: string; destination?: LocalKeyConfiguration; backupConfiguration?: import("../../src/server/backup/worker").TestBackupConfiguration; runtimeConfig?: import("../../src/server/hosting/runtime").LocalRuntimeConfiguration }) | undefined;
+afterAll(async () => { const f = protectedRestoreFixture; if (f) { await f.gateway.close().catch(() => {}); await f.runtime.close().catch(() => {}); } });
+it("protected restore enrolls an original41 and records actual stock sale cash and Settings history", async () => {
+  const f = await adminHandoffFixture(41), { randomUUID } = await import("node:crypto");
+  try {
+    const session = async (role: "ADMIN" | "SALESPERSON") => { const response = role === "ADMIN" ? await f.gateway.issueAdminSession(await f.gateway.verifyAdminPassword(f.values.ADMIN)) : await f.gateway.issueSalespersonSession(await f.gateway.verifySalespersonPassword(f.values.SALESPERSON));
+      return new Request(f.authorization.origins[role] + "/private", { method: "POST", headers: { origin: f.authorization.origins[role], cookie: response.headers.getSetCookie().map(c => c.split(";")[0]).join("; ") } }); };
+    const originalRequest = await session("ADMIN"), staffRequest = await session("SALESPERSON");
+    const { createInventoryService } = await import("../../src/server/inventory/service"), { createSalesService } = await import("../../src/server/sales/service"), { createCashService } = await import("../../src/server/cash/service"), { createSettingsService } = await import("../../src/server/settings/service");
+    const product = await createInventoryService(f.gateway,41).createProduct(originalRequest,{ requestKey:randomUUID(),name:"TEST protected restore",unit:"PACK",buyingPricePaisa:"12300",sellingPricePaisa:"15000",sellingActive:true,openingQuantity:"10",lowStockThreshold:"1" });
+    const settingsApi = createSettingsService(f.gateway,"TEST SHOP"), current = await settingsApi.current(originalRequest,"ADMIN"); if (!("context" in current) || typeof current.context !== "string") throw Error();
+    await settingsApi.save(originalRequest,f.values.ADMIN,randomUUID(),current.context,{expectedRevision:"0",settings:{shopName:"TEST protected restore",address:"",phone:"",footer:"",receiptLayout:"ordinary",currency:"PKR",timezone:"Asia/Karachi"},reason:"TEST original immutable Settings context"});
+    const cash = createCashService(f.gateway,"TEST SHOP",41), ctx=(await cash.context(originalRequest)).context, date=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Karachi",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+    const action = async (kind:import("../../src/server/cash/service").CashAction,input:unknown) => { const key=randomUUID();await cash.prepare(originalRequest,f.values.ADMIN,key,ctx,kind,input);const result=await cash.execute(originalRequest,key,ctx,"ADMIN_VERIFIED_CASH_FACTS");if(result.state!=="COMMITTED")throw Error();return result.result as Record<string,unknown>; };
+    const count=await action("START_COUNT",{businessDate:date,evidence:"TEST disposable physical-count declaration"});
+    const recorded=await action("RECORD_COUNT",{sessionId:count.sessionId,actualPaisa:"100000",evidence:"TEST disposable opening cash"});
+    await action("OPEN_ANCHOR",{countId:recorded.countId,untouchedOpening:"NO",evidence:"TEST prior unknown period preserved"});
+    const sales=createSalesService(f.gateway,"TEST SHOP",41), key=randomUUID(), command={requestKey:key,context:(await sales.context(staffRequest)).context,lines:[{productId:product.product.id,quantity:"2",unitPricePaisa:"15000",discountPercent:"0"}],cashPaisa:"30000",cashDate:date,customerName:"",customerPhone:""};
+    await cash.admit(staffRequest,"SALESPERSON",{kind:"SALE",key,input:command});const receipt=await sales.create(staffRequest,command);
+    const { createTestCustody } = await import("../../src/server/backup/crypto"), directory=path.join(f.config.directory,"protected-backup-custody");mkdirSync(directory);const custody=await createTestCustody(directory);
+    protectedRestoreFixture={...f,custody,archive:"",originalRequest,staffRequest,saleId:receipt.id,receipt,settingsContext:current.context};
+  } catch(error) { await f.gateway.close();await f.runtime.close();throw error; }
+});
+it("protected backup authenticates a real financial snapshot under CURRENT admission", async () => {
+  const f=protectedRestoreFixture;if(!f)throw Error("TEST setup missing");
+  const { createProtectedArchive41 } = await import("../../src/server/backup/service"), directory=path.join(f.config.directory,"protected-archive");mkdirSync(directory);
+  const result=await createProtectedArchive41(f.custody,f.config.database,directory,f.authorization.protectedAdmission!);f.archive=result.archive;
+  expect(result.manifest.schema).toBe(41);expect(result.manifest.fingerprint).toBeDefined();
+});
+it("protected restore preserves exact financial rows and requires fresh keys known completion and deliberate CURRENT", async () => {
+  const f=protectedRestoreFixture;if(!f||!f.archive)throw Error("TEST authenticated archive missing");
+  const { randomUUID } = await import("node:crypto"), { withAdminMaintenanceSource } = await import("../../src/server/auth/gateway");
+  const { withProtectedRestore41,completeProtectedRestore41,selectProtectedRestore41,bindTrustedProtectedRestoreInteraction } = await import("../../src/server/bootstrap/restore41");
+  const { createRestoredCandidateProtectedLocalKeys } = await import("../../src/server/bootstrap/keys"), { bindTrustedCandidateSelectionInteraction } = await import("../../src/server/bootstrap/candidate-selection");
+  const operation={operationId:randomUUID(),purpose:"RESTORE41" as const}, directory=path.join(f.config.directory,operation.operationId);mkdirSync(directory);
+  const proof=await f.gateway.verifyAdminPassword(f.values.ADMIN), before=f.state();
+  try {
+    await withAdminMaintenanceSource(f.gateway,proof,f.runtime,operation,async(source,lease)=>{
+      await withProtectedRestore41(f.config,f.config,source,lease,f.custody,f.archive,directory,operation.operationId,
+        bindTrustedProtectedRestoreInteraction({confirm:async()=>"CONFIRM_SEPARATE_TEST_RESTORE41"}),async(candidate,destination)=>{
+          f.destination=destination;
+          await expect(selectProtectedRestore41(candidate,bindTrustedCandidateSelectionInteraction({confirm:async()=>"CONFIRM_TEST_WRITER_SELECTION"}))).rejects.toThrow();
+          const {X509Certificate,createHash}=await import("node:crypto");
+          expect(new X509Certificate(reissuedSourceTls.certificate).fingerprint256).not.toBe(new X509Certificate(tls.certificate).fingerprint256);
+          const publicDigest=(certificate:Buffer)=>createHash("sha256").update(new X509Certificate(certificate).publicKey.export({type:"spki",format:"der"})).digest("hex");expect(publicDigest(reissuedSourceTls.certificate)).toBe(publicDigest(tls.certificate));
+          await expect(createRestoredCandidateProtectedLocalKeys(destination,reissuedSourceTls,candidate)).rejects.toThrow("Protected setup unavailable.");
+          await createRestoredCandidateProtectedLocalKeys(destination,candidateTls,candidate);
+          expect(await completeProtectedRestore41(candidate)).toMatchObject({status:"COMMITTED_UNADMITTED"});
+          // Deliberately leave known COMMITTED for a separate restart finalizer.
+        });
+    });expect(f.state()).toBe(before);
+  } finally { await f.gateway.close().catch(()=>{});await f.runtime.close(); }
+});
+it("protected restore known COMMITTED restart finalization resolves a lost CURRENT publication by readback without replay",async()=>{
+ const f=protectedRestoreFixture;if(!f?.destination)throw Error("TEST known completion missing");
+ const {acquireRuntimeOwnership}=await import("../../src/server/hosting/ownership"),{createProtectedRootRecoveryAdmission,createSelectedWriterAdmission}=await import("../../src/server/bootstrap/writer-admission"),{openAuthorizationGateway,withAdminMaintenanceSource}=await import("../../src/server/auth/gateway");
+ const {finalizeProtectedRestore41,quarantineNeverAdmittedRestore41}=await import("../../src/server/bootstrap/restore41"),{bindTrustedCandidateSelectionInteraction}=await import("../../src/server/bootstrap/candidate-selection"),{bindTrustedCandidateRecoveryInteraction}=await import("../../src/server/bootstrap/candidate-recovery8");
+ const {inspectLocalVault}=await import("../../src/server/bootstrap/keys"),{readEnrollmentJournal}=await import("../../src/server/bootstrap/journal"),{protectedManifestDigest}=await import("../../src/server/bootstrap/maintenance-journal"),{readProtectedCandidateLedger,classifyCandidateLedger}=await import("../../src/server/bootstrap/candidate-records"),{enrollmentDigest}=await import("../../src/server/bootstrap/database");
+ const vault=await inspectLocalVault(f.config),anchor=(await readEnrollmentJournal(vault,protectedManifestDigest(41))).find(r=>r.kind==="ENROLLED")!,ledger=await readProtectedCandidateLedger(vault,enrollmentDigest(anchor)),operation={operationId:ledger.records.at(-1)!.operationId,purpose:"RESTORE41" as const};
+ const runtime=await acquireRuntimeOwnership(f.filename);let gateway:Awaited<ReturnType<typeof openAuthorizationGateway>>|undefined;
+ try{await expect(createSelectedWriterAdmission(f.config,f.destination,runtime)).rejects.toThrow();
+ gateway=await openAuthorizationGateway({...f.authorization,protectedAdmission:await createProtectedRootRecoveryAdmission(f.config,runtime,41)},41);
+ const proof=await gateway.verifyAdminPassword(f.values.ADMIN);fault.currentPublications=0;
+ await withAdminMaintenanceSource(gateway,proof,runtime,operation,async(source,lease)=>{
+  await expect(quarantineNeverAdmittedRestore41(f.config,f.config,source,lease,operation.operationId,bindTrustedCandidateRecoveryInteraction({confirm:async()=>"CONFIRM_PERMANENT_NO_ADMISSION"}))).rejects.toThrow();
+  fault.lostCurrent=true;
+  await expect(finalizeProtectedRestore41(f.config,f.config,f.destination!,source,lease,operation.operationId,bindTrustedCandidateSelectionInteraction({confirm:async()=>"CONFIRM_TEST_WRITER_SELECTION"}))).rejects.toThrow();
+  expect(fault.lostCurrent).toBe(false);expect(fault.currentPublications).toBe(1);
+  expect(classifyCandidateLedger(await readProtectedCandidateLedger(vault,enrollmentDigest(anchor)))).toMatchObject({status:"RECORDED_CURRENT",recordedCurrent:{generation:"1"}});
+ });
+ expect(await createSelectedWriterAdmission(f.config,f.destination,runtime)).toBeDefined();
+ }finally{fault.lostCurrent=false;await gateway?.close();await runtime.close();}
+});
+it("protected restore independent reopen rejects TEST proofs and old sessions while new commands retain historical Settings", async () => {
+  const f=protectedRestoreFixture;if(!f?.destination)throw Error("TEST known protected restore missing");
+  const { acquireRuntimeOwnership } = await import("../../src/server/hosting/ownership"), { createSelectedWriterAdmission,createProtectedRootWriterAdmission } = await import("../../src/server/bootstrap/writer-admission"), { createProtectedRestoredHistory } = await import("../../src/server/backup/protected-history");
+  const { withProtectedLocalKeys } = await import("../../src/server/bootstrap/keys"), { openAuthorizationGateway } = await import("../../src/server/auth/gateway"), { createSettingsService } = await import("../../src/server/settings/service"), { createSalesService } = await import("../../src/server/sales/service");
+  const runtime=await acquireRuntimeOwnership(path.join(f.destination.database.directory,f.destination.database.filename));let gateway:Awaited<ReturnType<typeof openAuthorizationGateway>>|undefined;
+  try {
+    await expect(createProtectedRootWriterAdmission(f.config,runtime,41)).rejects.toThrow();
+    const admission=await createSelectedWriterAdmission(f.config,f.destination,runtime),history=createProtectedRestoredHistory(admission,f.destination.database);let secrets!:typeof f.authorization.signingSecrets;
+    await withProtectedLocalKeys(f.destination,async keys=>{secrets={...keys.signingSecrets};});
+    const config={...f.authorization,database:f.destination.database,protectedAdmission:admission,signingSecrets:secrets};
+    await expect(openAuthorizationGateway(config,41)).rejects.toThrow("Access denied.");
+    await expect(openAuthorizationGateway({...config,protectedHistory:{} as typeof history},41)).rejects.toThrow();
+    gateway=await openAuthorizationGateway({...config,protectedHistory:history},41);
+    await expect(gateway.authorizeAdmin(f.originalRequest)).rejects.toThrow("Access denied.");
+    const response=await gateway.issueAdminSession(await gateway.verifyAdminPassword(f.values.ADMIN)),request=new Request(f.authorization.origins.ADMIN+"/private",{method:"POST",headers:{origin:f.authorization.origins.ADMIN,cookie:response.headers.getSetCookie().map(c=>c.split(";")[0]).join("; ")}});
+    const staffResponse=await gateway.issueSalespersonSession(await gateway.verifySalespersonPassword(f.values.SALESPERSON)),staffRequest=new Request(f.authorization.origins.SALESPERSON+"/private",{headers:{cookie:staffResponse.headers.getSetCookie().map(c=>c.split(";")[0]).join("; ")}});
+    expect(await createSalesService(gateway,"TEST SHOP",41).get(staffRequest,f.saleId)).toEqual(f.receipt);
+    const settingsApi=createSettingsService(gateway,"TEST SHOP"),current=await settingsApi.current(request,"ADMIN");if(!("context" in current)||typeof current.context!=="string")throw Error();expect(current.context).not.toBe(f.settingsContext);
+    await settingsApi.save(request,f.values.ADMIN,(await import("node:crypto")).randomUUID(),current.context,{expectedRevision:"1",settings:{shopName:"TEST new destination",address:"",phone:"",footer:"",receiptLayout:"ordinary",currency:"PKR",timezone:"Asia/Karachi"},reason:"TEST new context without history rewriting"});
+    const {configureProtectedBackups41}=await import("../../src/server/backup/worker"),root=path.join(f.destination.directory,"worker"),offDevice=path.join(f.destination.directory,"test-export");mkdirSync(root);mkdirSync(offDevice);
+    f.backupConfiguration=await configureProtectedBackups41(gateway,request,f.values.ADMIN,f.custody,f.destination.database,root,offDevice,admission,history);
+  } finally { await gateway?.close();await runtime.close(); }
+});
+
+
+it("protected restored runtime authenticates actual HTTPS and Chromium and rejects unauthorized role and Origin access",async()=>{
+ const f=protectedRestoreFixture;if(!f?.destination||!f.backupConfiguration||!process.env.SHOP_POS_INVENTORY_BUILT_APP)throw Error("TEST verified restore and exact built app required");
+ const net=await import("node:net"),https=await import("node:https"),{withProtectedLocalKeys}=await import("../../src/server/bootstrap/keys"),{startLocalRuntime}=await import("../../src/server/hosting/runtime");
+ const server=net.createServer();await new Promise<void>(resolve=>server.listen(0,"127.0.0.1",resolve));const port=(server.address() as import("node:net").AddressInfo).port;await new Promise<void>(resolve=>server.close(()=>resolve()));
+ let secrets!:typeof f.authorization.signingSecrets;await withProtectedLocalKeys(f.destination,async keys=>{secrets={...keys.signingSecrets};});
+ const config:import("../../src/server/hosting/runtime").LocalRuntimeConfiguration={applicationDirectory:process.env.SHOP_POS_INVENTORY_BUILT_APP,port,tls:candidateTls,protectedIdentity:{root:f.config,selected:f.destination},authorization:{...f.authorization,database:f.destination.database,signingSecrets:secrets,protectedAdmission:undefined,origins:{ADMIN:"https://localhost:"+port,SALESPERSON:"https://127.0.0.1:"+port}},testSales:{shopName:"TEST SHOP"},testReturns:true,testExpenses:true,testInvoiceCorrections:true,testReports:true,testCash:true,testSettings:true,testBackups:f.backupConfiguration};f.runtimeConfig=config;
+ const wire=(endpoint:string,role:"ADMIN"|"SALESPERSON",cookies:string[]=[],value?:unknown,origin?:string)=>new Promise<{status:number;body:string;cookies:string[]}>((resolve,reject)=>{
+  const body=value===undefined?undefined:JSON.stringify(value),request=https.request({hostname:"127.0.0.1",servername:role==="ADMIN"?"localhost":"",port,ca:candidateTls.trustAnchor,agent:false,path:endpoint,method:body?"POST":"GET",headers:{host:new URL(config.authorization.origins[role]).host,origin:origin??config.authorization.origins[role],cookie:cookies.map(c=>c.split(";")[0]).join("; "),...(body?{"content-type":"application/json","content-length":Buffer.byteLength(body)}:{})}},response=>{const chunks:Buffer[]=[];response.on("data",b=>chunks.push(b));response.on("end",()=>resolve({status:response.statusCode!,body:Buffer.concat(chunks).toString(),cookies:response.headers["set-cookie"]??[]}));});request.once("error",reject);request.end(body);
+ });
+ const runtime=await startLocalRuntime(config);
+ try{
+  expect(runtime.authenticationEnabled).toBe(true);
+  expect((await wire("/api/admin/products","ADMIN")).status).toBe(403);
+  const admin=await wire("/api/auth/login","ADMIN",[],{password:f.values.ADMIN}),staff=await wire("/api/auth/login","SALESPERSON",[],{password:f.values.SALESPERSON});expect(admin.status).toBe(200);expect(staff.status).toBe(200);
+  expect((await wire("/api/admin/products","SALESPERSON",staff.cookies)).status).toBe(403);
+  expect((await wire("/api/admin/products","ADMIN",admin.cookies,undefined,"https://foreign.invalid")).status).toBe(403);
+  const receipt=await wire("/api/pos/sales/"+f.saleId,"SALESPERSON",staff.cookies);expect(receipt.status).toBe(200);expect(JSON.parse(receipt.body)).toEqual(f.receipt);
+  const {chromium}=await import("playwright"),{createHash,X509Certificate}=await import("node:crypto"),spki=createHash("sha256").update(new X509Certificate(candidateTls.certificate).publicKey.export({type:"spki",format:"der"})).digest("base64");
+  const browser=await chromium.launch({headless:true,args:["--ignore-certificate-errors-spki-list="+spki]});
+  try{const context=await browser.newContext({ignoreHTTPSErrors:false}),page=await context.newPage();await page.goto(config.authorization.origins.ADMIN+"/login");
+   await expect.poll(()=>page.getByRole("button",{name:"Open Shop",exact:true}).isEnabled(),{timeout:60000}).toBe(true);
+   expect(await page.locator("#login-password").inputValue()).toBe("");await page.locator("#login-password").fill(f.values.ADMIN);await page.getByRole("button",{name:"Open Shop",exact:true}).click();
+   await expect.poll(()=>new URL(page.url()).pathname,{timeout:60000}).toBe("/admin/products");await page.goto(config.authorization.origins.ADMIN+"/admin/settings");
+   expect(await page.getByLabel(/shop name/i).inputValue()).toBe("TEST new destination");await context.close();
+  }finally{await browser.close();}
+ }finally{await runtime.close();}
+});
+it("protected runtime maintenance drains HTTPS and backup work while pinning the sole writer lease",async()=>{
+ const f=protectedRestoreFixture;if(!f?.runtimeConfig||!f.destination)throw Error("TEST runtime missing");
+ const {startLocalRuntime,withLocalRuntimeMaintenance}=await import("../../src/server/hosting/runtime"),{adminMaintenanceSourceEvidence}=await import("../../src/server/auth/gateway"),{acquireRuntimeOwnership}=await import("../../src/server/hosting/ownership"),{randomUUID}=await import("node:crypto");
+ const runtime=await startLocalRuntime(f.runtimeConfig),operation={operationId:randomUUID(),purpose:"RESTORE41" as const};
+ await withLocalRuntimeMaintenance(runtime,f.values.ADMIN,operation,async(source,lease)=>{
+  expect(adminMaintenanceSourceEvidence(source,f.destination!.database,lease,operation).schema).toBe(41);
+  await expect(runtime.close()).rejects.toThrow("Local service unavailable.");await expect(acquireRuntimeOwnership(f.filename)).rejects.toThrow("Local service unavailable.");
+ });
+ const acquired=await acquireRuntimeOwnership(f.filename);await acquired.close();
+});
+it("protected restore receipt tampering invalidates a live admission and independent restart",async()=>{
+ const f=protectedRestoreFixture;if(!f?.destination)throw Error("TEST restored target missing");
+ const {acquireRuntimeOwnership}=await import("../../src/server/hosting/ownership"),{createSelectedWriterAdmission,assertProtectedWriterAdmission}=await import("../../src/server/bootstrap/writer-admission");
+ const runtime=await acquireRuntimeOwnership(path.join(f.destination.database.directory,f.destination.database.filename));
+ try{const admission=await createSelectedWriterAdmission(f.config,f.destination,runtime),receipt=path.join(f.destination.directory,"protected-identity","restore41","restore.dpapi"),bytes=readFileSync(receipt);bytes[bytes.length-1]^=1;writeFileSync(receipt,bytes);
+ expect(()=>assertProtectedWriterAdmission(admission,f.destination!.database,undefined,true)).toThrow();await expect(createSelectedWriterAdmission(f.config,f.destination,runtime)).rejects.toThrow();
+ }finally{await runtime.close();}
+});
+
+it("runtime lease rejects release during a borrowed bootstrap callback and releases only after known closure", async () => {
+ const directory=mkdtempSync(path.join(run,"pinned-runtime-"));copyFileSync(blank41,path.join(directory,"test.sqlite3"));
+ const database={directory,filename:"test.sqlite3",mode:"test" as const,create:false};
+ const {acquireRuntimeOwnership}=await import("../../src/server/hosting/ownership"),{withHeldBootstrapOwnership,hasActiveBootstrapLease}=await import("../../src/server/bootstrap/ownership");
+ const runtime=await acquireRuntimeOwnership(path.join(directory,"test.sqlite3"));
+ try{await withHeldBootstrapOwnership(database,runtime,async(_retain,lease)=>{
+   expect(hasActiveBootstrapLease(lease,database)).toBe(true);await expect(runtime.close()).rejects.toThrow("Local service unavailable.");
+   runtime.assertHeld();await expect(acquireRuntimeOwnership(path.join(directory,"test.sqlite3"))).rejects.toThrow("Local service unavailable.");
+ });runtime.assertHeld();}finally{await runtime.close();}
+ const reopened=await acquireRuntimeOwnership(path.join(directory,"test.sqlite3"));await reopened.close();
+});
+
+
+let interruptedRestoreFixture: (Awaited<ReturnType<typeof adminHandoffFixture>> & {custody:import("../../src/server/backup/crypto").BackupCustody;custodyDirectory:string;archive:string;operation:{operationId:string;purpose:"RESTORE41"};target:string;targetState?:string}) | undefined;
+it("restore crash prerequisite retains an authenticated archive and untouched enrolled original41", async()=>{
+ const f=await adminHandoffFixture(41),{createTestCustody}=await import("../../src/server/backup/crypto"),{createProtectedArchive41}=await import("../../src/server/backup/service"),{randomUUID}=await import("node:crypto");
+ try{const custodyDirectory=path.join(f.config.directory,"crash41-custody"),staging=path.join(f.config.directory,"crash41-backup");mkdirSync(custodyDirectory);mkdirSync(staging);const custody=await createTestCustody(custodyDirectory);
+ const archived=await createProtectedArchive41(custody,f.config.database,staging,f.authorization.protectedAdmission!);const operation={operationId:randomUUID(),purpose:"RESTORE41" as const},target=path.join(f.config.directory,operation.operationId);mkdirSync(target);
+ interruptedRestoreFixture={...f,custody,custodyDirectory,archive:archived.archive,operation,target};
+ }finally{await f.gateway.close();await f.runtime.close();}
+});
+it("actual restore child killed after SQLite backup never grants completion or adoption",async()=>{
+ const f=interruptedRestoreFixture;if(!f)throw Error("TEST crash preparation missing");
+ const child=fork(path.resolve("tests/helpers/maintenance-runtime-probe.mjs"),[],{cwd:process.cwd(),execArgv:["--experimental-transform-types","--disable-warning=ExperimentalWarning","--disable-warning=MODULE_TYPELESS_PACKAGE_JSON"],env:{...process.env,NODE_ENV:"test"},stdio:["ignore","ignore","pipe","ipc"],windowsHide:true});
+ const exited=once(child,"exit");child.stderr!.resume();
+ try{const reply=new Promise<{status:string}>((resolve,reject)=>{child.once("message",resolve);child.once("error",reject);child.once("exit",()=>reject(Error("TEST restore child exited before backup pause")));});
+ child.send({action:"pause-restore-copy-ack",filename:f.filename,config:f.config,authorization:{...f.authorization,protectedAdmission:undefined},password:f.values.ADMIN,operation:f.operation,target:f.target,custodyDirectory:f.custodyDirectory,archive:f.archive});
+ expect((await reply).status).toBe("ACTUAL_RESTORE_COPY_UNACKNOWLEDGED");expect(child.kill("SIGTERM")).toBe(true);await exited;
+ // Disposable simulation of a flushed/partial orphan publication. Retain it
+ // permanently; a later native quarantine must fence it without deletion.
+ const orphan=path.join(f.config.directory,"protected-identity","candidate-authority","000001."+f.operation.operationId+".committed.dpapi."+(await import("node:crypto")).randomUUID()+".pending");writeFileSync(orphan,Buffer.alloc(0),{flag:"wx"});
+ const {openProofDatabase,fingerprint}=await import("../../src/server/backup/snapshot"),{enrollmentDigest}=await import("../../src/server/bootstrap/database");const db=openProofDatabase(path.join(f.target,"restored41.sqlite3"));try{expect(db.prepare("PRAGMA user_version").get()?.user_version).toBe(BigInt(41));f.targetState=enrollmentDigest(fingerprint(db));}finally{db.close();}
+ }finally{if(child.exitCode===null&&child.signalCode===null){child.kill("SIGTERM");await exited;}}
+});
+it("restore crash recovery requires restricted fresh Admin and permanently quarantines the unacknowledged copy",async()=>{
+ const f=interruptedRestoreFixture;if(!f?.targetState)throw Error("TEST interrupted restore missing");
+ const {acquireRuntimeOwnership}=await import("../../src/server/hosting/ownership"),{createProtectedRootWriterAdmission,createProtectedRootRecoveryAdmission}=await import("../../src/server/bootstrap/writer-admission"),{openAuthorizationGateway,withAdminMaintenanceSource}=await import("../../src/server/auth/gateway");
+ const {quarantineNeverAdmittedRestore41}=await import("../../src/server/bootstrap/restore41"),{bindTrustedCandidateRecoveryInteraction}=await import("../../src/server/bootstrap/candidate-recovery8"),{openProofDatabase,fingerprint}=await import("../../src/server/backup/snapshot"),{enrollmentDigest}=await import("../../src/server/bootstrap/database");
+ const runtime=await acquireRuntimeOwnership(f.filename);let gateway:Awaited<ReturnType<typeof openAuthorizationGateway>>|undefined;
+ try{await expect(createProtectedRootWriterAdmission(f.config,runtime,41)).rejects.toThrow();
+ gateway=await openAuthorizationGateway({...f.authorization,protectedAdmission:await createProtectedRootRecoveryAdmission(f.config,runtime,41)},41);
+ await expect(gateway.verifySalespersonPassword(f.values.SALESPERSON)).rejects.toThrow("Access denied.");
+ const proof=await gateway.verifyAdminPassword(f.values.ADMIN),before=f.state();
+ await withAdminMaintenanceSource(gateway,proof,runtime,f.operation,async(source,lease)=>{
+  expect(await quarantineNeverAdmittedRestore41(f.config,f.config,source,lease,f.operation.operationId,bindTrustedCandidateRecoveryInteraction({confirm:async()=>"CONFIRM_PERMANENT_NO_ADMISSION"}))).toMatchObject({status:"QUARANTINED_NO_ADMISSION",sqlOutcome:"UNKNOWN",productionActivation:false});
+ });expect(f.state()).toBe(before);
+ const db=openProofDatabase(path.join(f.target,"restored41.sqlite3"));try{expect(enrollmentDigest(fingerprint(db))).toBe(f.targetState);}finally{db.close();}
+ expect(await createProtectedRootWriterAdmission(f.config,runtime,41)).toBeDefined();
+ }finally{await gateway?.close();await runtime.close();}
+});
+
+
+it("unpublished INTENT recovery authenticates orphan bytes and permanently fences the UUID without guessing or deleting its payload",async()=>{
+ const f=interruptedRestoreFixture;if(!f)throw Error("TEST original41 recovery prerequisite missing");
+ const {randomUUID}=await import("node:crypto"),{storage}=await import("../../src/server/backup/storage"),{decryptSnapshot}=await import("../../src/server/backup/crypto"),{acquireRuntimeOwnership}=await import("../../src/server/hosting/ownership");
+ const {createProtectedRootRecoveryAdmission,createProtectedRootWriterAdmission}=await import("../../src/server/bootstrap/writer-admission"),{openAuthorizationGateway,withAdminMaintenanceSource}=await import("../../src/server/auth/gateway"),{quarantineUnpublishedCandidate,bindTrustedCandidateRecoveryInteraction}=await import("../../src/server/bootstrap/candidate-recovery8");
+ const operation={operationId:randomUUID(),purpose:"RESTORE41" as const},directory=path.join(f.config.directory,operation.operationId),staging=path.join(f.config.directory,"unpublished-readback");mkdirSync(directory);mkdirSync(staging);await storage(directory,"initialize");await storage(staging,"initialize");copyFileSync(f.filename,path.join(directory,"restored41.sqlite3"));
+ const orphan=path.join(f.config.directory,"protected-identity","candidate-authority","000003."+operation.operationId+".intent.dpapi."+randomUUID()+".pending"),orphanBytes=Buffer.from("TEST_PARTIAL_CIPHER_NO_AUTHENTICATED_INTENT");writeFileSync(orphan,orphanBytes,{flag:"wx"});
+ const plaintext=path.join(staging,"unpublished.pending"),manifest=await decryptSnapshot(f.custody,f.archive,plaintext),destination:LocalKeyConfiguration={directory,database:{directory,filename:"restored41.sqlite3",mode:"test",create:false},migrationsDirectory:migrations};
+ const runtime=await acquireRuntimeOwnership(f.filename);let gateway:Awaited<ReturnType<typeof openAuthorizationGateway>>|undefined;
+ try{await expect(createProtectedRootWriterAdmission(f.config,runtime,41)).rejects.toThrow();gateway=await openAuthorizationGateway({...f.authorization,protectedAdmission:await createProtectedRootRecoveryAdmission(f.config,runtime,41)},41);
+ const proof=await gateway.verifyAdminPassword(f.values.ADMIN),before=f.state();await withAdminMaintenanceSource(gateway,proof,runtime,operation,async(source,lease)=>{
+  await expect(quarantineUnpublishedCandidate(f.config,f.config,destination,source,lease,operation.operationId,bindTrustedCandidateRecoveryInteraction({confirm:async()=>"CONFIRM_PERMANENT_NO_ADMISSION"}),f.custody,{} as typeof manifest,f.archive,plaintext)).rejects.toThrow();
+  expect(await quarantineUnpublishedCandidate(f.config,f.config,destination,source,lease,operation.operationId,bindTrustedCandidateRecoveryInteraction({confirm:async()=>"CONFIRM_PERMANENT_NO_ADMISSION"}),f.custody,manifest,f.archive,plaintext)).toMatchObject({status:"QUARANTINED_NO_ADMISSION",unpublishedIntent:true,sqlOutcome:"UNKNOWN",productionActivation:false});
+ });expect(f.state()).toBe(before);expect(readFileSync(orphan)).toEqual(orphanBytes);expect(await createProtectedRootWriterAdmission(f.config,runtime,41)).toBeDefined();
+ }finally{await gateway?.close();await runtime.close();}
+});
+
+
+it("protected database directory with a foreign ACL is rejected at fresh admission without changing SQL",async()=>{
+ const f=await adminHandoffFixture(41),before=f.state();await f.gateway.close();
+ try{
+  const task=promisify(execFile)(path.join(process.env.SystemRoot!,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-Command","$target=[Console]::In.ReadToEnd();$entry=New-Object IO.DirectoryInfo($target);$acl=$entry.GetAccessControl([Security.AccessControl.AccessControlSections]::Access);$principal=New-Object Security.Principal.SecurityIdentifier('S-1-5-32-545');$rule=New-Object Security.AccessControl.FileSystemAccessRule($principal,'Read','Allow');[void]$acl.AddAccessRule($rule);$entry.SetAccessControl($acl)"],{windowsHide:true});task.child.stdin!.end(f.config.database.directory);await task;
+  const {createProtectedRootWriterAdmission}=await import("../../src/server/bootstrap/writer-admission");await expect(createProtectedRootWriterAdmission(f.config,f.runtime,41)).rejects.toThrow("Protected setup unavailable.");expect(f.state()).toBe(before);
+ }finally{await f.runtime.close();}
 });

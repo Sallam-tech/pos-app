@@ -24,7 +24,7 @@ import { storage, testDirectory } from "../backup/storage";
 import { resolveDatabaseLocation } from "../db/location";
 import { validateReviewedSchema } from "../db/validate-schema";
 import { authenticationBackup8Evidence, type VerifiedAuthenticationBackup8 } from "./authentication-backup";
-import { candidateLedgerContext, candidateRecordBytes, candidateRecordDigest, classifyCandidateLedger, readProtectedCandidateLedger, type CandidateRecord } from "./candidate-records";
+import { candidateLedgerContext, candidateRecordBytes, candidateRecordDigest, classifyCandidateLedger, candidatePendingCompatible, readProtectedCandidateLedger, type CandidateRecord } from "./candidate-records";
 import { enrollmentDigest } from "./database";
 import { inspectLocalVault, withProtectedLocalKeys, type LocalKeyConfiguration } from "./keys";
 import { protectedManifestDigest } from "./maintenance-journal";
@@ -89,7 +89,7 @@ export async function unadmittedCandidateCopy8Evidence(copy: unknown) {
   if (archive.sourceStateDigest !== c.intent.sourceStateDigest || archive.ciphertextSha256 !== c.intent.backupCiphertextSha256 || fileIdentity(c.filename) !== c.identity) return rejectBootstrap();
   await storage(path.dirname(c.filename), "check", { filename: path.basename(c.filename) }); guard(c);
   const ledger = await readProtectedCandidateLedger(c.vault, c.intent.originalAnchorDigest), own = ledger.records.filter(r => r.operationId === c.intent.operationId);
-  if (ledger.pending.length || own.length !== 1 || own[0].kind !== "INTENT" || candidateRecordDigest(own[0]) !== candidateRecordDigest(c.intent) ||
+  if (!candidatePendingCompatible(ledger) || own.length !== 1 || own[0].kind !== "INTENT" || candidateRecordDigest(own[0]) !== candidateRecordDigest(c.intent) ||
       classifyCandidateLedger(ledger).status !== "RECOVERY_REVIEW_REQUIRED" || await snapshot(c.filename) !== c.sourceFingerprint) return rejectBootstrap();
   guard(c);
   return Object.freeze({ operationId: c.intent.operationId, sourceFileIdentity: c.intent.sourceFileIdentity, destinationFileIdentity: c.identity,
@@ -113,7 +113,7 @@ export async function withUnadmittedCandidateCopy8<T>(input: LocalKeyConfigurati
     const vault = await inspectLocalVault(config), archive = await authenticationBackup8Evidence(backup, config, lease);
     if (vault.databaseFingerprint !== hash({ filename: initial.filename, device: initial.device, inode: initial.inode })) return rejectBootstrap();
     const ledger = await readProtectedCandidateLedger(vault, archive.originalAnchorDigest), state = classifyCandidateLedger(ledger);
-    if (ledger.pending.length || !["ABSENT", "QUARANTINED_ONLY"].includes(state.status) || ledger.records.some(r => r.operationId === initial.operationId)) return rejectBootstrap();
+    if (!candidatePendingCompatible(ledger) || !["ABSENT", "QUARANTINED_ONLY"].includes(state.status) || ledger.records.some(r => r.operationId === initial.operationId)) return rejectBootstrap();
     const request = Object.freeze({ operationId: initial.operationId, purpose: "UPGRADE8" as const, sourceFileIdentity: vault.databaseFingerprint, originalAnchorDigest: archive.originalAnchorDigest,
       archiveId: archive.archiveId, ciphertextSha256: archive.ciphertextSha256, destinationDirectory: path.resolve(directory), productionActivation: false as const });
     if (claimedSources.has(source)) return rejectBootstrap();
@@ -198,7 +198,10 @@ export async function verifiedCandidate41Evidence(copy: unknown) {
   await storage(path.dirname(c.filename), "check", { filename: path.basename(c.filename) });
   const ledger = await readProtectedCandidateLedger(c.vault, c.intent.originalAnchorDigest);
   const expected = c.stage === "COMMITTED41" ? c.committed : c.intent;
-  if (!expected || ledger.pending.length || candidateRecordDigest(ledger.records.at(-1)!) !== candidateRecordDigest(expected) || ledger.records.filter(r => r.operationId === c.intent.operationId).length !== (c.stage === "COMMITTED41" ? 2 : 1)) return rejectBootstrap();
+  const own = ledger.records.filter(r => r.operationId === c.intent.operationId), last = ledger.records.at(-1);
+  const selected = c.stage === "COMMITTED41" && own.length === 3 && last?.kind === "CURRENT" && last.operationId === c.intent.operationId &&
+    last.intentDigest === candidateRecordDigest(c.intent) && last.targetStateDigest === c.committed?.targetStateDigest && last.targetVaultDigest === c.committed?.targetVaultDigest;
+  if (!expected || !candidatePendingCompatible(ledger, c.stage === "COMMITTED41" ? c.intent.operationId : undefined) || (!selected && (candidateRecordDigest(last!) !== candidateRecordDigest(expected) || own.length !== (c.stage === "COMMITTED41" ? 2 : 1)))) return rejectBootstrap();
   guard(c);
   return Object.freeze({ operationId: c.intent.operationId, filename: c.filename, sourceFileIdentity: c.intent.sourceFileIdentity, destinationFileIdentity: c.identity,
     sourceStateDigest: c.intent.sourceStateDigest, targetStateDigest: c.targetDigest!, targetSpecificationDigest: c.intent.targetSpecificationDigest,
@@ -282,7 +285,7 @@ export async function candidate41KeyEvidence(copy: unknown, config: LocalKeyConf
   const actual = loadMigrations(config.migrationsDirectory), expected = reviewedMigrations();
   if (actual.length !== 41 || actual.some((m, i) => m.name !== expected[i].name || m.version !== expected[i].version || m.checksum !== expected[i].checksum)) return rejectBootstrap();
   const facts = await verifiedCandidate41Evidence(copy);
-  return Object.freeze({ ...facts, originalCertificateFingerprint: c.vault.metadata.certificateFingerprint,
+  return Object.freeze({ ...facts, forbiddenTlsPublicKeyDigests: Object.freeze([c.vault.tlsPublicKeyDigest]), originalCertificateFingerprint: c.vault.metadata.certificateFingerprint,
     originalInstallationId: c.vault.metadata.installationId, originalDeviceId: c.vault.metadata.deviceId });
 }
 
@@ -299,7 +302,7 @@ export async function recordKnownCandidateCompletion8(copy: UnadmittedCandidateC
     const config = Object.freeze({ directory: input.directory, migrationsDirectory: input.migrationsDirectory, database: Object.freeze({ ...input.database, create: false }) });
     const facts = await candidate41KeyEvidence(copy, config), destination = await inspectLocalVault(config); guard(c);
     if (destination.databaseFingerprint !== c.identity || destination.metadata.installationId === facts.originalInstallationId ||
-        destination.metadata.deviceId === facts.originalDeviceId || destination.metadata.certificateFingerprint === facts.originalCertificateFingerprint) return rejectBootstrap();
+        destination.metadata.deviceId === facts.originalDeviceId || destination.metadata.certificateFingerprint === facts.originalCertificateFingerprint || facts.forbiddenTlsPublicKeyDigests.includes(destination.tlsPublicKeyDigest)) return rejectBootstrap();
     await withProtectedLocalKeys(c.config, async original => withProtectedLocalKeys(config, async target => {
       if (target.signingSecrets.ADMIN === original.signingSecrets.ADMIN || target.signingSecrets.SALESPERSON === original.signingSecrets.SALESPERSON) return rejectBootstrap();
     }).then(() => {})); guard(c);

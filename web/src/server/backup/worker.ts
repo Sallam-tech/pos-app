@@ -1,4 +1,7 @@
 import "server-only";
+import { assertProtectedWriterAdmission, type ProtectedWriterAdmission } from "../bootstrap/writer-admission";
+import { protectedRestoredHistory, type ProtectedRestoredHistory } from "./protected-history";
+import { createProtectedArchive41 } from "./service";
 import {createHash,randomUUID} from "node:crypto";
 import {createReadStream,lstatSync,readFileSync,readdirSync,mkdirSync} from "node:fs";
 import {open} from "node:fs/promises";
@@ -16,38 +19,45 @@ import {fail,storage,testDirectory} from "./storage";
 
 declare const configurationBrand:unique symbol;
 export interface TestBackupConfiguration{readonly [configurationBrand]:true}
-type Setup={format:"POS_TEST_BACKUP_CONFIG_V1";id:string;namespace:string;keyId:string;root:string;exportDirectory:string;configuredAtMs:number};
-type Capability={setup:Setup;custody:BackupCustody;database:DatabaseOptions;restoreProof?:VerifiedTestRestore};
+type Setup={format:"POS_TEST_BACKUP_CONFIG_V1"|"POS_PROTECTED41_BACKUP_CONFIG_V1";id:string;namespace:string;keyId:string;root:string;exportDirectory:string;configuredAtMs:number};
+type Capability={setup:Setup;custody:BackupCustody;database:DatabaseOptions;restoreProof?:VerifiedTestRestore;admission?:ProtectedWriterAdmission;protectedHistory?:ProtectedRestoredHistory};
 const configurations=new WeakMap<object,Capability>();
 function mint(c:Capability){const result=Object.freeze({toJSON:fail}) as unknown as TestBackupConfiguration;configurations.set(result,c);return result;}
 function source(database:DatabaseOptions){if(database.mode!=="test")return fail();return resolveDatabaseLocation({...database,create:false}).filename;}
 async function checkSource(c:Capability){
  if(testSourceNamespace(source(c.database))!==c.setup.namespace)return fail();
- restoredHistory(c.restoreProof,c.database);
+ if(c.admission){const facts=assertProtectedWriterAdmission(c.admission,c.database,undefined,true);if(facts.schema!==41||facts.maintenanceOnly||facts.restored&&!c.protectedHistory)return fail();protectedRestoredHistory(c.protectedHistory,c.database);}else restoredHistory(c.restoreProof,c.database);
  const db=openProofDatabase(source(c.database));try{await verifySchema41(db);}finally{db.close();}
 }
-export async function configureTestBackups(g:AuthorizationGateway,request:Request,password:unknown,custody:BackupCustody,database:DatabaseOptions,root:string,exportDirectory:string,restoreProof?:VerifiedTestRestore){
+async function configureBackups(g:AuthorizationGateway,request:Request,password:unknown,custody:BackupCustody,database:DatabaseOptions,root:string,exportDirectory:string,restoreProof?:VerifiedTestRestore,admission?:ProtectedWriterAdmission,protectedHistory?:ProtectedRestoredHistory){
  testDirectory(root);testDirectory(exportDirectory);if(path.resolve(root)===path.resolve(exportDirectory))return fail();
  const filename=source(database),namespace=testSourceNamespace(filename),receipt=await g.verifyAdminPassword(password);
  await g.withFreshAdminTransaction(request,receipt,async(tx,actor)=>{
   if(actor.role!=="ADMIN")return fail();
   if(authorizedFileNamespace(tx)!==namespace||testSourceNamespace(filename)!==namespace)return fail();
  });
- const setup:Setup={format:"POS_TEST_BACKUP_CONFIG_V1",id:randomUUID(),namespace,keyId:custodyMetadata(custody).id,root:path.resolve(root),exportDirectory:path.resolve(exportDirectory),configuredAtMs:Date.now()};
- const c:Capability={setup,custody,database:Object.freeze({...database,create:false}),restoreProof};
+ const setup:Setup={format:admission?"POS_PROTECTED41_BACKUP_CONFIG_V1":"POS_TEST_BACKUP_CONFIG_V1",id:randomUUID(),namespace,keyId:custodyMetadata(custody).id,root:path.resolve(root),exportDirectory:path.resolve(exportDirectory),configuredAtMs:Date.now()};
+ const c:Capability={setup,custody,database:Object.freeze({...database,create:false}),restoreProof,admission,protectedHistory};
  await checkSource(c);await storage(root,"initialize");await storage(exportDirectory,"initialize");
  const payload=Buffer.from(canonical({record:setup,signature:signProtectedEvidence(custody,setup)}));
  try{await storage(root,"seal-record",{value:payload.toString("base64")});}finally{payload.fill(0);}
  return mint(c);
 }
-export async function reopenTestBackupConfiguration(custody:BackupCustody,database:DatabaseOptions,root:string,restoreProof?:VerifiedTestRestore){
+export function configureTestBackups(g:AuthorizationGateway,request:Request,password:unknown,custody:BackupCustody,database:DatabaseOptions,root:string,exportDirectory:string,restoreProof?:VerifiedTestRestore){
+ return configureBackups(g,request,password,custody,database,root,exportDirectory,restoreProof);
+}
+export function configureProtectedBackups41(g:AuthorizationGateway,request:Request,password:unknown,custody:BackupCustody,database:DatabaseOptions,root:string,exportDirectory:string,admission:ProtectedWriterAdmission,history?:ProtectedRestoredHistory){
+ const facts=assertProtectedWriterAdmission(admission,database,undefined,true);if(facts.schema!==41||facts.maintenanceOnly)return fail();
+ return configureBackups(g,request,password,custody,database,root,exportDirectory,undefined,admission,history);
+}
+export async function reopenTestBackupConfiguration(custody:BackupCustody,database:DatabaseOptions,root:string,restoreProof?:VerifiedTestRestore,admission?:ProtectedWriterAdmission,protectedHistory?:ProtectedRestoredHistory){
  const encoded=await storage(root,"unseal-record");if(typeof encoded!=="string")return fail();
  const b=Buffer.from(encoded,"base64");
  try{
   const v=JSON.parse(b.toString("utf8")),s=v.record as Setup;
-  if(!verifyProtectedEvidence(custody,s,v.signature)||!s||Object.keys(s).sort().join(",")!=="configuredAtMs,exportDirectory,format,id,keyId,namespace,root"||s.format!=="POS_TEST_BACKUP_CONFIG_V1"||uuid(s.id)!==s.id||s.keyId!==custodyMetadata(custody).id||s.root!==path.resolve(root)||!Number.isSafeInteger(s.configuredAtMs)||s.configuredAtMs<1)return fail();
+  if(!verifyProtectedEvidence(custody,s,v.signature)||!s||Object.keys(s).sort().join(",")!=="configuredAtMs,exportDirectory,format,id,keyId,namespace,root"||(s.format!=="POS_TEST_BACKUP_CONFIG_V1"&&s.format!=="POS_PROTECTED41_BACKUP_CONFIG_V1")||(s.format==="POS_PROTECTED41_BACKUP_CONFIG_V1")!==!!admission||uuid(s.id)!==s.id||s.keyId!==custodyMetadata(custody).id||s.root!==path.resolve(root)||!Number.isSafeInteger(s.configuredAtMs)||s.configuredAtMs<1)return fail();
   testDirectory(s.exportDirectory);await storage(s.exportDirectory,"check");
-  const c:Capability={setup:s,custody,database:Object.freeze({...database,create:false}),restoreProof};await checkSource(c);return mint(c);
+  const c:Capability={setup:s,custody,database:Object.freeze({...database,create:false}),restoreProof,admission,protectedHistory};await checkSource(c);return mint(c);
  }catch{return fail();}finally{b.fill(0);}
 }
 type Kind="MANUAL"|"AUTOMATIC"|"CLOSING"|"EXPORT";
@@ -81,10 +91,10 @@ export async function startTestBackupWorker(configuration:TestBackupConfiguratio
   jobs.set(e.job.id,Object.freeze(e.job));sequence=e.sequence;previous=createHash("sha256").update(canonical(e)).digest("hex");
  }
  if(jobs.size>10000)return fail();
- let stopped=false,broken=false,tail:Promise<void>=Promise.resolve();
- const enqueue=<T>(f:()=>Promise<T>):Promise<T>=>{const result=tail.then(async()=>{ownership.assertHeld();if(stopped||broken)return fail();return f();});tail=result.then(()=>{},()=>{});return result;};
+ let stopping=false,stopped=false,broken=false,tail:Promise<void>=Promise.resolve();
+ const enqueue=<T>(f:()=>Promise<T>):Promise<T>=>{if(stopping||stopped)return Promise.reject(new Error("Backup or recovery unavailable."));const result=tail.then(async()=>{ownership.assertHeld();if(stopped||broken)return fail();return f();});tail=result.then(()=>{},()=>{});return result;};
  async function append(job:BackupJob){
-  ownership.assertHeld();if(broken||sequence>=30000||jobs.size>=10000&&!jobs.has(job.id))return fail();checkJob(job);
+  ownership.assertHeld();if(c!.admission)assertProtectedWriterAdmission(c!.admission,c!.database,undefined,true);if(broken||sequence>=30000||jobs.size>=10000&&!jobs.has(job.id))return fail();checkJob(job);
   const record:Event={format:"POS_TEST_BACKUP_JOB_V1",configurationId:c!.setup.id,sequence:sequence+1,previous,job};
   const pending=randomUUID()+".pending",file=await open(path.join(c!.setup.root,pending),"wx");
   try{await file.writeFile(canonical({record,signature:signProtectedEvidence(c!.custody,record)}));await file.sync();}finally{await file.close();}
@@ -127,7 +137,7 @@ export async function startTestBackupWorker(configuration:TestBackupConfiguratio
    if(!found){
     const root=path.join(c!.setup.root,"job-"+job.id);try{mkdirSync(root);}catch(e){if((e as {code?:string}).code!=="EEXIST")throw e;}
     testDirectory(root);const directory=path.join(root,"try-"+randomUUID());mkdirSync(directory);
-    const result=await createTestArchive(c!.custody,c!.database,directory,c!.restoreProof,undefined,job.id);
+    const result=c!.admission?await createProtectedArchive41(c!.custody,c!.database,directory,c!.admission,c!.protectedHistory,undefined,job.id):await createTestArchive(c!.custody,c!.database,directory,c!.restoreProof,undefined,job.id);
     ownership.assertHeld();if(result.manifest.sourceNamespace!==c!.setup.namespace)return fail();const facts=await hashFile(result.archive);
     found={archive:path.relative(c!.setup.root,result.archive).split(path.sep).join("/"),...facts};
    }
@@ -151,17 +161,17 @@ export async function startTestBackupWorker(configuration:TestBackupConfiguratio
  }
  // Recover uncertain original IDs before discovering new current-time work.
  await enqueue(async()=>{await drain();await pulse();});
- const timer=setInterval(()=>{void enqueue(pulse).catch(()=>{broken=true;});},30000);timer.unref();
+ const timer=setInterval(()=>{if(!stopping)void enqueue(pulse).catch(()=>{if(!stopping)broken=true;});},30000);timer.unref();
  const worker=Object.freeze({
-  manual(key:string){return enqueue(async()=>{const result=await admit(uuid(key),"MANUAL","manual");void enqueue(drain).catch(()=>{broken=true;});return result;});},
+  manual(key:string){return enqueue(async()=>{const result=await admit(uuid(key),"MANUAL","manual");if(!stopping)void enqueue(drain).catch(()=>{if(!stopping)broken=true;});return result;});},
   export(key:string,sourceId:string){return enqueue(async()=>{uuid(sourceId);const source=jobs.get(sourceId);if(!source||source.state!=="SNAPSHOT_VERIFIED")return fail();const result=await admit(uuid(key),"EXPORT","export:"+sourceId,sourceId);void enqueue(drain).catch(()=>{broken=true;});return result;});},
-  status(){ownership.assertHeld();if(broken)return fail();const list=[...jobs.values()].sort((a,b)=>b.createdAtMs-a.createdAtMs||b.id.localeCompare(a.id));return Object.freeze({configured:true,mode:"TEST_ONLY",automaticIntervalMinutes:30,configuredAtMs:String(c!.setup.configuredAtMs),observedAtMs:String(Date.now()),recoveryGap:"POWERED_OFF_INTERVALS_HAVE_NO_SNAPSHOT",cloud:"NOT_CONFIGURED",physicalOffDevice:"NOT_VERIFIED",applicationRestore:"SEPARATE_DRILL_REQUIRED",productionActivation:false,retention:"PRESERVE_ALL_PENDING_OWNER_STORAGE_ACCEPTANCE",jobs:list.slice(0,50).map(dto)});},
-  job(key:string){const j=jobs.get(uuid(key));return j?dto(j):{id:key,state:"UNKNOWN"};},
+  status(){ownership.assertHeld();if(stopping||stopped||broken)return fail();const list=[...jobs.values()].sort((a,b)=>b.createdAtMs-a.createdAtMs||b.id.localeCompare(a.id));return Object.freeze({configured:true,mode:"TEST_ONLY",automaticIntervalMinutes:30,configuredAtMs:String(c!.setup.configuredAtMs),observedAtMs:String(Date.now()),recoveryGap:"POWERED_OFF_INTERVALS_HAVE_NO_SNAPSHOT",cloud:"NOT_CONFIGURED",physicalOffDevice:"NOT_VERIFIED",applicationRestore:"SEPARATE_DRILL_REQUIRED",productionActivation:false,retention:"PRESERVE_ALL_PENDING_OWNER_STORAGE_ACCEPTANCE",jobs:list.slice(0,50).map(dto)});},
+  job(key:string){ownership.assertHeld();if(stopping||stopped)return fail();const j=jobs.get(uuid(key));return j?dto(j):{id:key,state:"UNKNOWN"};},
   async scan(){await enqueue(pulse);},
   async idle(){await tail;},
-  async stop(){clearInterval(timer);await tail;stopped=true;},
+  async stop(){stopping=true;clearInterval(timer);await tail;if(!broken)await drain();stopped=true;},
   // Internal TEST evidence only: no HTTP filesystem selector.
-  archive(key:string){const j=jobs.get(uuid(key));if(!j||j.state!=="SNAPSHOT_VERIFIED"||!j.archive)return fail();return path.join(c!.setup.root,j.archive);},
+  archive(key:string){ownership.assertHeld();if(stopping||stopped)return fail();const j=jobs.get(uuid(key));if(!j||j.state!=="SNAPSHOT_VERIFIED"||!j.archive)return fail();return path.join(c!.setup.root,j.archive);},
  });
  workerBindings.set(worker,c.setup.id);return worker;
 }
@@ -189,4 +199,10 @@ export async function createTestIsolatedRestore(configuration:TestBackupConfigur
   await restoreTestArchive(c.custody,authority,archive,directory);
  }
  return Object.freeze({key,archiveId,state:"ISOLATED_RESTORE_VERIFIED_LOGIN_PENDING",productionActivation:false});
+}
+
+export function rebindProtectedBackupAdmission(configuration:TestBackupConfiguration,admission:ProtectedWriterAdmission,history?:ProtectedRestoredHistory):TestBackupConfiguration {
+ const c=configurations.get(configuration);if(!c||c.setup.format!=="POS_PROTECTED41_BACKUP_CONFIG_V1")return fail();
+ const facts=assertProtectedWriterAdmission(admission,c.database,undefined,true);if(facts.schema!==41||facts.maintenanceOnly||facts.restored&&!history)return fail();
+ protectedRestoredHistory(history,c.database);return mint({...c,admission,protectedHistory:history});
 }

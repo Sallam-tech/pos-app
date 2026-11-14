@@ -44,6 +44,7 @@ export interface AuthorizationGateway {
   close(): Promise<void>;
 }
 export interface AuthorizationConfiguration {
+  protectedHistory?: import("../backup/protected-history").ProtectedRestoredHistory;
   protectedAdmission?: import("../bootstrap/writer-admission").ProtectedWriterAdmission;
   // Opaque, verified, destination-bound disposable TEST restore only.
   restoreProof?: import("../backup/service").VerifiedTestRestore;

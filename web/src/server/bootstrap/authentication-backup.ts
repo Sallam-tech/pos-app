@@ -139,7 +139,7 @@ const recoveries = new WeakMap<object, { lease: BootstrapLease; filename: string
 // Reopen the ORIGINAL signed pre-copy after restart. Fresh Admin verification
 // legitimately advances throttling counters; only that table may differ. Every
 // other typed row/rowid, schema byte, anchor and binding must still be exact.
-// This read-only proof grants quarantine comparison ONLY, never backup/replay.
+// This read-only proof grants source comparison only, never backup, replay or admission.
 export async function verifyAuthentication8Recovery(config: LocalKeyConfiguration, lease: BootstrapLease, custody: BackupCustody,
   archive: string, staging: string, expected: Readonly<{ archiveId: string; ciphertextSha256: string; sourceStateDigest: string; originalAnchorDigest: string }>): Promise<VerifiedAuthenticationRecovery8> {
   guard(config, lease); testDirectory(staging);

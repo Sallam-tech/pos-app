@@ -72,6 +72,18 @@ try {
         Assert-Acl $filename $false
         [Console]::Out.Write('true')
     } elseif ($message.operation -eq 'open') {
+        if ($message.PSObject.Properties.Name -contains 'applicationDirectory') {
+            $applicationDirectory=[IO.Path]::GetFullPath([string]$message.applicationDirectory)
+            $databaseDirectory=[IO.Path]::GetFullPath([string]$message.databaseDirectory)
+            $databaseFilename=[string]$message.databaseFilename
+            if ($databaseFilename -cnotmatch '^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}\.(db|sqlite|sqlite3)$' -or [IO.Path]::GetFullPath([IO.Path]::Combine($applicationDirectory,'protected-identity')) -ine [IO.Path]::GetFullPath($directory)) {throw 'Denied'}
+            Assert-Directory $applicationDirectory;Assert-Acl $applicationDirectory $true
+            Assert-Directory $databaseDirectory;Assert-Acl $databaseDirectory $true
+            foreach($suffix in @('','-wal','-shm','-journal')){
+                $databaseFile=[IO.Path]::Combine($databaseDirectory,$databaseFilename+$suffix)
+                if([IO.File]::Exists($databaseFile)){Assert-Acl $databaseFile $false}elseif($suffix -eq ''){throw 'Denied'}
+            }
+        }
         Assert-Acl $directory $true
         Assert-Acl $filename $false
         $stream = New-Object IO.FileStream($filename, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
