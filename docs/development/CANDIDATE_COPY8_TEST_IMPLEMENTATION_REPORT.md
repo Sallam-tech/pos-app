@@ -1,0 +1,32 @@
+# Unadmitted exact8 candidate copy - focused TEST evidence
+
+14 November2026. Parent verified handoff checkpoint9f65df97b637d00f672bff49c15e048eae9dfe9b. Original security and candidate addendum items1-8 OWNER APPROVED. **COPY STAGE ONLY; final337-source build/client/preservation PASS. Reviewed related-only LOCAL checkpoint follows. Phase1 IN PROGRESS, Phase2 NOT STARTED, production DISABLED.**
+
+## Implemented
+
+- New bootstrap/candidate-copy8.ts requires a genuine live Admin maintenance source scope, its SAME bootstrap/runtime fence, verified signed/encrypted exact8 pre-copy and deliberate trusted desktop confirmation for a fresh operation/destination. The privileged interaction constructor alone is not human authentication. No route, alternate account writer, frontend edit or production exception is added.
+- Reject counterfeit source/archive/interaction, wrong operation/purpose, nonempty destination, existing operation and unresolved/pending/current root ledger. One deliberate attempt per source scope; cancellation/failure never replays the same attempt. Configuration is snapshotted, target path/sidecars validated, protected NTFS directory initialized and actual capacity checked.
+- Exclusively pre-create/fsync a new empty target, bind its actual file identity and complete target specification, then flush/publish/read back protected INTENT BEFORE native SQLite backup writes. Snapshot/reopen full exact8 schema/integrity/FKs/typed rows/hidden rowids; original SQL state, credentials and original anchor/archive remain preserved. Opaque copy evidence binds source/archive/intent/target and live lease, revalidates storage, and exists only in the callback. Cancellation invalidates every proof guard; no serialized/reused proof works.
+- This is an exact8 copy only. The callback must finish with that unchanged schema8 state. No DDL/migration, fresh destination keys, completion/CURRENT/quarantine authority, writer admission or production activation is issued. Successful and uncertain targets remain INTENT/recovery-locked. A matching file/schema cannot reconstruct a lost capability. Future DDL needs its separate genuine issuer and known outcome; never remove this postcondition or widen generic TEST flags to permit it.
+
+## Focused results
+
+Ignored evidence root: web/test-results/phase1-production-preflight-20261114/.
+
+| Check | Actual evidence |
+| --- | --- |
+| Exact copy and authority rejection | candidate-copy8-focused-followup.log:2 PASS,125.75s total. Genuine archive/source/owner plus full row/rowid/source preservation; counterfeit source/archive/interaction, nonempty target/sentinel and duplicate attempt deny. Published ledger contains ONLY INTENT; no destination vault/completion/selection |
+| Lost copy acknowledgement | Same run: controlled throw AFTER actual native backup completion. Retained exact8 target and INTENT; callback/capability not issued; same source attempt refuses replay without changing target bytes. This is controlled acknowledgement loss, not a process kill or SQL migration outcome |
+| Final cancellation and affected success | candidate-copy8-cancellation-followup.log:2 PASS,162.22s total. One affected positive repeat plus NEW cancellation case: pre-abort changes no target/confirmation; actual post-copy abort makes live evidence reject and preserves target. Original120s per-case limit unchanged |
+| Distinct count | 3 new app cases have passing focused evidence, NOT one clean3-case run. Cumulative new phase29 +2 selected unchanged regressions =31 distinct across scoped runs; repeated positive not counted twice |
+| Native driver prerequisite | Installed backup.js and src/objects/backup.cpp show failed newly-created destination may be unlinked. Separate actual NON-POS disposable probe forces failure after one native page step: exclusive pre-created file keeps identity and original source bytes remain unchanged. Destination is retained at0 bytes after native backup rollback. candidate-backup-native-retention-probe.json. This is not counted as an app/migration/crash case |
+| Final type/lint | type-candidate-copy8-cancellation.log and two-file zero-warning lint-candidate-copy8-cancellation.log exit0 PASS |
+| Current exact build/preservation | candidate-copy8-cancellation-build.log exit0; exact337 current-source hashes,5 immutable metadata and exactly2 expected generated Next imports verified.33 actual client JS files scanned/private markers absent.34 unrelated/41 SQL/4 source documents/165 frontend source hashes preserved. candidate-copy8-cancellation-final-verification.json PASS. Earlier prototype build retained separately |
+
+Only one new server source, focused enrollment test additions and memory/readiness/this report change. Earlier336 source files stay unchanged. Cumulative endpoint inventory remains102. Reviewed related-only LOCAL checkpoint outcome will be recorded in candidate-copy8-local-checkpoint.json/live Git. No push/reset/clean or artifact deletion.
+
+## Retained diagnostics and unfinished work
+
+Initial generic rejection masked a TEST assertion and its cleanup stopped before closing the owned runtime fence, affecting the next fixture. Dedicated fresh-identity diagnostic proved the first copy/callback checks had passed: legitimate WAL/SHM inspection sidecars contradicted an incorrect one-file expectation. Corrected the exact WAL fixture expectation, preserved assertion causes, fixed TEST cleanup and added sidecar path checking. Subsequent2-case run PASS. Self-review then bound cancellation into all proof guards; affected success/new cancellation PASS. No security assertion/timeout weakened. All earlier candidates/archives/diagnostics retained; original operation IDs/targets never replayed.
+
+Next: private original-anchor/verified-copy DDL capability, unchanged reviewed8-to41 programs, independent full reopened validation and known completion, fresh destination keys/provenance, protected selection and transaction-generation admission, old-source fencing, persistent41 restore, host/worker orchestration and focused actual SQL/publication process kills. Permanent quarantine requires its separately verified controller; current INTENT never asserts rollback. Actual independent Windows/profile/media/power/hardware/printer, owner B copies, physical former-device fencing and retention/RPO/RTO remain unverified gates. No real data/enrollment/key activation, schema42, R reset, EXE or Phase3.

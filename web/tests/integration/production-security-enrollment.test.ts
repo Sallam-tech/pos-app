@@ -20,7 +20,7 @@ import { runTrustedFirstRunSetup } from "../../src/server/auth/provision";
 import { passwordCallbacks } from "../../src/server/auth/password";
 import type { LocalTlsMaterial } from "../../src/server/hosting/https";
 
-const fault = vi.hoisted(() => ({ sql: false, lostCommit: false, anchor: false, afterClose: undefined as undefined | (() => void) }));
+const fault = vi.hoisted(() => ({ sql: false, lostCommit: false, anchor: false, copyAfterBackup: false, afterClose: undefined as undefined | (() => void) }));
 vi.mock("../../src/server/bootstrap/windows", async original => {
   const actual = await original<typeof import("../../src/server/bootstrap/windows")>();
   return { ...actual, windowsProtection: async (message: Readonly<Record<string, string>>) => {
@@ -49,6 +49,19 @@ vi.mock("../../src/server/auth/provision", async original => {
     const result = await actual.runTrustedFirstRunSetup(...args);
     if (fault.lostCommit) { fault.lostCommit = false; throw Error("TEST lost actual COMMIT acknowledgement"); }
     return result;
+  } };
+});
+
+vi.mock("../../src/server/backup/snapshot", async original => {
+  const actual = await original<typeof import("../../src/server/backup/snapshot")>();
+  return { ...actual, openProofDatabase: (...args: Parameters<typeof actual.openProofDatabase>) => {
+    const db = actual.openProofDatabase(...args), backup = db.backup;
+    db.backup = async (...parameters: Parameters<typeof backup>) => {
+      const result = await backup.apply(db, parameters);
+      if (fault.copyAfterBackup) { fault.copyAfterBackup = false; throw Error("TEST lost actual native copy acknowledgement"); }
+      return result;
+    };
+    return db;
   } };
 });
 
@@ -663,4 +676,118 @@ it("Admin maintenance actual child death releases only its runtime fence and pre
     if (child.exitCode === null && child.signalCode === null) { child.kill("SIGTERM"); await exited; }
     writeFileSync(path.join(f.config.directory, "maintenance-child-stderr.log"), Buffer.concat(output));
   }
+});
+
+async function copyTestHandoff(f: Awaited<ReturnType<typeof candidateCopyFixture>>, proof: unknown,
+  work: (source: import("../../src/server/auth/gateway").AdminMaintenanceSource, lease: import("../../src/server/bootstrap/ownership").BootstrapLease) => Promise<void>) {
+  const { withAdminMaintenanceSource } = await import("../../src/server/auth/gateway");
+  let failed = false, cause: unknown;
+  try { await withAdminMaintenanceSource(f.gateway, proof, f.runtime, f.operation, async (source, lease) => {
+    try { await work(source, lease); } catch (error) { failed = true; cause = error; throw error; }
+  }); } catch (error) { if (failed) throw cause; throw error; }
+}
+
+async function candidateCopyFixture() {
+  const f = await adminHandoffFixture();
+  const { createTestCustody } = await import("../../src/server/backup/crypto");
+  const directory = path.join(f.config.directory, "copy-test-custody"); mkdirSync(directory);
+  const custody = await createTestCustody(directory);
+  const operation = { operationId: (await import("node:crypto")).randomUUID(), purpose: "UPGRADE8" as const };
+  const precopy = path.join(f.config.directory, "copy-test-authenticated-precopy"), target = path.join(f.config.directory, operation.operationId);
+  mkdirSync(precopy); mkdirSync(target);
+  return { ...f, custody, operation, precopy, target };
+}
+
+it("unadmitted copy8 requires genuine source and archive plus deliberate owner confirmation, preserving rows and publishing only INTENT", async () => {
+  const f = await candidateCopyFixture();
+  const { createAuthenticationBackup8 } = await import("../../src/server/bootstrap/authentication-backup");
+  const { withUnadmittedCandidateCopy8, unadmittedCandidateCopy8Evidence, bindTrustedCandidateCopyInteraction } = await import("../../src/server/bootstrap/candidate-copy8");
+  const { readProtectedCandidateLedger, classifyCandidateLedger } = await import("../../src/server/bootstrap/candidate-records");
+  const { inspectLocalVault } = await import("../../src/server/bootstrap/keys");
+  const { readEnrollmentJournal } = await import("../../src/server/bootstrap/journal");
+  const { enrollmentDigest } = await import("../../src/server/bootstrap/database");
+  const { protectedManifestDigest } = await import("../../src/server/bootstrap/maintenance-journal");
+  let saved: unknown;
+  try {
+    const proof = await f.gateway.verifyAdminPassword(f.values.ADMIN), before = f.state();
+    await copyTestHandoff(f, proof, async (source, lease) => {
+      const backup = await createAuthenticationBackup8(f.config, lease, f.custody, f.precopy, (await import("node:crypto")).randomUUID());
+      const confirm = vi.fn(async (request: { operationId: string; productionActivation: false }) => { expect(request).toMatchObject({ operationId: f.operation.operationId, productionActivation: false }); return "CONFIRM_NEW_UNADMITTED_COPY8" as const; });
+      const interaction = bindTrustedCandidateCopyInteraction({ confirm });
+      await expect(withUnadmittedCandidateCopy8(f.config, {} as typeof source, lease, backup, f.target, interaction, async () => {})).rejects.toThrow("Protected setup unavailable.");
+      expect(confirm).not.toHaveBeenCalled();
+      await expect(withUnadmittedCandidateCopy8(f.config, source, lease, {} as typeof backup, f.target, interaction, async () => {})).rejects.toThrow("Protected setup unavailable.");
+      await expect(withUnadmittedCandidateCopy8(f.config, source, lease, backup, f.target, {} as typeof interaction, async () => {})).rejects.toThrow("Protected setup unavailable.");
+      const occupiedParent = path.join(f.config.directory, "occupied-copy-parent"); mkdirSync(occupiedParent);
+      const occupied = path.join(occupiedParent, f.operation.operationId); mkdirSync(occupied); writeFileSync(path.join(occupied, "existing.txt"), "TEST EXISTING EVIDENCE");
+      await expect(withUnadmittedCandidateCopy8(f.config, source, lease, backup, occupied, interaction, async () => {})).rejects.toThrow("Protected setup unavailable.");
+      expect(readFileSync(path.join(occupied, "existing.txt"), "utf8")).toBe("TEST EXISTING EVIDENCE"); expect(confirm).not.toHaveBeenCalled();
+      console.info("COPY8_TEST_STAGE", "authenticated-backup-and-forgery-complete");
+      await withUnadmittedCandidateCopy8(f.config, source, lease, backup, f.target, interaction, async copy => {
+        console.info("COPY8_TEST_STAGE", "copy-callback-entered");
+        saved = copy;
+        expect(() => JSON.stringify(copy)).toThrow("Protected setup unavailable.");
+        await expect(unadmittedCandidateCopy8Evidence({})).rejects.toThrow("Protected setup unavailable.");
+        expect(await unadmittedCandidateCopy8Evidence(copy)).toMatchObject({ operationId: f.operation.operationId, schema: 8, admission: false, copyFingerprint: before, productionActivation: false });
+      });
+      console.info("COPY8_TEST_STAGE", "copy-scope-closed");
+      expect(confirm).toHaveBeenCalledTimes(1);
+      await expect(unadmittedCandidateCopy8Evidence(saved)).rejects.toThrow("Protected setup unavailable.");
+      await expect(withUnadmittedCandidateCopy8(f.config, source, lease, backup, f.target, interaction, async () => {})).rejects.toThrow("Protected setup unavailable.");
+      const vault = await inspectLocalVault(f.config), records = await readEnrollmentJournal(vault, protectedManifestDigest(8)), anchor = records.find(r => r.kind === "ENROLLED")!;
+      const ledger = await readProtectedCandidateLedger(vault, enrollmentDigest(anchor));
+      expect(ledger.records.map(r => r.kind)).toEqual(["INTENT"]); expect(classifyCandidateLedger(ledger).status).toBe("RECOVERY_REVIEW_REQUIRED");
+      // This WAL-mode fixture legitimately retains read-only inspection sidecars.
+      expect(readdirSync(f.target).sort()).toEqual(["candidate8.sqlite3", "candidate8.sqlite3-shm", "candidate8.sqlite3-wal"]);
+      expect(f.state()).toBe(before);
+    });
+  } finally { await f.gateway.close().catch(() => {}); await f.runtime.close(); }
+});
+
+it("unadmitted copy8 lost actual native copy acknowledgement retains target and INTENT without issuing or replaying authority", async () => {
+  const f = await candidateCopyFixture();
+  const { createAuthenticationBackup8 } = await import("../../src/server/bootstrap/authentication-backup");
+  const { withUnadmittedCandidateCopy8, bindTrustedCandidateCopyInteraction } = await import("../../src/server/bootstrap/candidate-copy8");
+  try {
+    const proof = await f.gateway.verifyAdminPassword(f.values.ADMIN), before = f.state();
+    await copyTestHandoff(f, proof, async (source, lease) => {
+      const backup = await createAuthenticationBackup8(f.config, lease, f.custody, f.precopy, (await import("node:crypto")).randomUUID());
+      const confirm = vi.fn(async () => "CONFIRM_NEW_UNADMITTED_COPY8" as const), interaction = bindTrustedCandidateCopyInteraction({ confirm }), work = vi.fn(async () => {});
+      fault.copyAfterBackup = true;
+      await expect(withUnadmittedCandidateCopy8(f.config, source, lease, backup, f.target, interaction, work)).rejects.toThrow("Protected setup unavailable.");
+      expect(fault.copyAfterBackup).toBe(false); expect(work).not.toHaveBeenCalled();
+      const target = path.join(f.target, "candidate8.sqlite3"), bytes = readFileSync(target);
+      expect(bytes.length).toBeGreaterThan(0); expect(bytes.subarray(0, 16).toString()).toBe("SQLite format 3\0");
+      await expect(withUnadmittedCandidateCopy8(f.config, source, lease, backup, f.target, interaction, work)).rejects.toThrow("Protected setup unavailable.");
+      expect(confirm).toHaveBeenCalledTimes(1); expect(readFileSync(target)).toEqual(bytes); expect(f.state()).toBe(before);
+      const { inspectLocalVault } = await import("../../src/server/bootstrap/keys"), { readEnrollmentJournal } = await import("../../src/server/bootstrap/journal"), { protectedManifestDigest } = await import("../../src/server/bootstrap/maintenance-journal"), { enrollmentDigest } = await import("../../src/server/bootstrap/database"), { readProtectedCandidateLedger } = await import("../../src/server/bootstrap/candidate-records");
+      const vault = await inspectLocalVault(f.config), anchor = (await readEnrollmentJournal(vault, protectedManifestDigest(8))).find(r => r.kind === "ENROLLED")!;
+      expect((await readProtectedCandidateLedger(vault, enrollmentDigest(anchor))).records.map(r => r.kind)).toEqual(["INTENT"]);
+    });
+  } finally { fault.copyAfterBackup = false; await f.gateway.close().catch(() => {}); await f.runtime.close(); }
+});
+
+it("unadmitted copy8 cancellation invalidates the live proof after copying and preserves the unresolved target", async () => {
+  const f = await candidateCopyFixture();
+  const { createAuthenticationBackup8 } = await import("../../src/server/bootstrap/authentication-backup");
+  const { withUnadmittedCandidateCopy8, unadmittedCandidateCopy8Evidence, bindTrustedCandidateCopyInteraction } = await import("../../src/server/bootstrap/candidate-copy8");
+  const controller = new AbortController();
+  try {
+    const proof = await f.gateway.verifyAdminPassword(f.values.ADMIN), before = f.state();
+    await copyTestHandoff(f, proof, async (source, lease) => {
+      const backup = await createAuthenticationBackup8(f.config, lease, f.custody, f.precopy, (await import("node:crypto")).randomUUID());
+      const confirm = vi.fn(async () => "CONFIRM_NEW_UNADMITTED_COPY8" as const), interaction = bindTrustedCandidateCopyInteraction({ confirm });
+      const alreadyAborted = new AbortController(); alreadyAborted.abort();
+      await expect(withUnadmittedCandidateCopy8(f.config, source, lease, backup, f.target, interaction, async () => {}, alreadyAborted.signal)).rejects.toThrow("Protected setup unavailable.");
+      expect(confirm).not.toHaveBeenCalled(); expect(readdirSync(f.target)).toEqual([]);
+      const work = vi.fn(async (copy: Parameters<typeof unadmittedCandidateCopy8Evidence>[0]) => {
+        expect((await unadmittedCandidateCopy8Evidence(copy)).schema).toBe(8);
+        controller.abort();
+        await expect(unadmittedCandidateCopy8Evidence(copy)).rejects.toThrow("Protected setup unavailable.");
+      });
+      await expect(withUnadmittedCandidateCopy8(f.config, source, lease, backup, f.target, interaction, work, controller.signal)).rejects.toThrow("Protected setup unavailable.");
+      expect(confirm).toHaveBeenCalledTimes(1); expect(work).toHaveBeenCalledTimes(1);
+      expect(readFileSync(path.join(f.target, "candidate8.sqlite3")).length).toBeGreaterThan(0); expect(f.state()).toBe(before);
+    });
+  } finally { await f.gateway.close().catch(() => {}); await f.runtime.close(); }
 });
