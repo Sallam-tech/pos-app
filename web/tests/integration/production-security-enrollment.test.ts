@@ -1,3 +1,4 @@
+import type { CandidateRecord } from "../../src/server/bootstrap/candidate-records";
 import { once } from "node:events";
 import { createPrivateKey, randomBytes } from "node:crypto";
 import { execFile, fork } from "node:child_process";
@@ -362,4 +363,141 @@ it("authentication8 failure/cancellation preserves source and existing files; de
     expect(state()).toBe(before);
   });
   expect(state()).toBe(before);
+});
+
+
+// These tests authenticate journal STORAGE facts, not a verified migration or
+// selected writer. Fixture target/archive digests intentionally confer no authority.
+async function candidateStorageFixture() {
+  const f = await journalFixture(8, "SCHEMA8_TO_41");
+  const { candidateRecordBytes, candidateRecordDigest, candidateLedgerContext, readProtectedCandidateLedger, classifyCandidateLedger } = await import("../../src/server/bootstrap/candidate-records");
+  const { windowsProtection } = await import("../../src/server/bootstrap/windows");
+  const { withBootstrapOwnership, hasActiveBootstrapLease } = await import("../../src/server/bootstrap/ownership");
+  const { randomUUID } = await import("node:crypto");
+  const context = candidateLedgerContext(f.vault, f.intent.anchorDigest);
+  const first: CandidateRecord = { format: "POS_CANDIDATE_LEDGER_V1", kind: "INTENT", sequence: "1", previousDigest: null, operationId: randomUUID(), purpose: "UPGRADE8",
+    installationId: f.vault.metadata.installationId, deviceId: f.vault.metadata.deviceId, vaultDigest: f.vault.vaultDigest, originalAnchorDigest: f.intent.anchorDigest,
+    rootDatabaseFingerprint: f.vault.databaseFingerprint, sourceFileIdentity: f.vault.databaseFingerprint, destinationFileIdentity: f.enrollmentDigest("STORAGE_ONLY_TARGET_" + randomUUID()),
+    sourceSchema: "8", sourceStateDigest: f.state(), targetSpecificationDigest: f.intent.targetManifestDigest,
+    backupArchiveId: randomUUID(), backupCiphertextSha256: f.enrollmentDigest("STORAGE_ONLY_NO_ACTUAL_ARCHIVE"), createdAtMs: String(Date.now()),
+    intentDigest: null, targetStateDigest: null, targetVaultDigest: null, generation: null };
+  let activeLease: Parameters<typeof hasActiveBootstrapLease>[0];
+  const message = (record: CandidateRecord) => ({ ...context, operation: "candidate-append", payload: candidateRecordBytes(record).toString("base64") });
+  const append = async (record: CandidateRecord) => {
+    expect(hasActiveBootstrapLease(activeLease, f.config.database)).toBe(true);
+    expect(await windowsProtection(message(record))).toBe(true);
+  };
+  const owned = async (work: () => Promise<void>) => {
+    let failed = false, failure: unknown;
+    try { await withBootstrapOwnership(f.config.database, async (_retain, lease) => {
+      activeLease = lease;
+      try { await work(); } catch (error) { failed = true; failure = error; throw error; } finally { activeLease = undefined; }
+    }); } catch (error) { if (failed) throw failure; throw error; }
+  };
+  const next = (base: CandidateRecord, previous: CandidateRecord, fields: Partial<CandidateRecord>) => ({ ...base, sequence: String(Number(previous.sequence) + 1), previousDigest: candidateRecordDigest(previous), createdAtMs: String(Math.max(Date.now(), Number(previous.createdAtMs))), ...fields }) as CandidateRecord;
+  const quarantine = (intent: CandidateRecord, previous = intent) => next(intent, previous, { kind: "QUARANTINED_NO_ADMISSION", intentDigest: candidateRecordDigest(intent), targetStateDigest: null, targetVaultDigest: null, generation: null });
+  const commit = (intent: CandidateRecord, previous = intent) => next(intent, previous, { kind: "COMMITTED", intentDigest: candidateRecordDigest(intent), targetStateDigest: f.enrollmentDigest("STORAGE_ONLY_NOT_VERIFIED_SQL"), targetVaultDigest: f.enrollmentDigest("STORAGE_ONLY_NOT_DESTINATION_KEYS"), generation: null });
+  const read = () => readProtectedCandidateLedger(f.vault, f.intent.anchorDigest);
+  return { ...f, context, first, append, owned, next, quarantine, commit, read, message, digest: candidateRecordDigest, classify: classifyCandidateLedger, native: windowsProtection };
+}
+
+it("candidate ledger mutex storage preserves source, chains terminal quarantine and CURRENT generations, and rejects old-writer facts", async () => {
+  const f = await candidateStorageFixture(), before = f.state();
+  expect(f.classify(await f.read()).status).toBe("ABSENT");
+  await f.owned(async () => {
+    await f.append(f.first);
+    expect(f.classify(await f.read()).status).toBe("RECOVERY_REVIEW_REQUIRED");
+    const q = f.quarantine(f.first);
+    await expect(f.native({ ...f.message(q), vaultDigest: f.enrollmentDigest("WRONG_ROOT_CUSTODY") })).rejects.toThrow("Protected setup unavailable.");
+    await f.append(q);
+    expect(f.classify(await f.read()).status).toBe("QUARANTINED_ONLY");
+    await expect(f.append(f.commit(f.first, q))).rejects.toThrow("Protected setup unavailable.");
+    const fresh = f.next(f.first, q, { operationId: (await import("node:crypto")).randomUUID(), destinationFileIdentity: f.enrollmentDigest("DIFFERENT_STORAGE_TARGET") });
+    await f.append(fresh); const committed = f.commit(fresh); await f.append(committed);
+    expect(f.classify(await f.read()).status).toBe("RECOVERY_REVIEW_REQUIRED");
+    await expect(f.append(f.quarantine(fresh, committed))).rejects.toThrow("Protected setup unavailable.");
+    const current = f.next(committed, committed, { kind: "CURRENT", generation: "1" }); await f.append(current);
+    const classified = f.classify(await f.read()); expect(classified.status).toBe("RECORDED_CURRENT"); expect(classified.recordedCurrent?.destinationFileIdentity).toBe(fresh.destinationFileIdentity);
+    const { inspectLocalVault } = await import("../../src/server/bootstrap/keys");
+    const { readEnrollmentJournal } = await import("../../src/server/bootstrap/journal");
+    const { protectedManifestDigest } = await import("../../src/server/bootstrap/maintenance-journal");
+    const reopened = await inspectLocalVault(f.config); expect(reopened.vaultDigest).toBe(f.vault.vaultDigest);
+    const original = (await readEnrollmentJournal(reopened, protectedManifestDigest(8))).find(r => r.kind === "ENROLLED");
+    expect(f.enrollmentDigest(original)).toBe(f.intent.anchorDigest);
+    await expect(f.append(f.next(f.first, current, { operationId: (await import("node:crypto")).randomUUID() }))).rejects.toThrow("Protected setup unavailable.");
+    expect(f.state()).toBe(before);
+  });
+  expect(f.state()).toBe(before); expect((await f.read()).records).toHaveLength(5);
+});
+
+it("candidate ledger preserves unknown pending ciphertext, fences its operation without claiming rollback, and rejects DPAPI corruption", async () => {
+  const f = await candidateStorageFixture(), before = f.state();
+  await f.owned(async () => {
+    await f.append(f.first);
+    const name = "000002." + f.first.operationId + ".committed.dpapi." + (await import("node:crypto")).randomUUID() + ".pending";
+    const pending = path.join(f.context.directory, name); writeFileSync(pending, Buffer.from("PARTIAL_TEST_PUBLICATION"));
+    const partial = readFileSync(pending);
+    expect(f.classify(await f.read()).status).toBe("RECOVERY_REVIEW_REQUIRED");
+    await f.append(f.quarantine(f.first));
+    const facts = await f.read(); expect(facts.pending).toHaveLength(1); expect(f.classify(facts).status).toBe("QUARANTINED_ONLY"); expect(readFileSync(pending)).toEqual(partial);
+    const record = path.join(f.context.directory, "000001." + f.first.operationId + ".intent.dpapi");
+    copyFileSync(record, path.join(f.config.directory, "retained-original-candidate-record.dpapi"));
+    const bytes = readFileSync(record); bytes[bytes.length - 1] ^= 1; writeFileSync(record, bytes);
+    await expect(f.read()).rejects.toThrow("Protected setup unavailable."); expect(f.state()).toBe(before);
+  });
+});
+
+it("candidate ledger serializes genuine concurrent native COMMITTED versus quarantine; exactly one terminal outcome wins", async () => {
+  const f = await candidateStorageFixture(), before = f.state();
+  await f.owned(async () => {
+    await f.append(f.first);
+    const results = await Promise.allSettled([f.native(f.message(f.commit(f.first))), f.native(f.message(f.quarantine(f.first)))]);
+    expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
+    const facts = await f.read(); expect(facts.records).toHaveLength(2);
+    const last = facts.records[1]; expect(["COMMITTED", "QUARANTINED_NO_ADMISSION"]).toContain(last.kind);
+    await expect(f.append(last.kind === "COMMITTED" ? f.quarantine(f.first, last) : f.commit(f.first, last))).rejects.toThrow("Protected setup unavailable.");
+    expect(f.state()).toBe(before);
+  });
+});
+
+it("candidate ledger refuses a delayed native helper after its actual Node parent dies and quarantine is durable", async () => {
+  const f = await candidateStorageFixture(), before = f.state();
+  await f.owned(async () => {
+    await f.append(f.first); const q = f.quarantine(f.first), late = f.commit(f.first, q);
+    const directory = f.config.directory, gate = path.join(directory, "orphan-go.txt"), ready = path.join(directory, "orphan-ready.txt"), result = path.join(directory, "orphan-result.json");
+    const child = fork(path.resolve("tests/helpers/candidate-publication-child.mjs"), [], { cwd: process.cwd(), execArgv: [], windowsHide: true, stdio: ["ignore", "ignore", "ignore", "ipc"] });
+    const notification = new Promise<unknown>((resolve, reject) => { child.once("message", resolve); child.once("error", reject); child.once("exit", () => reject(Error("TEST publication parent exited before helper ready"))); });
+    try {
+      child.send({ message: f.message(late), nativeScript: path.resolve("src/server/bootstrap/windows-candidate-records.ps1"), gate, ready, result, stdout: path.join(directory, "orphan-native.stdout.log"), stderr: path.join(directory, "orphan-native.stderr.log") });
+      expect(await notification).toMatchObject({ status: "DELAYED_NATIVE_HELPER_READY", pid: expect.any(Number) });
+      expect(readFileSync(ready, "utf8")).toBe("READY_BEFORE_NATIVE_CALL");
+      await new Promise<void>(resolve => { child.once("exit", () => resolve()); child.kill(); });
+      await f.append(q); writeFileSync(gate, "RELEASE_ONLY_AFTER_DURABLE_QUARANTINE");
+      await expect.poll(() => { try { return JSON.parse(readFileSync(result, "utf8")); } catch { return null; } }, { timeout: 30000 }).toEqual({ finished: true, exitCode: 1 });
+      const nativeErrorBytes = readFileSync(path.join(directory, "orphan-native.stderr.log"));
+      const nativeError = nativeErrorBytes.subarray(0, 2).equals(Buffer.from([255, 254])) ? nativeErrorBytes.toString("utf16le") : nativeErrorBytes.toString("utf8");
+      expect(nativeError).toContain("Protected candidate publication unavailable.");
+      const facts = await f.read(); expect(facts.records).toHaveLength(2); expect(f.classify(facts).status).toBe("QUARANTINED_ONLY"); expect(f.state()).toBe(before);
+    } finally { if (child.exitCode === null && child.signalCode === null) child.kill(); if (!(await import("node:fs")).existsSync(gate)) writeFileSync(gate, "TEST_CLEANUP_RELEASE"); }
+  });
+});
+
+it("candidate ledger native reads reject hidden hard links and foreign ACLs on disposable protected records", async () => {
+  const f = await candidateStorageFixture(), before = f.state();
+  await f.owned(async () => {
+    await f.append(f.first);
+    const file = path.join(f.context.directory, "000001." + f.first.operationId + ".intent.dpapi"), alias = path.join(f.config.directory, "own-test-hardlink.dpapi");
+    const { linkSync } = await import("node:fs"); linkSync(file, alias);
+    await expect(f.native({ ...f.context, operation: "candidate-list" })).rejects.toThrow("Protected setup unavailable.");
+    await expect(f.read()).rejects.toThrow("Protected setup unavailable."); expect(f.state()).toBe(before);
+  });
+  const weak = await candidateStorageFixture(), weakBefore = weak.state();
+  await weak.owned(async () => {
+    await weak.append(weak.first);
+    const file = path.join(weak.context.directory, "000001." + weak.first.operationId + ".intent.dpapi");
+    const changeJob = promisify(execFile)(path.join(process.env.SystemRoot!, "System32/WindowsPowerShell/v1.0/powershell.exe"), ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "$file=[Console]::In.ReadToEnd();$acl=Get-Acl -LiteralPath $file;$identity=New-Object Security.Principal.SecurityIdentifier('S-1-5-32-545');$rule=New-Object Security.AccessControl.FileSystemAccessRule($identity,'Read','Allow');[void]$acl.AddAccessRule($rule);Set-Acl -LiteralPath $file -AclObject $acl"], { windowsHide: true });
+    changeJob.child.stdin!.end(file); const change = await changeJob;
+    expect(change.stderr).toBe("");
+    await expect(weak.native({ ...weak.context, operation: "candidate-list" })).rejects.toThrow("Protected setup unavailable."); expect(weak.state()).toBe(weakBefore);
+  });
 });

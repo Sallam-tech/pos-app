@@ -1,6 +1,6 @@
 # Phase1 runtime and authentication8 backup prerequisites
 
-14 November2026. **VERIFIED SCOPED TEST MILESTONE; full Phase1 IN PROGRESS, production DISABLED.** Parent60bc0510fee899eaa0ef8f2d19696ed012ef33ab. This adds prerequisites, not an activated maintenance/restore writer. Safe related-only LOCAL checkpoint follows explicit index review; live Git/evidence records its outcome.
+14 November2026. **VERIFIED SCOPED TEST MILESTONE; full Phase1 IN PROGRESS, production DISABLED.** Parent60bc0510fee899eaa0ef8f2d19696ed012ef33ab. This adds prerequisites, not an activated maintenance/restore writer. Safe related-only LOCAL checkpoint91123d34829dbd662094f04a19e76e3635815fe2:17 reviewed paths, empty index and exactly original34 unrelated paths confirmed; runtime-backup8-local-checkpoint.json.
 
 ## Behavior and review
 
