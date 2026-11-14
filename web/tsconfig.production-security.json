@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.backup-security.json",
+  "compilerOptions": { "incremental": false },
+  "include": ["src/server/**/*.ts", "tests/integration/production-security*.test.ts", "vitest.production-security.config.mts"]
+}

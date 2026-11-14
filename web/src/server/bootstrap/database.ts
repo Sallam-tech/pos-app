@@ -1,4 +1,5 @@
 import "server-only";
+import { assertSchema41Bootstrap, isReviewedSchema41Manifest } from "./schema41";
 
 import { createHash } from "node:crypto";
 import { openAsyncOwner } from "../auth/database";
@@ -24,14 +25,15 @@ function checkSchema(owner: Owner, migrations: readonly Migration[]) {
 }
 async function withBootstrapDatabase<T>(config: ProvisioningConfiguration, retain: () => void, work: (owner: Owner, schemaDigest: string) => Promise<T>): Promise<T> {
   const migrations = loadMigrations(config.migrationsDirectory);
-  if (migrations.length !== 8 || migrations.at(-1)?.name !== "0008_auth_enrollment_binding.sql") return rejectBootstrap();
+  const schema41 = isReviewedSchema41Manifest(migrations);
+  if (!schema41 && (migrations.length !== 8 || migrations.at(-1)?.name !== "0008_auth_enrollment_binding.sql")) return rejectBootstrap();
   let owner: Owner | undefined;
   try {
     owner = openAsyncOwner(config); const owned = owner;
     return await owned.db.transaction().execute(async () => {
       if (!owned.inTransaction()) return rejectBootstrap();
       owned.run("UPDATE auth_principals SET auth_epoch=auth_epoch"); // Existing writer-reservation idiom, no changed values.
-      checkSchema(owned, migrations);
+      if (schema41) assertSchema41Bootstrap(owned, false); else checkSchema(owned, migrations);
       const result = await work(owned, enrollmentDigest(migrations.map(m => [m.version, m.name, m.checksum])));
       if (!owned.inTransaction()) return rejectBootstrap();
       return result;
@@ -42,6 +44,7 @@ async function withBootstrapDatabase<T>(config: ProvisioningConfiguration, retai
 }
 export async function withPristineBootstrapDatabase<T>(config: ProvisioningConfiguration, retain: () => void, work: () => Promise<T>): Promise<T> {
   return withBootstrapDatabase(config, retain, async owner => {
+    if (owner.get("SELECT user_version FROM pragma_user_version")?.user_version === BigInt(41)) assertSchema41Bootstrap(owner, true);
     for (const table of tables) if (owner.get("SELECT count(*) AS n FROM " + table)?.n !== BigInt(0)) return rejectBootstrap();
     return work();
   });
@@ -49,15 +52,15 @@ export async function withPristineBootstrapDatabase<T>(config: ProvisioningConfi
 export async function inspectEnrollmentDatabase(config: ProvisioningConfiguration, retain: () => void) {
   return withBootstrapDatabase(config, retain, async (owner, schemaDigest) => readEnrollmentSnapshot(owner.scope(() => {
     if (!owner.inTransaction()) return rejectBootstrap();
-  }), schemaDigest));
+  }), schemaDigest, (owner.get("SELECT user_version FROM pragma_user_version")?.user_version === BigInt(41) ? 41 : 8)));
 }
 
 // Private READ-ONLY row inspection, not a schema/enrollment/authorization grant.
 // Caller must hold the same live owned transaction and verify exact schema first.
 // Fingerprint inputs and all valid-state decisions are unchanged from Part3S;
 // existence probes and sentinel LIMITs bound reads without counting session history.
-export async function readEnrollmentSnapshot(reader: Pick<import("../auth/types").AuthorizedTransaction, "get" | "all">, schemaDigest: string) {
-    if ((await reader.get("SELECT user_version FROM pragma_user_version"))?.user_version !== BigInt(8)) return rejectBootstrap();
+export async function readEnrollmentSnapshot(reader: Pick<import("../auth/types").AuthorizedTransaction, "get" | "all">, schemaDigest: string, version: 8 | 41 = 8) {
+    if ((await reader.get("SELECT user_version FROM pragma_user_version"))?.user_version !== BigInt(version)) return rejectBootstrap();
     const counts: Record<string, bigint> = {};
     for (const table of tables) counts[table] = (await reader.get("SELECT 1 AS present FROM main." + table + " LIMIT 1")) ? BigInt(1) : BigInt(0);
     if (Object.values(counts).every(n => n === BigInt(0))) return Object.freeze({ kind: "PRISTINE" as const, schemaDigest });

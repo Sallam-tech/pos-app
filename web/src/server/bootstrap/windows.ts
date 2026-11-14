@@ -21,7 +21,7 @@ export function windowsProtection(message: Readonly<Record<string, string>>): Pr
   if (!existsSync(executable)) return Promise.reject(new BootstrapRejected());
   return new Promise((resolve, reject) => {
     const child = spawn(executable, ["-NoLogo", "-NoProfile", "-NonInteractive", "-File",
-      fileURLToPath(new URL(message.operation.startsWith("record-") ? "./windows-enrollment-records.ps1" : "./windows-protection.ps1", import.meta.url))], { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+      fileURLToPath(new URL(message.operation.startsWith("maintenance-") ? "./windows-maintenance-records.ps1" : message.operation.startsWith("record-") ? "./windows-enrollment-records.ps1" : "./windows-protection.ps1", import.meta.url))], { windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     const chunks: Buffer[] = [];
     let count = 0, errorBytes = 0, done = false;
     const finish = (failed: boolean) => {

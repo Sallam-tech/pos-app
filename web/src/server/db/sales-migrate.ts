@@ -12,7 +12,7 @@ import { SALES_AUTO,SALES_INDEXES,salesObjects,SALES_TABLES } from "./sales-prog
 import { schemaTokens } from "./schema-sql";
 import { storedTriggerSql } from "./inventory-trigger-policy";
 import { DatabaseFoundationError } from "./errors";
-export function assertSalesSchemaSnapshot(tx:SqlTransaction,version:35|36|37|38|39|40|41){
+export function assertSalesSchemaSnapshot(tx:Pick<SqlTransaction,"get"|"all">,version:35|36|37|38|39|40|41){
  const databases=tx.all("SELECT name FROM pragma_database_list LIMIT 4");if(databases.length>2||databases.some(r=>r.name!=="main"&&r.name!=="temp")||(databases.some(r=>r.name==="temp")&&tx.all("SELECT name FROM temp.sqlite_schema LIMIT 1").length))throw Error("Ambiguous schema scope.");
  const history=reviewedMigrations().slice(0,version),objects=new Map<string,{type:string;table:string;sql:string|null}>();
  objects.set("schema_migrations",{type:"table",table:"schema_migrations",sql:HISTORY_DEFINITION});

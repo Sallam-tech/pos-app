@@ -1,4 +1,5 @@
 import "server-only";
+import { assertSchema41Bootstrap, isReviewedSchema41Manifest } from "../bootstrap/schema41";
 
 import { hasActiveBootstrapLease, retainBootstrapLease, type BootstrapLease } from "../bootstrap/ownership";
 
@@ -80,11 +81,13 @@ export async function runTrustedFirstRunSetup(
     // Maintenance must explicitly apply the reviewed migration first. No create,
     // migration, secret generation, data adoption or account reset happens here.
     const migrations = loadMigrations(config.migrationsDirectory);
-    if (migrations.length !== expectedNames.length ||
-        migrations.some((m, i) => m.name !== expectedNames[i])) return reject();
+    const schema41 = leased && isReviewedSchema41Manifest(migrations);
+    if (!schema41 && (migrations.length !== expectedNames.length ||
+        migrations.some((m, i) => m.name !== expectedNames[i]))) return reject();
     owner = openAsyncOwner(config);
     const owned = owner;
     const pristine = () => {
+      if (schema41) { assertSchema41Bootstrap(owned, true); return; }
       if (owned.get("SELECT user_version FROM pragma_user_version")?.user_version !== BigInt(8)) return reject();
       const history = owned.all("SELECT version,name,checksum FROM schema_migrations ORDER BY version");
       if (history.length !== migrations.length || history.some((row, i) =>

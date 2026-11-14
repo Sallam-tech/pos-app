@@ -1,4 +1,5 @@
 import "server-only";
+import { reviewedMigrations } from "../db/reviewed-schema";
 
 import { existsSync, lstatSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -9,7 +10,7 @@ import { rejectBootstrap, windowsProtection } from "./windows";
 
 export type VaultInspection = Awaited<ReturnType<typeof inspectLocalVault>>;
 interface Common {
-  format: "POS_ENROLL_V1"; kind: "INTENT" | "ABORTED" | "COMMITTED" | "ENROLLED";
+  format: "POS_ENROLL_V1" | "POS_ENROLL_SCHEMA41_V2"; kind: "INTENT" | "ABORTED" | "COMMITTED" | "ENROLLED";
   sequence: string; intentId: string; installationId: string; deviceId: string;
   vaultDigest: string; databaseFingerprint: string; schemaDigest: string;
 }
@@ -24,13 +25,17 @@ const uuid = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f]{8}
 export function recordName(record: EnrollmentRecord) {
   return record.kind === "ENROLLED" ? "enrolled.dpapi" : record.sequence.padStart(8, "0") + "." + record.kind.toLowerCase() + ".dpapi";
 }
+function formatFor(schemaDigest: string): Common["format"] {
+  const current = enrollmentDigest(reviewedMigrations().map(m => [m.version, m.name, m.checksum]));
+  return schemaDigest === current ? "POS_ENROLL_SCHEMA41_V2" : "POS_ENROLL_V1";
+}
 function parse(value: unknown, vault: VaultInspection, schemaDigest: string): EnrollmentRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) return rejectBootstrap();
   const v = value as Record<string, unknown>, extras = v.kind === "INTENT" ? ["previousAbortDigest"] :
     v.kind === "ABORTED" ? ["intentDigest", "outcome"] : v.kind === "COMMITTED" ? ["intentDigest", "bindingFingerprint", "initialFingerprint"] :
     v.kind === "ENROLLED" ? ["intentDigest", "committedDigest", "bindingFingerprint"] : undefined;
   if (!extras || Object.keys(v).sort().join(",") !== [...commonKeys, ...extras].sort().join(",") ||
-      v.format !== "POS_ENROLL_V1" || typeof v.sequence !== "string" || !/^[1-9][0-9]{0,7}$/.test(v.sequence) ||
+      v.format !== formatFor(schemaDigest) || typeof v.sequence !== "string" || !/^[1-9][0-9]{0,7}$/.test(v.sequence) ||
       !uuid(v.intentId) || v.installationId !== vault.metadata.installationId || v.deviceId !== vault.metadata.deviceId ||
       v.vaultDigest !== vault.vaultDigest || v.databaseFingerprint !== vault.databaseFingerprint || v.schemaDigest !== schemaDigest ||
       (v.kind === "INTENT" ? v.previousAbortDigest !== null && !hex(v.previousAbortDigest) : !hex(v.intentDigest)) ||
@@ -40,7 +45,7 @@ function parse(value: unknown, vault: VaultInspection, schemaDigest: string): En
   return v as unknown as EnrollmentRecord;
 }
 export function recordCommon(vault: VaultInspection, schemaDigest: string, sequence: string, intentId: string): Omit<Common, "kind"> {
-  return { format: "POS_ENROLL_V1", sequence, intentId, installationId: vault.metadata.installationId,
+  return { format: formatFor(schemaDigest), sequence, intentId, installationId: vault.metadata.installationId,
     deviceId: vault.metadata.deviceId, vaultDigest: vault.vaultDigest, databaseFingerprint: vault.databaseFingerprint, schemaDigest };
 }
 function verifyFile(directory: string, name: string) {

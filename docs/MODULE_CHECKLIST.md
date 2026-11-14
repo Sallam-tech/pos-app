@@ -1,5 +1,15 @@
 # POS Module Checklist
 
+## Current Phase1 + Phase2 owner master assignment -14 November2026
+
+- [x] Continue accepted e1b7df6; fresh329-source/41-migration/34-unrelated hash comparison and exact owner contracts preserved.
+- [x] Owner explicitly APPROVED shared schema41 security items1-8 for non-destructive implementation on disposable TEST identities/databases; production DISABLED.
+- [ ] Complete protected current-schema enrollment/maintenance/restore/fencing code and focused genuine checks before Phase1 code-level exit. Initial fresh41 enrollment slice/type check underway; no broad PASS.
+- [ ] Then continue Phase2 real integration, EXE/installer/printer/performance under the same master assignment, subject only to new material approvals.
+- [ ] Physical custody/independent Windows/profile/target hardware acceptance remain unverified. Phase3 not requested.
+
+[Current24-part evidence register](development/PHASE1_PHASE2_READINESS_REGISTER.md); [approved exact boundary](development/PRODUCTION_SCHEMA41_SECURITY_APPROVAL.md). Historical module statements below retain their dated scope.
+
 ## Current Backup / Restore / Production Security gate -14 November2026
 
 - [x] Preserve TEST41 checkpoint/evidence, all41 migration bytes and34 unrelated paths.

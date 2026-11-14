@@ -1,0 +1,335 @@
+# SHOP POS — FINAL PHASE 1 + PHASE 2 PRODUCTION ENGINEERING MASTER TASK
+
+Continue the EXISTING Shop POS at `D:\pos`. NEVER recreate or restart the project.
+
+Act as Principal Software Architect, Application Security Engineer, Financial Database Engineer, Senior Frontend/Backend Engineer, Windows Desktop Engineer, Performance Engineer and QA Lead.
+
+## MANDATORY CONTRACT
+
+Read the FULL attached:
+
+`SHOP_POS_ULTIMATE_ENGINEERING_SECURITY_CONTRACT.txt`
+
+Also read actual `AGENTS.md`, project memory, module checklist, completion matrix, approved frontend design/reference files, permanent security instructions and latest verified implementation reports.
+
+Apply ALL 24 parts of the attached contract wherever relevant to the ENTIRE POS, not just the current module.
+
+If the contract or approved frontend baseline cannot be located, request the missing reference before making changes that depend on it. Do not invent requirements or silently substitute assumptions.
+
+Inspect actual source, Git state and previous evidence. Verify checkpoint `e1b7df6`, 41 historical migrations and 34 unrelated uncommitted paths. Preserve everything.
+
+The existing TEST41 application and TEST Backup/Restore implementation are already reported PASS. Reuse them. Do not unnecessarily repeat completed modules, migrations, or tests.
+
+## PRIMARY OBJECTIVE
+
+Complete TWO sequential phases using this ONE master instruction:
+
+**PHASE 1 — Remaining Production Security and Recovery**
+
+**PHASE 2 — Real Production Integration, Windows EXE, Installer and Printer**
+
+After Phase 2, STOP and deliver the verified report.
+
+**DO NOT perform or claim completion of the separate final independent A–Z audit (PHASE 3). The owner will request that audit explicitly after development.**
+
+However, implement and test all applicable security, financial, frontend, database, recovery and correctness requirements DURING Phase 1 and Phase 2. Never defer known critical defects to Phase 3.
+
+---
+
+# ABSOLUTE FRONTEND FREEZE — BOTH PHASES
+
+The owner-approved frontend is FROZEN.
+
+**Do not change the approved design, navigation, layouts, colors, typography, spacing, themes, headers, buttons, branding, receipt presentation or user workflows without explicit owner approval.**
+
+Before editing frontend files:
+
+1. Identify the approved original prototype/baseline and affected files.
+2. Inspect and record the current implementation.
+3. Determine the smallest code changes necessary for secure real-data integration.
+4. Preserve existing visual and interaction behavior.
+5. Run relevant component, browser and representative visual comparisons at matching viewports/states.
+6. Report ANY visible difference, including whether it is intentional, necessary, accidental or unresolved.
+
+Connecting real backend data may change displayed business values, loading, validation and authorization states. It must NOT silently redesign approved screens.
+
+**If a necessary change would alter approved visual behavior, ask for owner approval BEFORE implementing it.**
+
+If no trustworthy visual baseline exists, report `NOT VERIFIED`. Do not falsely claim unchanged design.
+
+At Phase 2 completion, provide an explicit frontend preservation matrix:
+
+**Screen → Original approved reference → Current implementation → Integration status → Visual comparison evidence → Changed/Unchanged/Not Verified.**
+
+---
+
+# PHASE 1 — COMPLETE REMAINING PRODUCTION SECURITY
+
+Start by reviewing the actual Backup/Restore report and existing implementation.
+
+The following TEST capabilities are already reported implemented: age-encrypted consistent SQLite snapshots, Ed25519 verification, DPAPI-protected custody, backup worker, Admin APIs/UI, isolated restore, fresh login and financial reconciliation.
+
+**REUSE THEM. DO NOT REBUILD THEM.**
+
+Close the actual remaining production-security gaps.
+
+### A. Protected production database and enrollment
+
+Implement the protected schema41 production maintenance/enrollment path and correct former-writer fencing.
+
+Require:
+
+- Genuine Admin/Salesperson first-run enrollment and secure credential lifecycle.
+- Approved password policy, hashing, session expiration, revocation, logout and rate limiting.
+- Secure database ownership, identity transitions, maintenance authority and migration controls.
+- Proper production restore provenance without allowing TEST-only security exceptions.
+- Preservation of immutable audits, financial history and original-key crash recovery.
+- No silent data resets or automatic production activation.
+
+Seek owner approval before any new security/custody architecture or actual production enrollment.
+
+### B. Recovery keys and disaster recovery
+
+Complete production-ready code and procedures for:
+
+- Owner-controlled portable recovery material and two separately protected copies.
+- Secure recovery on replacement Windows PCs without incorrectly depending on the original DPAPI user/device.
+- Verification of archive signatures, source identity, destination authorization, complete ciphertext and financial integrity.
+- Safe off-device export, storage/media validation, recovery instructions and backup-failure handling.
+- Owner-approved retention, capacity limits and recovery objectives.
+- Recovery from interrupted backup, restore, upgrade and maintenance operations.
+
+Do not discard existing archives or invent recovery keys.
+
+Test disposable restored databases with original sales, purchases, inventory, refunds, expenses, corrections, closing and Settings history.
+
+**A restore must successfully reopen the genuine application, authenticate and reconcile the preserved financial records.**
+
+Physical independent-PC recovery and owner-held recovery-key acceptance must remain `BLOCKED` until genuinely witnessed.
+
+### C. Complete production security
+
+Review all actual endpoints and apply the attached contract's relevant security requirements:
+
+- Authentication, server-side RBAC and IDOR/function-level authorization.
+- CSRF, XSS, SQL injection prevention and strict input validation.
+- Session/cookie safety, rate limits, replay controls and idempotency.
+- Restrictive Host, Origin, CORS, SNI, TLS and local network boundaries.
+- Windows ACLs, protected credentials, signing secrets and key rotation.
+- Secure error handling, logging, dependency management and secret scanning.
+- No exposure of Admin-only information to Salesperson through frontend payloads, APIs, caches or errors.
+- No developer authentication bypass or production demo fallback.
+- Protection against malicious local/browser requests and unauthorized LAN access.
+
+Review the seven recorded moderate development-tool advisories for actual applicability and severity. Avoid unrelated dependency upgrades; resolve or document appropriately.
+
+Test relevant normal, negative, adversarial, concurrency and crash/restart paths with genuine disposable TEST data.
+
+### PHASE 1 EXIT GATE
+
+Before Phase 2, require:
+
+- Production-security code paths implemented and focused tests passing.
+- Protected enrollment and maintenance behavior verified with disposable identities.
+- Financial and database safeguards preserved.
+- No unresolved known Critical/High security, financial-integrity or data-loss defect.
+- Any physical custody, hardware or owner-only acceptance explicitly labeled `BLOCKED` or `NOT VERIFIED`.
+
+**Do not proceed past an unresolved critical implementation blocker. Physical acceptance alone may remain pending while safe TEST packaging work proceeds.**
+
+Record a concise Phase 1 PASS/PARTIAL/BLOCKED checkpoint and a safe LOCAL Git commit of reviewed related files.
+
+---
+
+# PHASE 2 — REAL PRODUCTION INTEGRATION + WINDOWS EXE + INSTALLER + PRINTER
+
+Continue automatically after the Phase 1 code-level exit gate.
+
+## A. Real Frontend → Backend → SQLite Integration
+
+Verify all existing business workflows through REAL frontend actions:
+
+Login → Admin/Salesperson → Products/Inventory → Sales/Invoices → Returns/Refunds → Expenses → Invoice Corrections → Dashboard/Revenue/Profit/Reports → Daily Closing/Cash → Settings → Backup/Restore.
+
+For each required workflow:
+
+1. Execute a genuine authenticated frontend action.
+2. Verify input validation and server-side role authorization.
+3. Verify actual API execution.
+4. Verify authoritative SQLite transaction and persisted result.
+5. Verify updated UI values are derived from durable records.
+6. Verify relevant downstream stock, cash, invoice and report consistency.
+7. Verify restart durability and safe recovery of lost/UNKNOWN responses.
+
+Check every important button, form, route and role transition.
+
+Identify and eliminate any silently mock-only, browser-only or simulated-success PRODUCTION path.
+
+**Never replace real records with demo fixtures or make frontend success messages appear before confirmed authoritative outcomes.**
+
+Preserve all approved financial policies: exact PKR, per-unit discount rounding, inventory valuation, source-linked refunds, expenses, historical invoice costs, profit, cash reconciliation and Daily Closing.
+
+No duplicate financial effects, invented cash, uninspected automatic restocking or historical rewriting.
+
+Record independent integration statuses for UI, API, database, restart and production eligibility.
+
+## B. Secure Windows EXE and Installer
+
+Review compatible packaging choices and request owner approval for material architecture, dependency, code-signing or secret-custody decisions.
+
+Package the EXISTING application into a standalone, offline Windows 11 executable and installer.
+
+Requirements:
+
+- No VS Code, Codex or development server required.
+- Properly bundled application runtime and native SQLite dependencies.
+- Secure frontend/backend process lifecycle and single-instance behavior.
+- Restricted local API exposure, correct authenticated role windows and no unintended LAN binding.
+- Secure first-run setup using the Phase 1 protected enrollment implementation.
+- Database, configuration, archives and secrets stored outside replaceable application files under appropriate Windows permissions.
+- Correct startup, shutdown, crash/restart and offline recovery.
+- Preserve client data across update/reinstall, with authorized recoverable migrations.
+- Prevent incompatible old applications from writing newer-schema databases.
+- Safe rollback, installer failure and uninstall data-retention behavior.
+- No hardcoded privileged secrets, recovery keys or production credentials inside distributed binaries.
+- No unapproved Windows driver, Defender, firewall, SmartScreen or certificate changes.
+
+**Build and TEST the actual packaged executable and installer, not only a Next.js development build.**
+
+Do not enable real production merely because the packaged build passes TEST checks.
+
+## C. Receipt Printing
+
+Integrate the existing real invoice/receipt records into appropriate printing workflows:
+
+- Ordinary printer and 80mm thermal receipts.
+- Approved receipt layout, shop branding, invoice details, item quantities, prices, discounts and exact totals.
+- Historical receipt/version correctness after corrections and refunds.
+- Authorized reprints, printer selection and clear print-failure states.
+- No duplicate sale, refund, payment or stock effect when printing or retrying.
+- Protected business/private information.
+
+Use focused programmatic tests. Actual printer acceptance requires genuine physical printed-output verification.
+
+## D. Critical performance and reliability
+
+Before release, address the known 50k-row latency problems:
+
+- Cash counting: approximately 24.4s HTTPS / 36.1s Chromium.
+- Daily closing: approximately 8s HTTPS / 16.2s Chromium.
+- Invoice search/detail: approximately 9.9s HTTPS / 23.4s Chromium.
+
+Profile real bottlenecks, establish appropriate owner/target-hardware acceptance criteria, and optimize without removing integrity, validation, authorization or historical checks.
+
+Use consistent 1k/10k/50k workloads where relevant. Report before/after measurements, RAM/SQLite pressure and remaining risks.
+
+Do not claim target-hardware or production capacity PASS from synthetic laptop-only measurements.
+
+## E. Mandatory Phase 2 acceptance
+
+Run targeted REAL packaged-application tests covering:
+
+- Role-secured frontend/API/SQLite workflows.
+- Exact financial reconciliation.
+- Restart, offline operation and browser/process failures.
+- Installation, upgrade, reinstall and data retention.
+- Encrypted backup/restore integration.
+- Credential and key custody boundaries.
+- Printing and safe retry.
+- Relevant security negative tests.
+- Package secret/dependency scanning.
+- Performance regression.
+- TypeScript, lint and production/package builds.
+
+Inspect evidence and fix actual defects. Do not hide errors, weaken assertions or simply increase test timeouts to obtain PASS.
+
+**Actual client Windows 11, replacement-PC recovery, owner recovery copies, signed/trusted distribution and physical printer remain separate hardware/owner acceptance gates until genuinely verified.**
+
+---
+
+# MANDATORY OWNER APPROVALS
+
+Ask me BEFORE genuinely new:
+
+- Security or production-enrollment architecture decisions.
+- Recovery-key ownership and physical custody decisions.
+- Code-signing/private-key arrangements.
+- Significant new packaging dependencies or architectural changes.
+- Irreversible migrations or destructive operations.
+- Real shop credential enrollment, live data migration or production activation.
+- Any necessary visible change to the frozen frontend.
+
+Combine related approvals into one concise question with recommended safest options.
+
+Do not repeat approvals already granted for the exact same scope.
+
+Continue safe, previously authorized implementation while unrelated physical acceptance is pending.
+
+**Production activation is NOT authorized by this prompt.**
+
+---
+
+# SAFE GIT, DATA AND WINDOWS RULES
+
+Preserve the existing repository, approved UI, historical migrations, backup archives, local checkpoints, secrets, databases and all 34 unrelated working-tree paths.
+
+Before changing source, inspect Git status.
+
+After each verified coherent stage:
+
+- Stage only explicitly reviewed relevant source, tests and documentation.
+- Check staged diff, sensitive material and accidental changes.
+- Create SAFE LOCAL Git checkpoint.
+- Record hash and remaining work.
+
+No push, reset, clean, stash, blind staging, WSL, Docker, VM, risky drivers or unauthorized OS-security changes.
+
+No destructive testing on original or live databases. Failure injection only on disposable copies.
+
+---
+
+# CODEX USAGE EFFICIENCY — IMPORTANT
+
+The owner has limited Codex usage and wants to reserve enough capacity for a SEPARATE Phase 3 final independent A–Z audit, potentially today.
+
+Optimize usage intelligently:
+
+- Read targeted files, not the whole repository repeatedly.
+- Reuse existing PASS evidence and completed implementation.
+- Avoid rebuilding finished TEST41/Backup systems.
+- Use focused tests during implementation.
+- Do not repeatedly run expensive full suites or capture redundant screenshots.
+- Group tightly related fixes and tests.
+- Avoid unbounded loops, repeated architecture debates and unnecessary documentation.
+- Prefer concise evidence-backed reports.
+- Maintain phase checkpoints and reliable resumption notes if interrupted.
+- Before an expensive broad test or unusually large redesign, assess whether it is necessary now and preserve capacity for final acceptance.
+
+**Never skip mandatory safety testing, fabricate results or claim completion simply to conserve usage.**
+
+Do not promise a particular percentage of remaining Codex quota; measure it only if actually available.
+
+---
+
+# FINAL PHASE 1 + PHASE 2 DELIVERY REPORT
+
+Deliver a concise, factual evidence-backed report containing:
+
+1. Phase 1 security/recovery implementation and exact PASS/PARTIAL/BLOCKED status.
+2. Phase 2 real frontend/backend/SQLite integration matrix.
+3. Explicit confirmation of approved frontend preservation WITH comparison evidence, or exact unverified screens/changes.
+4. Actual packaged Windows EXE/installer artifacts and smoke-test results if successfully created.
+5. Printer implementation and real hardware acceptance status.
+6. Backup/restore, enrollment, credentials, secret and key-custody evidence.
+7. Financial reconciliation and security negative-test results.
+8. Measured performance and unresolved risks.
+9. Requirement-to-evidence status register covering the complete attached engineering contract.
+10. Safe LOCAL Git commit hashes and preservation check.
+11. Owner approvals or physical tests still required.
+12. Whether the software is ready to BEGIN Phase 3, not whether it is already approved for client release.
+
+**DO NOT perform the final independent A–Z release audit. Phase 3 requires a separate explicit owner request.**
+
+**DO NOT declare client handover READY based on Phase 1/2 alone.**
+
+**START FROM `e1b7df6`. IMPLEMENT → TEST → FIX → VERIFY → CHECKPOINT. CONTINUE PHASE 1 THEN PHASE 2 WITHOUT REQUESTING ANOTHER MASTER PROMPT.**

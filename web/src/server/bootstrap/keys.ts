@@ -50,8 +50,9 @@ function storedFile(directory: string) {
   rejectRedirectedPath(directory);
   const entries = readdirSync(directory);
   if (realpathSync.native(directory).toLowerCase() !== path.resolve(directory).toLowerCase() ||
-      !entries.includes("identity.dpapi") || entries.some(name => name !== "identity.dpapi" && name !== "enrollment")) return rejectBootstrap();
+      !entries.includes("identity.dpapi") || entries.some(name => name !== "identity.dpapi" && name !== "enrollment" && name !== "maintenance")) return rejectBootstrap();
   if (entries.includes("enrollment")) rejectRedirectedPath(path.join(directory, "enrollment"));
+  if (entries.includes("maintenance")) rejectRedirectedPath(path.join(directory, "maintenance"));
   const filename = path.join(directory, "identity.dpapi"), stat = lstatSync(filename, { bigint: true });
   if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== BigInt(1) || stat.size < BigInt(9) || stat.size > BigInt(131072)) return rejectBootstrap();
   return stat;
