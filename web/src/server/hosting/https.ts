@@ -1,3 +1,4 @@
+import { assertPatchedLocalRuntime } from "./runtime-policy";
 import {isBackupApiPath} from "./backup-http";
 import {isSettingsApiPath} from "./settings-http";
 import {isCashApiPath} from "./cash-http";
@@ -81,6 +82,7 @@ function respond(response: ServerResponse, status: number) {
 // Internal transport, NOT a gateway/role authorization capability. No HTTP
 // backend, proxy, redirects, auth endpoint, upgrade or forwarded transport trust.
 export function createLocalHttpsHost(port: number, origins: LocalOrigins, tls: LocalTlsMaterial, handler: Handler, authentication?: Handler, inventory?: Handler, pages?: Handler) {
+  assertPatchedLocalRuntime();
   const m = material(tls);
   let stopping = false, listening = false;
   const sockets = new Set<Duplex>(), active = new Set<Promise<void>>();

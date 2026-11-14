@@ -57,12 +57,14 @@ export async function withTestRecoveryMaterial<T>(custody: BackupCustody, consum
   return consume(secret(custody).identity);
 }
 export type SnapshotFacts = {
-  format: "POS_SQLITE_SNAPSHOT_V1"; archiveId: string; keyId: string; createdAtMs: string;
-  schema: 41; sourceNamespace: string; databaseBytes: string; databaseSha256: string;
+  format: "POS_SQLITE_SNAPSHOT_V1" | "POS_AUTH8_SNAPSHOT_V1"; archiveId: string; keyId: string; createdAtMs: string;
+  schema: 8 | 41; sourceNamespace: string; databaseBytes: string; databaseSha256: string;
   fingerprint: unknown; history: unknown[];
 };
 const MAX_BYTES = 1024 * 1024 * 1024;
 const MAX_HEADER = 65536;
+// Full bounded protected enrollment history is included only in the new auth8 format.
+const MAX_AUTH8_HEADER = 262144;
 function safeFile(filename: string) {
   const st = lstatSync(filename);
   if (!st.isFile() || st.isSymbolicLink() || st.nlink !== 1 || st.size < 1 || st.size > MAX_BYTES + 1024 * 1024) return fail();
@@ -90,15 +92,16 @@ async function writeStream(filename: string, stream: ReadableStream<Uint8Array>,
     await file.sync();
   } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); await file.close(); }
 }
-export async function encryptSnapshot(custody: BackupCustody, snapshot: string, pending: string, sourceNamespace: string, fingerprint: unknown, signal?: AbortSignal, history: unknown[] = [], archiveId: string = randomUUID()) {
+export async function encryptSnapshot(custody: BackupCustody, snapshot: string, pending: string, sourceNamespace: string, fingerprint: unknown, signal?: AbortSignal, history: unknown[] = [], archiveId: string = randomUUID(), schema: 8 | 41 = 41) {
   testDirectory(path.dirname(snapshot)); testDirectory(path.dirname(pending));
+  if ((schema !== 8 && schema !== 41) || (schema === 8 && history.length !== 0)) return fail();
   const k = secret(custody), facts = await hashFile(snapshot);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(archiveId) || !/^[a-f0-9]{64}$/.test(sourceNamespace) || BigInt(facts.bytes)>BigInt(MAX_BYTES)) return fail();
-  const manifest: SnapshotFacts = { format: "POS_SQLITE_SNAPSHOT_V1", archiveId, keyId: k.id,
-    createdAtMs: String(Date.now()), schema: 41, sourceNamespace, databaseBytes: facts.bytes, databaseSha256: facts.sha256, fingerprint, history };
+  const manifest: SnapshotFacts = { format: schema === 8 ? "POS_AUTH8_SNAPSHOT_V1" : "POS_SQLITE_SNAPSHOT_V1", archiveId, keyId: k.id,
+    createdAtMs: String(Date.now()), schema, sourceNamespace, databaseBytes: facts.bytes, databaseSha256: facts.sha256, fingerprint, history };
   const signature = sign(null, Buffer.from(canonical(manifest)), k.signingPrivate??fail()).toString("base64");
   const header = Buffer.from(canonical({ manifest, signature }));
-  if (header.length > MAX_HEADER) return fail();
+  if (header.length > (schema === 8 ? MAX_AUTH8_HEADER : MAX_HEADER)) return fail();
   const length = Buffer.alloc(4); length.writeUInt32BE(header.length);
   const input = Readable.from((async function* () { yield length; yield header; for await (const chunk of createReadStream(snapshot)) yield chunk; })());
   const enc = new Encrypter(); enc.addRecipient(k.recipient);
@@ -107,8 +110,10 @@ export async function encryptSnapshot(custody: BackupCustody, snapshot: string, 
     return Object.freeze(manifest);
   } catch { input.destroy(); return fail(); }
 }
-export async function decryptSnapshot(custody: BackupCustody, archive: string, pending: string, signal?: AbortSignal, testIdentity?: string, expectedArchiveSha256?:string): Promise<Readonly<SnapshotFacts>> {
+export async function decryptSnapshot(custody: BackupCustody, archive: string, pending: string, signal?: AbortSignal, testIdentity?: string, expectedArchiveSha256?:string, expectedSchema: 8 | 41 = 41): Promise<Readonly<SnapshotFacts>> {
   testDirectory(path.dirname(archive)); testDirectory(path.dirname(pending));
+  if (expectedSchema !== 8 && expectedSchema !== 41) return fail();
+  const maximumHeader = expectedSchema === 8 ? MAX_AUTH8_HEADER : MAX_HEADER;
   const k = secret(custody); safeFile(archive);if(expectedArchiveSha256!==undefined&&!/^[a-f0-9]{64}$/.test(expectedArchiveSha256))return fail();
   const d = new Decrypter(); d.addIdentity(testIdentity ?? k.identity);
   const file = await open(pending, "wx");
@@ -125,7 +130,7 @@ export async function decryptSnapshot(custody: BackupCustody, archive: string, p
       if (!manifest) {
         prefix = Buffer.concat([prefix, chunk]); chunk = Buffer.alloc(0);
         if (prefix.length >= 4 && headerLength === undefined) {
-          headerLength = prefix.readUInt32BE(); if (!headerLength || headerLength > MAX_HEADER) return fail();
+          headerLength = prefix.readUInt32BE(); if (!headerLength || headerLength > maximumHeader) return fail();
         }
         if (headerLength !== undefined && prefix.length >= headerLength + 4) {
           const encoded = prefix.subarray(4, 4 + headerLength).toString("utf8");
@@ -134,12 +139,12 @@ export async function decryptSnapshot(custody: BackupCustody, archive: string, p
             typeof envelope.signature !== "string" || !verify(null, Buffer.from(canonical(envelope.manifest)), k.signingPublic, Buffer.from(envelope.signature, "base64"))) return fail();
           manifest = envelope.manifest;
           if (!manifest || Object.keys(manifest).sort().join(",") !== "archiveId,createdAtMs,databaseBytes,databaseSha256,fingerprint,format,history,keyId,schema,sourceNamespace" ||
-            !Array.isArray(manifest.history) || manifest.history.length > 16 || manifest.format !== "POS_SQLITE_SNAPSHOT_V1" || manifest.schema !== 41 || manifest.keyId !== k.id ||
+            !Array.isArray(manifest.history) || manifest.history.length > 16 || manifest.format !== (expectedSchema === 8 ? "POS_AUTH8_SNAPSHOT_V1" : "POS_SQLITE_SNAPSHOT_V1") || manifest.schema !== expectedSchema || (expectedSchema === 8 && manifest.history.length !== 0) || manifest.keyId !== k.id ||
             !/^[0-9a-f-]{36}$/.test(manifest.archiveId) || !/^[0-9]{1,16}$/.test(manifest.createdAtMs) ||
             !/^[a-f0-9]{64}$/.test(manifest.sourceNamespace) || !/^[a-f0-9]{64}$/.test(manifest.databaseSha256) ||
             !/^[1-9][0-9]{0,10}$/.test(manifest.databaseBytes) || BigInt(manifest.databaseBytes) > BigInt(MAX_BYTES)) return fail();
           chunk = prefix.subarray(4 + headerLength); prefix = Buffer.alloc(0);
-        } else if (prefix.length > MAX_HEADER + 4 + 65536) return fail();
+        } else if (prefix.length > maximumHeader + 4 + 65536) return fail();
       }
       if (manifest && chunk.length) {
         bytes += chunk.length;

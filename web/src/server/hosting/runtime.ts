@@ -1,3 +1,4 @@
+import { assertPatchedLocalRuntime } from "./runtime-policy";
 import {startTestBackupWorker,type TestBackupConfiguration,type TestBackupWorker} from "../backup/worker";
 import {createBackupDispatcher,isBackupApiPath} from "./backup-http";
 import {createSettingsDispatcher,isSettingsApiPath} from "./settings-http";
@@ -64,6 +65,7 @@ function applicationConfig(directory: string) {
 // signing key, certificate, credential, migration or account is generated here.
 // Persistent production storage exposes only health; TEST auth is path-confined.
 export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promise<LocalRuntime> {
+  assertPatchedLocalRuntime();
   let ownership: Awaited<ReturnType<typeof acquireRuntimeOwnership>> | undefined;
   let gateway: AuthorizationGateway | undefined;
   let backupWorker:TestBackupWorker|undefined;

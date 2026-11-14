@@ -4,7 +4,8 @@
 
 - [x] Continue accepted e1b7df6; fresh329-source/41-migration/34-unrelated hash comparison and exact owner contracts preserved.
 - [x] Owner explicitly APPROVED shared schema41 security items1-8 for non-destructive implementation on disposable TEST identities/databases; production DISABLED.
-- [ ] Complete protected current-schema enrollment/maintenance/restore/fencing code and focused genuine checks before Phase1 code-level exit. Initial fresh41 enrollment slice/type check underway; no broad PASS.
+- [x] Candidate selection/permanent no-admission quarantine addendum items1-8 OWNER APPROVED for disposable TEST implementation; original approvals remain valid. [Proposal](development/SCHEMA41_CANDIDATE_MAINTENANCE_RECOVERY_ADDENDUM.md); no dependent promotion code yet. [Current scoped evidence](development/PHASE1_RUNTIME_AUTH8_PREREQUISITES_REPORT.md).
+- [ ] Complete protected current-schema enrollment/maintenance/restore/fencing code and focused genuine checks before Phase1 code-level exit. Fresh41 enrollment/journal checkpoint60bc051 verified; current runtime/auth8 prerequisites16 new-phase cases +2 selected unchanged regressions PASS across focused runs; exact334-source patched build and real Chromium recovery workflow PASS. Final current scoped type/lint exits checked before checkpoint. No complete Phase1 PASS.
 - [ ] Then continue Phase2 real integration, EXE/installer/printer/performance under the same master assignment, subject only to new material approvals.
 - [ ] Physical custody/independent Windows/profile/target hardware acceptance remain unverified. Phase3 not requested.
 
