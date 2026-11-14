@@ -192,7 +192,14 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
       try { const result = await work(reader); guard(); return result; }
       finally { live = false; bootstrapScopes.delete(reader); }
     };
-    return { db, get, all, run, scope, withBootstrapReadScope, inTransaction: () => native.inTransaction,
+    // Private owner fact, not business/admission authority. Bind handoff to the
+    // actual handle's original identity; never infer it from a replacement path.
+    const fileIdentity = () => {
+      if (!native.open || closingReads) return deny();
+      sameFile();
+      return Object.freeze({ filename: location.filename.toLowerCase(), device: String(identity.dev), inode: String(identity.ino) });
+    };
+    return { db, get, all, run, scope, withBootstrapReadScope, fileIdentity, inTransaction: () => native.inTransaction,
       async close() { closingReads = true; invalidate(); if (!native.open) { releaseLeaseOwner(); return; } try { await db!.destroy(); } finally { if (native.open) native.close(); if (!native.open) releaseLeaseOwner(); } },
       quarantine() { closingReads = true; invalidate(); try { if (native.open) native.close(); if (!native.open) releaseLeaseOwner(); } catch { /* No further access is allowed. */ } }
     };

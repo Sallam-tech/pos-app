@@ -3,7 +3,7 @@ import { once } from "node:events";
 import { createPrivateKey, randomBytes } from "node:crypto";
 import { execFile, fork } from "node:child_process";
 import { promisify } from "node:util";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { beforeAll, expect, it, vi } from "vitest";
 import { openDatabase } from "../../src/server/db/connection";
@@ -20,7 +20,7 @@ import { runTrustedFirstRunSetup } from "../../src/server/auth/provision";
 import { passwordCallbacks } from "../../src/server/auth/password";
 import type { LocalTlsMaterial } from "../../src/server/hosting/https";
 
-const fault = vi.hoisted(() => ({ sql: false, lostCommit: false, anchor: false }));
+const fault = vi.hoisted(() => ({ sql: false, lostCommit: false, anchor: false, afterClose: undefined as undefined | (() => void) }));
 vi.mock("../../src/server/bootstrap/windows", async original => {
   const actual = await original<typeof import("../../src/server/bootstrap/windows")>();
   return { ...actual, windowsProtection: async (message: Readonly<Record<string, string>>) => {
@@ -33,7 +33,8 @@ vi.mock("../../src/server/bootstrap/windows", async original => {
 vi.mock("../../src/server/auth/database", async original => {
   const actual = await original<typeof import("../../src/server/auth/database")>();
   return { ...actual, openAsyncOwner: (config: Parameters<typeof actual.openAsyncOwner>[0]) => {
-    const owner = actual.openAsyncOwner(config), run = owner.run;
+    const owner = actual.openAsyncOwner(config), run = owner.run, close = owner.close;
+    owner.close = async () => { await close(); const action = fault.afterClose; fault.afterClose = undefined; action?.(); };
     owner.run = (sql, values) => {
       const result = run(sql, values);
       if (fault.sql && sql.startsWith("INSERT INTO auth_principals")) { fault.sql = false; throw Error("TEST actual first account write fault"); }
@@ -500,4 +501,166 @@ it("candidate ledger native reads reject hidden hard links and foreign ACLs on d
     expect(change.stderr).toBe("");
     await expect(weak.native({ ...weak.context, operation: "candidate-list" })).rejects.toThrow("Protected setup unavailable."); expect(weak.state()).toBe(weakBefore);
   });
+});
+
+async function adminHandoffFixture(version: 8 | 41 = 8) {
+  const f = await fixture(version); await f.entry.enroll();
+  const authorization = { database: f.config.database, migrationsDirectory: f.config.migrationsDirectory,
+    origins: { ADMIN: "https://localhost:7443", SALESPERSON: "https://127.0.0.1:7443" },
+    signingSecrets: { ADMIN: randomBytes(48).toString("base64url"), SALESPERSON: randomBytes(48).toString("base64url") }, sessionLifetimeSeconds: 120 };
+  const { acquireRuntimeOwnership } = await import("../../src/server/hosting/ownership");
+  const { openAuthorizationGateway } = await import("../../src/server/auth/gateway");
+  const filename = path.join(f.config.database.directory, f.config.database.filename);
+  const runtime = await acquireRuntimeOwnership(filename);
+  let gateway;
+  try { gateway = await openAuthorizationGateway(authorization, version === 41 ? 41 : undefined); }
+  catch (error) { await runtime.close(); throw error; }
+  const { openProofDatabase, fingerprint } = await import("../../src/server/backup/snapshot");
+  const { enrollmentDigest } = await import("../../src/server/bootstrap/database");
+  const state = () => { const db = openProofDatabase(filename); try { return enrollmentDigest(fingerprint(db)); } finally { db.close(); } };
+  return { ...f, authorization, runtime, gateway, filename, state };
+}
+
+it("Admin maintenance handoff consumes genuine fresh proof, preserves exact8 and continuously holds the same runtime fence", async () => {
+  const f = await adminHandoffFixture();
+  const { withAdminMaintenanceSource, adminMaintenanceSourceEvidence, openAuthorizationGateway } = await import("../../src/server/auth/gateway");
+  const { hasActiveBootstrapLease } = await import("../../src/server/bootstrap/ownership");
+  const { acquireRuntimeOwnership } = await import("../../src/server/hosting/ownership");
+  const { randomUUID } = await import("node:crypto");
+  const receipt = await f.gateway.verifyAdminPassword(f.values.ADMIN), before = f.state();
+  const operation = { operationId: randomUUID(), purpose: "UPGRADE8" as const };
+  let savedSource: unknown, savedLease!: Parameters<typeof adminMaintenanceSourceEvidence>[2];
+  try {
+    expect(await withAdminMaintenanceSource(f.gateway, receipt, f.runtime, operation, async (source, lease) => {
+      savedSource = source; savedLease = lease;
+      expect(hasActiveBootstrapLease(lease, f.config.database)).toBe(true);
+      const facts = adminMaintenanceSourceEvidence(source, f.config.database, lease, operation);
+      expect(facts).toMatchObject({ ...operation, schema: 8, productionActivation: false, credentialVersion: "1", authEpoch: "1" });
+      expect(facts.filename).toBe(f.filename.toLowerCase());
+      expect(() => JSON.stringify(source)).toThrow("Access denied.");
+      expect(() => adminMaintenanceSourceEvidence({}, f.config.database, lease, operation)).toThrow("Access denied.");
+      expect(() => adminMaintenanceSourceEvidence(source, f.config.database, {} as typeof lease, operation)).toThrow("Access denied.");
+      expect(() => adminMaintenanceSourceEvidence(source, f.config.database, lease, { ...operation, operationId: randomUUID() })).toThrow("Access denied.");
+      expect(() => adminMaintenanceSourceEvidence(source, f.config.database, lease, { ...operation, purpose: "RESTORE41" })).toThrow("Access denied.");
+      await expect(f.gateway.close()).rejects.toThrow("Access denied.");
+      await expect(openAuthorizationGateway(f.authorization)).rejects.toThrow("Access denied.");
+      await expect(acquireRuntimeOwnership(f.filename)).rejects.toThrow("Local service unavailable.");
+      const child = fork(path.resolve("tests/helpers/maintenance-runtime-probe.mjs"), [], { execArgv: ["--experimental-transform-types"], silent: true, windowsHide: true, env: { ...process.env, NODE_ENV: "test" } });
+      const message = once(child, "message"), exited = once(child, "exit");
+      child.send({ action: "probe", filename: f.filename });
+      expect((await message)[0]).toEqual({ status: "FENCE_DENIED" });
+      expect((await exited)[0]).toBe(0);
+      return "SOURCE_SCOPE_ONLY";
+    })).toBe("SOURCE_SCOPE_ONLY");
+    expect(f.state()).toBe(before);
+    f.runtime.assertHeld();
+    expect(() => adminMaintenanceSourceEvidence(savedSource, f.config.database, savedLease, operation)).toThrow("Access denied.");
+    expect(hasActiveBootstrapLease(savedLease, f.config.database)).toBe(false);
+    await expect(f.gateway.issueAdminSession(receipt)).rejects.toThrow("Access denied.");
+    await expect(f.gateway.verifySalespersonPassword(f.values.SALESPERSON)).rejects.toThrow("Access denied.");
+    const fresh = await openAuthorizationGateway(f.authorization);
+    try { for (const role of ["ADMIN", "SALESPERSON"] as const) {
+      const proof = await (role === "ADMIN" ? fresh.verifyAdminPassword(f.values[role]) : fresh.verifySalespersonPassword(f.values[role]));
+      expect((await (role === "ADMIN" ? fresh.issueAdminSession(proof) : fresh.issueSalespersonSession(proof))).status).toBe(200);
+    } } finally { await fresh.close(); }
+  } finally { await f.gateway.close(); await f.runtime.close(); }
+});
+
+it("Admin maintenance rejects forged gateway and proofs, Staff, stale receipt and counterfeit lease before source authority", async () => {
+  const f = await adminHandoffFixture();
+  const { withAdminMaintenanceSource } = await import("../../src/server/auth/gateway");
+  const operation = { operationId: (await import("node:crypto")).randomUUID(), purpose: "UPGRADE8" as const }, work = vi.fn(async () => {});
+  try {
+    await expect(withAdminMaintenanceSource({} as typeof f.gateway, {}, f.runtime, operation, work)).rejects.toThrow("Access denied.");
+    await expect(withAdminMaintenanceSource(f.gateway, { signal: { aborted: false } }, f.runtime, operation, work)).rejects.toThrow("Access denied.");
+    const staff = await f.gateway.verifySalespersonPassword(f.values.SALESPERSON);
+    await expect(withAdminMaintenanceSource(f.gateway, staff, f.runtime, operation, work)).rejects.toThrow("Access denied.");
+    await expect(f.gateway.issueSalespersonSession(staff)).rejects.toThrow("Access denied.");
+    const old = await f.gateway.verifyAdminPassword(f.values.ADMIN);
+    await new Promise(resolve => setTimeout(resolve, 5100));
+    await expect(withAdminMaintenanceSource(f.gateway, old, f.runtime, operation, work)).rejects.toThrow("Access denied.");
+    const proof = await f.gateway.verifyAdminPassword(f.values.ADMIN), counterfeit = { assertHeld: vi.fn() };
+    await expect(withAdminMaintenanceSource(f.gateway, proof, counterfeit, operation, work)).rejects.toThrow("Access denied.");
+    expect(counterfeit.assertHeld).not.toHaveBeenCalled();
+    await expect(f.gateway.issueAdminSession(proof)).rejects.toThrow("Access denied.");
+    expect(work).not.toHaveBeenCalled();
+    expect((await f.gateway.issueAdminSession(await f.gateway.verifyAdminPassword(f.values.ADMIN))).status).toBe(200);
+  } finally { await f.gateway.close(); await f.runtime.close(); }
+});
+
+it("Admin maintenance reopens and rejects actual post-close credential revocation or replacement file without minting a source scope", async () => {
+  const { withAdminMaintenanceSource } = await import("../../src/server/auth/gateway");
+  for (const variant of ["revoke", "replacement"] as const) {
+    const f = await adminHandoffFixture(), operation = { operationId: (await import("node:crypto")).randomUUID(), purpose: "UPGRADE8" as const }, work = vi.fn(async () => {});
+    const receipt = await f.gateway.verifyAdminPassword(f.values.ADMIN), before = f.state();
+    const preserved = path.join(f.config.database.directory, "preserved-original8.sqlite3");
+    fault.afterClose = () => {
+      if (variant === "revoke") f.inspect(db => db.transaction(tx => tx.run("UPDATE auth_principals SET auth_epoch=auth_epoch+1 WHERE id='ADMIN'")));
+      else { renameSync(f.filename, preserved); copyFileSync(preserved, f.filename); }
+    };
+    try {
+      await expect(withAdminMaintenanceSource(f.gateway, receipt, f.runtime, operation, work)).rejects.toThrow("Protected setup unavailable.");
+      expect(work).not.toHaveBeenCalled(); f.runtime.assertHeld();
+      if (variant === "replacement") expect(f.state()).toBe(before);
+      else expect(f.inspect(db => db.get("SELECT auth_epoch FROM auth_principals WHERE id='ADMIN'")?.auth_epoch)).toBe(BigInt(2));
+    } finally { fault.afterClose = undefined; await f.gateway.close().catch(() => {}); await f.runtime.close(); }
+  }
+});
+
+it("Admin maintenance exact41 drains an admitted transaction, denies new work and never transfers the same receipt twice", async () => {
+  const f = await adminHandoffFixture(41);
+  const { withAdminMaintenanceSource, adminMaintenanceSourceEvidence } = await import("../../src/server/auth/gateway");
+  const operation = { operationId: (await import("node:crypto")).randomUUID(), purpose: "RESTORE41" as const };
+  const login = await f.gateway.issueAdminSession(await f.gateway.verifyAdminPassword(f.values.ADMIN));
+  const cookie = login.headers.get("set-cookie")!.split(";")[0], request = () => new Request(f.authorization.origins.ADMIN + "/api/test", { headers: { cookie, origin: f.authorization.origins.ADMIN } });
+  const receipt = await f.gateway.verifyAdminPassword(f.values.ADMIN);
+  let release!: () => void, ready!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; }), admitted = new Promise<void>(resolve => { ready = resolve; });
+  let drained = false;
+  const existing = f.gateway.withAdminTransaction(request(), async () => { ready(); await gate; drained = true; });
+  await admitted;
+  try {
+    const work = vi.fn(async (source: Parameters<typeof adminMaintenanceSourceEvidence>[0], lease: Parameters<typeof adminMaintenanceSourceEvidence>[2]) => {
+      expect(drained).toBe(true);
+      expect(adminMaintenanceSourceEvidence(source, f.config.database, lease, operation).schema).toBe(41);
+    });
+    const transfer = withAdminMaintenanceSource(f.gateway, receipt, f.runtime, operation, work);
+    await expect(f.gateway.publicShopName()).rejects.toThrow("Access denied.");
+    await expect(f.gateway.withAdminTransaction(request(), async () => {})).rejects.toThrow("Access denied.");
+    release(); await existing; await transfer;
+    expect(work).toHaveBeenCalledTimes(1);
+    await expect(withAdminMaintenanceSource(f.gateway, receipt, f.runtime, operation, work)).rejects.toThrow("Access denied.");
+  } finally { release(); await existing.catch(() => {}); await f.gateway.close(); await f.runtime.close(); }
+});
+
+it("Admin maintenance actual child death releases only its runtime fence and preserves the post-authentication source", async () => {
+  const f = await adminHandoffFixture();
+  await f.gateway.close(); await f.runtime.close();
+  const operation = { operationId: (await import("node:crypto")).randomUUID(), purpose: "UPGRADE8" as const };
+  const child = fork(path.resolve("tests/helpers/maintenance-runtime-probe.mjs"), [], { execArgv: ["--experimental-transform-types"], silent: true, windowsHide: true, env: { ...process.env, NODE_ENV: "test" } });
+  const output: Buffer[] = []; let size = 0;
+  child.stderr!.on("data", (b: Buffer) => { size += b.length; if (size < 16384) output.push(b); });
+  const message = once(child, "message"), exited = once(child, "exit");
+  child.send({ action: "pause-maintenance", filename: f.filename, authorization: f.authorization, password: f.values.ADMIN, operation });
+  try {
+    const [reply] = await message;
+    expect(reply).toMatchObject({ status: "MAINTENANCE_SOURCE_HELD", schema: 8, productionActivation: false });
+    expect(child.kill("SIGTERM")).toBe(true); await exited;
+    expect(f.state()).toBe((reply as { state: string }).state);
+    const { acquireRuntimeOwnership } = await import("../../src/server/hosting/ownership");
+    const { openAuthorizationGateway } = await import("../../src/server/auth/gateway");
+    const runtime = await acquireRuntimeOwnership(f.filename);
+    try {
+      const gateway = await openAuthorizationGateway(f.authorization);
+      try {
+        for (const role of ["ADMIN", "SALESPERSON"] as const) {
+          const proof = await (role === "ADMIN" ? gateway.verifyAdminPassword(f.values[role]) : gateway.verifySalespersonPassword(f.values[role]));
+          expect((await (role === "ADMIN" ? gateway.issueAdminSession(proof) : gateway.issueSalespersonSession(proof))).status).toBe(200);
+        }
+      } finally { await gateway.close(); }
+    } finally { await runtime.close(); }
+  } finally {
+    if (child.exitCode === null && child.signalCode === null) { child.kill("SIGTERM"); await exited; }
+    writeFileSync(path.join(f.config.directory, "maintenance-child-stderr.log"), Buffer.concat(output));
+  }
 });

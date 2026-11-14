@@ -1,7 +1,7 @@
 import "server-only";
 
 import { lstatSync } from "node:fs";
-import { acquireRuntimeOwnership } from "../hosting/ownership";
+import { acquireRuntimeOwnership, assertRuntimeOwnership } from "../hosting/ownership";
 import { resolveDatabaseLocation, type DatabaseOptions } from "../db/location";
 import { rejectBootstrap } from "./windows";
 
@@ -50,6 +50,35 @@ export async function withBootstrapOwnership<T>(database: DatabaseOptions, work:
       try { await guard.close(); }
       catch { rejectBootstrap(); }
     }
+    delete state[ownerKey];
+  }
+}
+
+// Borrow the SAME genuine runtime fence after its source native owner closes.
+// This function takes ownership of the process marker synchronously, before any
+// await. It never closes/reacquires the caller's machine-wide lease. This low-level
+// scope alone grants no human, backup, migration, key or admission authority.
+export async function withHeldBootstrapOwnership<T>(database: DatabaseOptions, runtime: unknown, work: (retainOwnership: () => void, lease: BootstrapLease) => Promise<T>): Promise<T> {
+  if (state[ownerKey] || database.create === true || typeof work !== "function") return rejectBootstrap();
+  assertRuntimeOwnership(runtime);
+  const filename = resolveDatabaseLocation({ ...database, create: false }).filename;
+  const identity = lstatSync(filename, { bigint: true });
+  state[ownerKey] = true;
+  let releasable = true;
+  const lease = Object.freeze({}) as BootstrapLease;
+  leases.set(lease, { filename: filename.toLowerCase(), device: identity.dev, inode: identity.ino,
+    retain: () => { releasable = false; }, assertHeld: () => assertRuntimeOwnership(runtime) });
+  try {
+    if (!hasActiveBootstrapLease(lease, database)) return rejectBootstrap();
+    const result = await work(() => { releasable = false; }, lease);
+    if (!hasActiveBootstrapLease(lease, database)) return rejectBootstrap();
+    return result;
+  } catch { return rejectBootstrap(); }
+  finally {
+    leases.delete(lease);
+    // Retention is fail-closed; the caller must retain its runtime fence too.
+    if (!releasable) return rejectBootstrap();
+    assertRuntimeOwnership(runtime);
     delete state[ownerKey];
   }
 }

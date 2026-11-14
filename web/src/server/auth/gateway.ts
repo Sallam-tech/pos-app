@@ -11,6 +11,9 @@ import { createAuthEndpoint } from "better-auth/api";
 import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { getCurrentAdapter, runWithTransaction } from "@better-auth/core/context";
 import { openAsyncOwner } from "./database";
+import { assertRuntimeOwnership } from "../hosting/ownership";
+import { withHeldBootstrapOwnership, hasActiveBootstrapLease, type BootstrapLease } from "../bootstrap/ownership";
+import { resolveDatabaseLocation, type DatabaseOptions } from "../db/location";
 import { createVolatileStorage } from "./storage";
 import { assertPasswordNotReused, passwordCallbacks, passwordPolicy } from "./password";
 import { createLoginAttemptProtection } from "./login-attempts";
@@ -56,6 +59,67 @@ function boundSession(value: unknown): BoundSession {
   return s as unknown as BoundSession;
 }
 
+interface CredentialState {
+  role: Role; hash: string; credentialVersion: bigint; authEpoch: bigint;
+  provisionedAt: bigint; updatedAt: string;
+}
+function provisioningState(owned: ReturnType<typeof openAsyncOwner>, now: bigint): bigint {
+  const setup = owned.get("SELECT format_version,admin_id,salesperson_id,completed_at_ms FROM auth_provisioning WHERE id=?", [BigInt(1)]);
+  if (!setup || setup.format_version !== BigInt(1) || setup.admin_id !== "ADMIN" ||
+      setup.salesperson_id !== "SALESPERSON" || typeof setup.completed_at_ms !== "bigint" ||
+      setup.completed_at_ms <= BigInt(0) || setup.completed_at_ms > now) return deny();
+  // Missing either securely provisioned role closes the entire foundation.
+  const complete = owned.get(`SELECT count(*) AS n FROM auth_users u
+    JOIN auth_credentials c ON c.userId=u.id AND c.accountId=u.id AND c.providerId='credential'
+    JOIN auth_principals p ON p.id=u.id WHERE p.provisioned_at_ms=?`, [setup.completed_at_ms]);
+  if (complete?.n !== BigInt(2)) return deny();
+  return setup.completed_at_ms;
+}
+function readCredentialState(owned: ReturnType<typeof openAsyncOwner>, role: Role, now: bigint): CredentialState {
+  const completed = provisioningState(owned, now);
+  const row = owned.get(`SELECT u.id,u.role,c.id AS credential_id,c.accountId,c.providerId,c.password,c.updatedAt,
+    p.active,p.credential_version,p.auth_epoch,p.provisioned_at_ms
+    FROM auth_users u JOIN auth_credentials c ON c.userId=u.id
+    JOIN auth_principals p ON p.id=u.id WHERE u.id=?`, [role]);
+  if (!row || row.id !== role || row.role !== role || row.credential_id !== role ||
+      row.accountId !== role || row.providerId !== "credential" || row.active !== BigInt(1) ||
+      row.provisioned_at_ms !== completed || typeof row.password !== "string" || row.password.length !== 161 ||
+      typeof row.updatedAt !== "string" || typeof row.credential_version !== "bigint" ||
+      typeof row.auth_epoch !== "bigint" || row.credential_version <= BigInt(0) || row.auth_epoch <= BigInt(0)) return deny();
+  return { role, hash: row.password, credentialVersion: int64(row.credential_version),
+    authEpoch: int64(row.auth_epoch), provisionedAt: completed, updatedAt: row.updatedAt };
+}
+
+export interface AdminMaintenanceOperation { readonly operationId: string; readonly purpose: "UPGRADE8" | "RESTORE41" }
+declare const maintenanceSourceBrand: unique symbol;
+export interface AdminMaintenanceSource { readonly [maintenanceSourceBrand]: true }
+type SourceFacts = Readonly<AdminMaintenanceOperation & { filename: string; device: string; inode: string; schema: 8 | 41; credentialVersion: string; authEpoch: string; productionActivation: false }>;
+const maintenanceSources = new WeakMap<object, { facts: SourceFacts; database: DatabaseOptions; lease: BootstrapLease; runtime: unknown }>();
+type MaintenanceHook = <T>(proof: unknown, runtime: unknown, operation: AdminMaintenanceOperation, work: (source: AdminMaintenanceSource, lease: BootstrapLease) => Promise<T>) => Promise<T>;
+const maintenanceGateways = new WeakMap<object, MaintenanceHook>();
+function maintenanceOperation(value: AdminMaintenanceOperation): AdminMaintenanceOperation {
+  if (!value || Object.keys(value).sort().join(",") !== "operationId,purpose" ||
+      uuid(value.operationId) !== value.operationId || !["UPGRADE8", "RESTORE41"].includes(value.purpose)) return deny();
+  return Object.freeze({ operationId: value.operationId, purpose: value.purpose });
+}
+// Private callback-only source authorization. No HTTP route, owner confirmation,
+// pre-copy, SQL/migration, key or destination-admission authority is issued here.
+export async function withAdminMaintenanceSource<T>(gateway: AuthorizationGateway, proof: unknown, runtime: unknown, operation: AdminMaintenanceOperation, work: (source: AdminMaintenanceSource, lease: BootstrapLease) => Promise<T>): Promise<T> {
+  const hook = gateway && typeof gateway === "object" ? maintenanceGateways.get(gateway) : undefined;
+  if (!hook) return deny();
+  return hook(proof, runtime, operation, work);
+}
+export function adminMaintenanceSourceEvidence(source: unknown, database: DatabaseOptions, lease: BootstrapLease, operation: AdminMaintenanceOperation): SourceFacts {
+  const saved = source && typeof source === "object" ? maintenanceSources.get(source) : undefined;
+  if (!saved || saved.lease !== lease) return deny();
+  const requested = maintenanceOperation(operation);
+  assertRuntimeOwnership(saved.runtime);
+  if (!hasActiveBootstrapLease(lease, saved.database) || !hasActiveBootstrapLease(lease, database) ||
+      resolveDatabaseLocation({ ...database, create: false }).filename.toLowerCase() !== saved.facts.filename ||
+      requested.operationId !== saved.facts.operationId || requested.purpose !== saved.facts.purpose) return deny();
+  return saved.facts;
+}
+
 // No eager open, environment secret, default signing key, login or HTTP route.
 // Missing configuration is a usable deny-only foundation, never a bypass.
 export async function openAuthorizationGateway(config?: AuthorizationConfiguration, requiredSchema?: 35 | 36 | 37 | 38 | 39 | 40 | 41): Promise<AuthorizationGateway> {
@@ -96,10 +160,6 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
     tail = operation.then(() => undefined, () => undefined);
     return track(operation);
   };
-  interface CredentialState {
-    role: Role; hash: string; credentialVersion: bigint; authEpoch: bigint;
-    provisionedAt: bigint; updatedAt: string;
-  }
   let verification: { role: Role; snapshot?: CredentialState } | undefined;
   type ReceiptState = CredentialState & { boot: string; expiresAtMonotonic: number };
   const receipts = new WeakMap<VerifiedCredential, ReceiptState>();
@@ -178,32 +238,8 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
       if (!Number.isSafeInteger(time) || time <= 0) return deny();
       return int64(BigInt(time));
     };
-    const provisioned = (now: bigint): bigint => {
-      const setup = owned.get("SELECT format_version,admin_id,salesperson_id,completed_at_ms FROM auth_provisioning WHERE id=?", [BigInt(1)]);
-      if (!setup || setup.format_version !== BigInt(1) || setup.admin_id !== "ADMIN" ||
-          setup.salesperson_id !== "SALESPERSON" || typeof setup.completed_at_ms !== "bigint" ||
-          setup.completed_at_ms <= BigInt(0) || setup.completed_at_ms > now) return deny();
-      // Missing either securely provisioned role closes the entire foundation.
-      const complete = owned.get(`SELECT count(*) AS n FROM auth_users u
-        JOIN auth_credentials c ON c.userId=u.id AND c.accountId=u.id AND c.providerId='credential'
-        JOIN auth_principals p ON p.id=u.id WHERE p.provisioned_at_ms=?`, [setup.completed_at_ms]);
-      if (complete?.n !== BigInt(2)) return deny();
-      return setup.completed_at_ms;
-    };
-    const credentialState = (role: Role): CredentialState => {
-      const completed = provisioned(securityTime());
-      const row = owned.get(`SELECT u.id,u.role,c.id AS credential_id,c.accountId,c.providerId,c.password,c.updatedAt,
-        p.active,p.credential_version,p.auth_epoch,p.provisioned_at_ms
-        FROM auth_users u JOIN auth_credentials c ON c.userId=u.id
-        JOIN auth_principals p ON p.id=u.id WHERE u.id=?`, [role]);
-      if (!row || row.id !== role || row.role !== role || row.credential_id !== role ||
-          row.accountId !== role || row.providerId !== "credential" || row.active !== BigInt(1) ||
-          row.provisioned_at_ms !== completed || typeof row.password !== "string" || row.password.length !== 161 ||
-          typeof row.updatedAt !== "string" || typeof row.credential_version !== "bigint" ||
-          typeof row.auth_epoch !== "bigint" || row.credential_version <= BigInt(0) || row.auth_epoch <= BigInt(0)) return deny();
-      return { role, hash: row.password, credentialVersion: int64(row.credential_version),
-        authEpoch: int64(row.auth_epoch), provisionedAt: completed, updatedAt: row.updatedAt };
-    };
+    const provisioned = (now: bigint) => provisioningState(owned, now);
+    const credentialState = (role: Role) => readCredentialState(owned, role, securityTime());
     const quarantine = () => {
       closed = true; invalidateReceipt();
       for (const role of roles) try { stores[role].clear(); } catch { /* Closed denies even if RAM cleanup fails. */ }
@@ -616,7 +652,83 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
         live();const result=await work(tx,actor);live();return result;
       });
     };
-    return Object.freeze({
+    // A handoff reserves this existing close operation synchronously. It drains
+    // the same queue, validates fresh SQL, closes its only native handle, then
+    // enters bootstrap ownership WITHOUT yielding between the process markers.
+    const closeGateway = (beforeClose?: () => Promise<void>, afterClose?: () => Promise<void>): Promise<void> => {
+      if (local.getStore()) return Promise.reject(new AuthorizationDenied());
+      if (!closePromise) {
+        closing = true; invalidateReceipt();
+        closePromise = (async () => {
+          await Promise.allSettled(active);
+          let rejected = false;
+          try { await beforeClose?.(); } catch { rejected = true; }
+          closed = true; invalidateReceipt();
+          for (const role of roles) try { stores[role].clear(); } catch { /* Always close SQLite. */ }
+          try { await owned.close(); } catch { owned.quarantine(); return deny(); }
+          delete processState[ownerKey];
+          if (rejected) return deny();
+          // Calling the async function executes its initial ownership claim NOW.
+          if (afterClose) await afterClose();
+        })();
+      }
+      return closePromise;
+    };
+    const sourceConfiguration = Object.freeze({ database: Object.freeze({ ...config.database, create: false }), migrationsDirectory: config.migrationsDirectory, restoreProof: config.restoreProof });
+    const maintenance: MaintenanceHook = async <T>(value: unknown, runtime: unknown, input: AdminMaintenanceOperation, work: (source: AdminMaintenanceSource, lease: BootstrapLease) => Promise<T>): Promise<T> => {
+      let saved: ReceiptState, operation: AdminMaintenanceOperation;
+      try {
+        if (!value || typeof value !== "object") return deny();
+        const candidate = value as VerifiedCredential, found = receipts.get(candidate);
+        if (!found) return deny();
+        const aborted = candidate.signal.aborted;
+        receipts.delete(candidate); invalidateReceipt(); saved = found; // One-use even on later rejection.
+        if (aborted || saved.role !== "ADMIN" || local.getStore() || closed || closing || verification || issuing || rotating || typeof work !== "function") return deny();
+        receiptLive(saved); assertRuntimeOwnership(runtime); operation = maintenanceOperation(input);
+      } catch { return deny(); }
+      const identity = owned.fileIdentity();
+      let result!: T;
+      await closeGateway(async () => {
+        assertRuntimeOwnership(runtime); receiptLive(saved);
+        if (await getCurrentAdapter(contexts.ADMIN.adapter) !== contexts.ADMIN.adapter) return deny();
+        await enqueue(() => gatewayTransaction(contexts.ADMIN.adapter, async () => {
+          available(); receiptLive(saved); assertRuntimeOwnership(runtime);
+          owned.run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?", ["ADMIN"]);
+          if (!sameCredential(credentialState("ADMIN"), saved)) return deny();
+          const schema = operation.purpose === "UPGRADE8" ? 8 : 41;
+          if ((schema === 41 && requiredSchema !== 41) || !(await validateReviewedSchema({ get: async (sql, values) => owned.get(sql, values), all: async (sql, values) => owned.all(sql, values) }, schema)).ok) return deny();
+          if (JSON.stringify(owned.fileIdentity()) !== JSON.stringify(identity)) return deny();
+          receiptLive(saved); assertRuntimeOwnership(runtime);
+        }));
+      }, () => withHeldBootstrapOwnership(sourceConfiguration.database, runtime, async (retain, lease) => {
+        // Reopen only AFTER the old native handle has closed. Recheck source SQL
+        // and actual file identity under the same runtime+bootstrap fence before
+        // minting a scope; path replacement or credential revocation denies.
+        let inspector: ReturnType<typeof openAsyncOwner> | undefined;
+        const schema = operation.purpose === "UPGRADE8" ? 8 : 41;
+        try {
+          inspector = openAsyncOwner(sourceConfiguration); const reader = inspector;
+          await reader.db.transaction().execute(async () => {
+            assertRuntimeOwnership(runtime);
+            reader.run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?", ["ADMIN"]);
+            if (JSON.stringify(reader.fileIdentity()) !== JSON.stringify(identity) || !sameCredential(readCredentialState(reader, "ADMIN", securityTime()), saved) ||
+                !(await validateReviewedSchema({ get: async (sql, values) => reader.get(sql, values), all: async (sql, values) => reader.all(sql, values) }, schema)).ok) return deny();
+          });
+        } finally {
+          if (inspector) try { await inspector.close(); } catch { retain(); inspector.quarantine(); return deny(); }
+        }
+        const source = Object.freeze({ toJSON: deny }) as unknown as AdminMaintenanceSource;
+        const facts: SourceFacts = Object.freeze({ ...operation, ...identity, schema, credentialVersion: String(saved.credentialVersion), authEpoch: String(saved.authEpoch), productionActivation: false });
+        maintenanceSources.set(source, { facts, database: sourceConfiguration.database, lease, runtime });
+        try {
+          adminMaintenanceSourceEvidence(source, sourceConfiguration.database, lease, operation);
+          result = await local.run(true, () => work(source, lease));
+          adminMaintenanceSourceEvidence(source, sourceConfiguration.database, lease, operation);
+        } finally { maintenanceSources.delete(source); }
+      }));
+      return result;
+    };
+    const gateway: AuthorizationGateway = Object.freeze({
       publicShopName:()=>{if(requiredSchema!==41||local.getStore()||closed||closing)return Promise.reject(new AuthorizationDenied());return enqueue(()=>owned.db.transaction().execute(async()=>{available();await requireSchema();const guard=()=>{available();if(!owned.inTransaction())deny();};const tx=owned.scope(guard);await assertSettingsLedgers(tx);const value=await currentSettings(tx);guard();await requireSchema();return value?.settings.shopName??null;}));},
       withFreshAdminTransaction:fresh,
       verifyAdminPassword: (password: unknown) => verify("ADMIN", password),
@@ -631,21 +743,10 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
       authorizeSalesperson: (request: Request) => execute("SALESPERSON", request, async (_tx, actor) => actor),
       withAdminTransaction: <T>(request: Request, work: (tx: AuthorizedTransaction, actor: Actor) => Promise<T>) => execute("ADMIN", request, work),
       withSalespersonTransaction: <T>(request: Request, work: (tx: AuthorizedTransaction, actor: Actor) => Promise<T>) => execute("SALESPERSON", request, work),
-      async close() {
-        if (local.getStore()) return deny();
-        if (!closePromise) {
-          closing = true; invalidateReceipt();
-          closePromise = (async () => {
-            await Promise.allSettled(active);
-            closed = true; invalidateReceipt(); // No retained RAM can authorize this owner.
-            for (const role of roles) try { stores[role].clear(); } catch { /* Best effort; always close SQLite. */ }
-            try { await owned.close(); } catch { owned.quarantine(); return deny(); }
-            delete processState[ownerKey];
-          })();
-        }
-        await closePromise;
-      },
+      close: () => closeGateway(),
     });
+    maintenanceGateways.set(gateway, maintenance);
+    return gateway;
   } catch {
     invalidateReceipt(); stores.ADMIN.clear(); stores.SALESPERSON.clear();
     try { if (owner) await owner.close(); } catch { owner?.quarantine(); return deny(); }
