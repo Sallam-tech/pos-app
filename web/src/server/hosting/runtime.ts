@@ -1,3 +1,5 @@
+import {startTestBackupWorker,type TestBackupConfiguration,type TestBackupWorker} from "../backup/worker";
+import {createBackupDispatcher,isBackupApiPath} from "./backup-http";
 import {createSettingsDispatcher,isSettingsApiPath} from "./settings-http";
 import {createCashDispatcher,isCashApiPath} from "./cash-http";
 import {createInvoicesDispatcher,isInvoicesApiPath} from "./invoices-http";
@@ -31,6 +33,7 @@ export interface LocalRuntimeConfiguration {
   readonly testReports?:true;
   readonly testCash?:true;
   readonly testSettings?:true;
+  readonly testBackups?:TestBackupConfiguration;
   readonly testSales?:Readonly<{shopName:string}>;
 }
 export interface LocalRuntime {
@@ -63,6 +66,7 @@ function applicationConfig(directory: string) {
 export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promise<LocalRuntime> {
   let ownership: Awaited<ReturnType<typeof acquireRuntimeOwnership>> | undefined;
   let gateway: AuthorizationGateway | undefined;
+  let backupWorker:TestBackupWorker|undefined;
   let app: ReturnType<typeof next> | undefined;
   let host: ReturnType<typeof createLocalHttpsHost> | undefined;
   let ownedErrorListeners: NodeJS.UncaughtExceptionListener[] = [];
@@ -81,6 +85,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
       origins,
       signingSecrets: Object.freeze({ ...input.authorization.signingSecrets }),
       sessionLifetimeSeconds: input.authorization.sessionLifetimeSeconds,
+      restoreProof: input.authorization.restoreProof,
     };
     // Existing authoritative path validation, no creation/adoption/migration.
     const location = resolveDatabaseLocation(config.database);
@@ -93,6 +98,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     if(input.testReports!==undefined&&(input.testReports!==true||!testAuthentication||!input.testInvoiceCorrections))return reject();
     if(input.testCash!==undefined&&(input.testCash!==true||!testAuthentication||!input.testReports))return reject();
     if(input.testSettings!==undefined&&(input.testSettings!==true||!testAuthentication||!input.testCash))return reject();
+    if(input.testBackups!==undefined&&(!testAuthentication||!input.testSettings))return reject();
     const schema=input.testSettings?41:input.testCash?40:input.testInvoiceCorrections?39:input.testExpenses?38:input.testReturns?37:salesShop?36:35;
     const conf = applicationConfig(input.applicationDirectory);
     ownership = await acquireRuntimeOwnership(location.filename);
@@ -105,12 +111,14 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
       await authentication(request, response, context);
     } : undefined, testAuthentication ? async (request, response, context) => {
       liveGuard.assertHeld();
-      if(settings&&request.url&&isSettingsApiPath(request.url))await settings(request,response,context);else if(cash&&request.url&&isCashApiPath(request.url))await cash(request,response,context);else if(reports&&request.url&&isReportsApiPath(request.url))await reports(request,response,context);else if(invoices&&request.url&&isInvoicesApiPath(request.url))await invoices(request,response,context);else if(expenses&&request.url&&isExpensesApiPath(request.url))await expenses(request,response,context);else if(returns&&request.url&&isReturnsApiPath(request.url))await returns(request,response,context);else if(sales&&request.url&&isSalesApiPath(request.url))await sales(request,response,context);else await inventory(request, response, context);
+      if(backups&&request.url&&isBackupApiPath(request.url))await backups(request,response,context);else if(settings&&request.url&&isSettingsApiPath(request.url))await settings(request,response,context);else if(cash&&request.url&&isCashApiPath(request.url))await cash(request,response,context);else if(reports&&request.url&&isReportsApiPath(request.url))await reports(request,response,context);else if(invoices&&request.url&&isInvoicesApiPath(request.url))await invoices(request,response,context);else if(expenses&&request.url&&isExpensesApiPath(request.url))await expenses(request,response,context);else if(returns&&request.url&&isReturnsApiPath(request.url))await returns(request,response,context);else if(sales&&request.url&&isSalesApiPath(request.url))await sales(request,response,context);else await inventory(request, response, context);
     } : undefined, testAuthentication ? async (request, response, context) => {
       liveGuard.assertHeld();
       await pages(request, response, context);
     } : undefined);
     gateway = await openAuthorizationGateway(config, testAuthentication ? schema : undefined); // SAME existing single native owner.
+    if(input.testBackups)backupWorker=await startTestBackupWorker(input.testBackups,liveGuard,config.database);
+    const backups=input.testSettings?createBackupDispatcher(gateway,config.database,backupWorker,input.testBackups):undefined;
     const authentication = createAuthenticationDispatcher(gateway);
     const settings=input.testSettings?createSettingsDispatcher(gateway,salesShop!):undefined;
     const inventory = createInventoryDispatcher(gateway,schema);
@@ -142,6 +150,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
           // close() stops transport admission immediately, drains admitted HTTP,
           // then the gateway rejects/drains its own work, clears RAM and closes SQLite.
           await liveHost.close();
+          await backupWorker?.stop();
           await liveGateway.close();
           await closeApp();
           await liveOwnership.close(); // Release cross-process guard LAST.
@@ -153,6 +162,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     // Partial startup: no ready listener, no returned gateway, no secret-bearing error.
     try {
       await host?.close();
+      await backupWorker?.stop();
       await gateway?.close();
       await closeApp();
       await ownership?.close();

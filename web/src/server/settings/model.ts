@@ -1,6 +1,7 @@
 import "server-only";
+import type {HistoricalSettings} from "../backup/service";
 import type {AuthorizedTransaction as Tx} from "../auth/types";
-import {authorizedFileNamespace} from "../auth/database";
+import {authorizedFileNamespace,restoredSettingsHistory} from "../auth/database";
 import {canonical,digest,integer,object,text,uuid} from "../inventory/validation";
 import {verifiedJson} from "../db/verified-json";
 export type Branding={shopName:string;address:string;phone:string;footer:string;receiptLayout:"ordinary"|"compact";currency:"PKR";timezone:"Asia/Karachi"};
@@ -19,10 +20,16 @@ export async function frozenBranding(tx:Tx,id:string):Promise<Branding>{const r=
 export async function receiptBranding(tx:Tx,id:string){if((await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version!==BigInt(41))return undefined;const r=await tx.get("SELECT * FROM invoice_shop_snapshots WHERE invoice_id=?",[id]);if(!r)return undefined;const value=branding(verifiedJson(r.branding_json,r.branding_hash,true));if(r.format_version!==BigInt(1)||canonical(value)!==canonical(await frozenBranding(tx,String(r.settings_id))))throw Error();return value;}
 export async function assertSettingsLedgers(tx:Tx){
  if((await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version!==BigInt(41))return;
- const ctx=await settingsContext(tx);let prior:Row|undefined,cursor=BigInt(0);
+ const current=await settingsContext(tx),historical=await restoredSettingsHistory(tx);
+ await assertStoredSettingsLedgers(tx,current,historical);
+}
+// Pure READ validator for authenticated snapshots, not an authority capability.
+export async function assertStoredSettingsLedgers(tx:Tx,current:string,historical:readonly HistoricalSettings[]=[]){
+ if((await tx.get("SELECT user_version FROM pragma_user_version"))?.user_version!==BigInt(41))return;
+ const accepted=(table:string,r:Row)=>{if(r.context===current)return true;const id=r.__restore_rowid;return typeof id==="bigint"&&id>BigInt(0)&&historical.some(h=>h.context===r.context&&h.tables.some(t=>t.name===table&&id<=BigInt(t.maxRowid)));};let prior:Row|undefined,cursor=BigInt(0);
  for(;;){const rows=await tx.all("SELECT * FROM shop_settings_revisions WHERE revision>? ORDER BY revision LIMIT 200",[cursor]);if(!rows.length)break;
  for(const r of rows){if(r.revision!==cursor+BigInt(1)||r.previous_id!==(prior?.id??null)||r.actor_id!=="ADMIN"||prior&&BigInt(String(r.recorded_at_ms))<BigInt(String(prior.recorded_at_ms)))throw Error();
- const op=await tx.get("SELECT * FROM shop_settings_operations WHERE id=?",[r.operation_id]);if(!op||op.id!==op.request_key||op.context!==ctx||op.expected_revision!==cursor||op.result_revision!==r.revision||op.actor_id!==r.actor_id||op.session_ref!==r.session_ref||op.recorded_at_ms!==r.recorded_at_ms)throw Error();
+ const op=await tx.get("SELECT rowid AS __restore_rowid,* FROM shop_settings_operations WHERE id=?",[r.operation_id]);if(!op||op.id!==op.request_key||!accepted("shop_settings_operations",op)||op.expected_revision!==cursor||op.result_revision!==r.revision||op.actor_id!==r.actor_id||op.session_ref!==r.session_ref||op.recorded_at_ms!==r.recorded_at_ms)throw Error();
  const payload=settingsPayload(verifiedJson(op.payload_json,op.payload_hash,true)),result=verifiedJson(op.result_json,op.result_hash,true);
  if(payload.expectedRevision!==String(cursor)||canonical(payload.settings)!==canonical(revisionValue(r).settings)||payload.reason!==r.reason||canonical(result)!==canonical(revisionValue(r)))throw Error();prior=r;cursor=r.revision as bigint;
  }}
@@ -30,7 +37,7 @@ export async function assertSettingsLedgers(tx:Tx){
  await bad("SELECT o.id FROM shop_settings_operations o LEFT JOIN shop_settings_revisions r ON r.operation_id=o.id WHERE r.id IS NULL LIMIT 1");
  await bad("SELECT c.request_key FROM shop_settings_cancellations c WHERE EXISTS(SELECT 1 FROM shop_settings_operations o WHERE o.request_key=c.request_key) OR EXISTS(SELECT 1 FROM shop_password_operations p WHERE p.request_key=c.request_key) LIMIT 1");
  await bad("SELECT o.request_key FROM shop_settings_operations o JOIN shop_password_operations p ON p.request_key=o.request_key LIMIT 1");
- for(const r of await tx.all("SELECT * FROM shop_settings_cancellations"))if(r.context!==ctx||r.actor_id!=="ADMIN")throw Error();
+ for(const r of await tx.all("SELECT rowid AS __restore_rowid,* FROM shop_settings_cancellations"))if(!accepted("shop_settings_cancellations",r)||r.actor_id!=="ADMIN")throw Error();
  for(const r of await tx.all("SELECT p.*,s.shop_name,a.payload_json,a.payload_digest,sale.recorded_at_ms AS sale_time FROM invoice_shop_snapshots p JOIN shop_settings_revisions s ON s.id=p.settings_id JOIN sales sale ON sale.id=p.invoice_id JOIN sale_operations op ON op.id=sale.operation_id LEFT JOIN counter_cash_admissions a ON a.source_kind='SALE' AND a.source_key=op.request_key")){
   const value=branding(verifiedJson(r.branding_json,r.branding_hash,true)),raw=await tx.get("SELECT receipt_json FROM invoice_snapshots WHERE invoice_id=?",[r.invoice_id]);
   if(canonical(value)!==canonical(await frozenBranding(tx,String(r.settings_id)))||JSON.parse(String(raw?.receipt_json)).shopName!==value.shopName||r.recorded_at_ms!==r.sale_time)throw Error();
@@ -38,7 +45,7 @@ export async function assertSettingsLedgers(tx:Tx){
  }
  for(const a of await tx.all("SELECT payload_json,payload_digest FROM counter_cash_admissions WHERE source_kind=\'SALE\'")){const value=verifiedJson(a.payload_json,a.payload_digest,true) as {settingsId?:string|null;shopName:string};if(value.settingsId&&value.shopName!==(await frozenBranding(tx,value.settingsId)).shopName)throw Error();}
  await bad("SELECT a.id FROM counter_cash_admissions a JOIN sale_operations o ON o.request_key=a.source_key LEFT JOIN invoice_shop_snapshots p ON p.invoice_id=o.invoice_id WHERE a.source_kind='SALE' AND json_extract(a.payload_json,'$.settingsId') IS NOT NULL AND (p.invoice_id IS NULL OR p.settings_id IS NOT json_extract(a.payload_json,'$.settingsId')) LIMIT 1");
- for(const role of ["ADMIN","SALESPERSON"]){let old:Row|undefined;for(const r of await tx.all("SELECT * FROM shop_password_operations WHERE target=? ORDER BY after_version",[role])){
-  if(r.context!==ctx||r.actor_id!=="ADMIN"||r.id!==r.request_key||r.after_version!==(r.before_version as bigint)+BigInt(1)||r.after_epoch!==(r.before_epoch as bigint)+BigInt(1)||old&&(r.before_version!==old.after_version||r.before_epoch!==old.after_epoch||BigInt(String(r.recorded_at_ms))<BigInt(String(old.recorded_at_ms))))throw Error();old=r;
+ for(const role of ["ADMIN","SALESPERSON"]){let old:Row|undefined;for(const r of await tx.all("SELECT rowid AS __restore_rowid,* FROM shop_password_operations WHERE target=? ORDER BY after_version",[role])){
+  if(!accepted("shop_password_operations",r)||r.actor_id!=="ADMIN"||r.id!==r.request_key||r.after_version!==(r.before_version as bigint)+BigInt(1)||r.after_epoch!==(r.before_epoch as bigint)+BigInt(1)||old&&(r.before_version!==old.after_version||r.before_epoch!==old.after_epoch||BigInt(String(r.recorded_at_ms))<BigInt(String(old.recorded_at_ms))))throw Error();old=r;
  }if(old){const p=await tx.get("SELECT credential_version,auth_epoch FROM auth_principals WHERE id=?",[role]);if(p?.credential_version!==old.after_version||p.auth_epoch!==old.after_epoch)throw Error();}}
 }

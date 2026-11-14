@@ -1,4 +1,5 @@
 "use client";
+import {TestBackupCard} from "./test-backup-card";
 import {useEffect,useState} from "react";
 import {Button} from "@/components/ui/button";
 import {Card} from "@/components/ui/card";
@@ -36,6 +37,6 @@ export function TestSettings(){
  </Card>
  <PasswordSecurityPreview live={{blocked,onChange:(target,pw,newPassword)=>execute(target==="Admin"?"PASSWORD_ADMIN":"PASSWORD_SALESPERSON",{password:pw,newPassword})}} />
  <Card className="grid gap-3 p-4"><h2 className="font-semibold">Saved Settings History</h2>{history.map(h=><div key={h.id} className="border-t pt-2 text-sm"><p>Revision {h.revision} · {h.settings.shopName}</p><p>{h.reason}</p><dl className="mt-1 text-xs"><div>Address: {h.settings.address||"Blank"}</div><div>Phone: {h.settings.phone||"Blank"}</div><div>Receipt message: {h.settings.footer||"Blank"}</div><div>Paper: {h.settings.receiptLayout}</div></dl><p className="text-xs">{new Date(Number(h.recordedAtMs)).toLocaleString("en-PK",{timeZone:"Asia/Karachi"})}</p></div>)}{cursor&&<Button disabled={busy} onClick={()=>{setBusy(true);void request("/api/admin/settings/history?cursor="+cursor).then(h=>{setHistory(v=>[...v,...h.items]);setCursor(h.nextCursor);}).catch(()=>setMessage("Saved history unavailable.")).finally(()=>setBusy(false));}}>More Saved Settings</Button>}</Card>
- <Card className="p-4 sm:p-5"><h2 className="font-semibold">Backup &amp; Restore</h2><p className="mt-2 text-sm">Not configured. Local and cloud backup/restore remain disabled.</p><div className="mt-3 flex gap-3"><Button disabled>Backup Now</Button><Button disabled variant="outline">Restore Backup</Button></div></Card>
+ <TestBackupCard />
  </div></div>;
 }

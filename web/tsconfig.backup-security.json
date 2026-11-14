@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.admin-products-settings.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "src/server/**/*.ts",
+    "tests/helpers/**/*.ts",
+    "tests/integration/backup-security*.test.ts",
+    "vitest.backup-security.config.mts"
+  ]
+}

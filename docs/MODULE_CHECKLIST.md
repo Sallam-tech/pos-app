@@ -1,5 +1,19 @@
 # POS Module Checklist
 
+## Current Backup / Restore / Production Security gate -14 November2026
+
+- [x] Preserve TEST41 checkpoint/evidence, all41 migration bytes and34 unrelated paths.
+- [x] Owner approved TEST A+B crypto/custody, narrow authenticated destination-bound restore provenance and the separate least-privilege worker/API/existing Backup card/readiness integration batch.
+- [x] Actual encrypted same-machine TEST HTTPS/Chromium restore, fresh login, restart and exact financial reconciliation PASS; actual Backup UI/API/export/isolated restore and original-key lost-response flow PASS.
+- [x] Retained1k/10k/50k originals hash-preserved; new TEST41 copies encrypted/restored/logged in and exact financial readers reconciled.
+- [x] Corrected fault assertion and19 distinct focused checks (17 new +2 selected unchanged regressions), final type/zero-warning lint/exact329-source build/preservation PASS. Explicit39-path/index/secret review before LOCAL checkpoint; actual outcome from live Git. No push/reset/clean.
+- [ ] Witness two independent owner B copies, independent Windows replacement-PC/profile, protected production41 maintenance/enrollment/former-writer fence and target TLS/media/power/capacity acceptance.
+- [ ] Owner storage-budget/retention/off-device/cloud destination acceptance; preserve all archives meanwhile.
+
+[Implementation, evidence and genuine limits](development/BACKUP_RESTORE_TEST_IMPLEMENTATION_REPORT.md).
+Commercial system PARTIAL; production DISABLED. No EXE work.
+
+
 ## Current Admin Products + Settings and performance gate
 
 - [x] Owner accepts TEST40 PASS/4ebfd614; authorizes coordinated existing Products/Settings plus related cash/invoice profiling. Reuse prior evidence.

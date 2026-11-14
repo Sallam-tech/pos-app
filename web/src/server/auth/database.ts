@@ -1,4 +1,5 @@
 import "server-only";
+import {restoredHistory,verifyHistoricalPrefixes,type HistoricalSettings} from "../backup/service";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { lstatSync } from "node:fs";
@@ -52,6 +53,8 @@ const leaseOwners = new WeakMap<object, object>();
 // Internal, non-bearer file namespace. Only genuine live scopes minted by this
 // native owner can supply it; structural readers and expired scopes fail closed.
 const fileScopes = new WeakMap<object, () => string>();
+const restoredScopes = new WeakMap<object, () => Promise<readonly HistoricalSettings[]>>();
+export async function restoredSettingsHistory(scope:AuthorizedTransaction):Promise<readonly HistoricalSettings[]>{const read=restoredScopes.get(scope);if(!read)return deny();return read();}
 export function authorizedFileNamespace(scope: AuthorizedTransaction): string {
   const read = fileScopes.get(scope); if (!read) return deny(); return read();
 }
@@ -63,8 +66,10 @@ export function assertBootstrapReadScope(value: unknown, lease: BootstrapLease, 
 
 // Internal module, not a connection exported by the authorization gateway.
 // Kysely owns its ONLY native handle; it never receives Part 1's private handle.
-export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "database" | "migrationsDirectory">) {
+export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "database" | "migrationsDirectory" | "restoreProof">) {
   const options = { ...config.database, create: false };
+  // Issuer/consumer both reject persistent mode and wrong target identities.
+  const historical:readonly HistoricalSettings[]=restoredHistory(config.restoreProof,options);
   const preflight = openDatabase(options);
   try {
     const manifest = loadMigrations(config.migrationsDirectory);
@@ -158,6 +163,11 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
         sameFile();
         return createHash("sha256").update(JSON.stringify(["pos-test-inventory-file-v1",
           location.filename.toLowerCase(), identity.dev.toString(), identity.ino.toString()])).digest("hex");
+      });
+      restoredScopes.set(transaction,async()=>{
+        guard();if(options.mode!=="test"||!native.open||!native.inTransaction||closingReads)return deny();sameFile();
+        await verifyHistoricalPrefixes(transaction,historical);guard();sameFile();
+        return historical;
       });
       return transaction;
     };

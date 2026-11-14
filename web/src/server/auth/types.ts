@@ -44,6 +44,8 @@ export interface AuthorizationGateway {
   close(): Promise<void>;
 }
 export interface AuthorizationConfiguration {
+  // Opaque, verified, destination-bound disposable TEST restore only.
+  restoreProof?: import("../backup/service").VerifiedTestRestore;
   database: DatabaseOptions;
   migrationsDirectory: string;
   // Provisioned elsewhere in a future reviewed key-custody step. No defaults.

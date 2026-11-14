@@ -15,6 +15,8 @@ const state = globalThis as typeof globalThis & { [key: symbol]: boolean | undef
 // stale-lock deletion, process killing or second SQLite handle. A fixed application
 // namespace rejects a second runtime EVEN with another DB or HTTPS port. It is
 // machine-wide (deliberately stricter than per-Windows-user). Collisions deny.
+const leases=new WeakSet<object>();
+export function assertRuntimeOwnership(lease:unknown){if(!lease||typeof lease!=="object"||!leases.has(lease))return reject();(lease as {assertHeld():void}).assertHeld();}
 export async function acquireRuntimeOwnership(filename: string): Promise<{ assertHeld(): void; close(): Promise<void> }> {
   try {
     if (state[marker] || !path.isAbsolute(filename)) return reject();
@@ -39,7 +41,7 @@ export async function acquireRuntimeOwnership(filename: string): Promise<{ asser
   let broken = false;
   server.on("error", () => { broken = true; });
   let closing: Promise<void> | undefined;
-  return Object.freeze({
+  const lease = Object.freeze({
     assertHeld() { if (broken || !server.listening || !state[marker]) return reject(); },
     close() {
       closing ??= new Promise<void>((resolve, fail) => server.close(error => {
@@ -49,4 +51,5 @@ export async function acquireRuntimeOwnership(filename: string): Promise<{ asser
       return closing;
     },
   });
+  leases.add(lease);return lease;
 }

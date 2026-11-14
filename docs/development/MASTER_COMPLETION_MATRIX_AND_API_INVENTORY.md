@@ -2,7 +2,7 @@
 
 **FINAL OWNER UPDATE: OPTION2 APPROVED - per-unit final-payable HALF_UP first, multiply quantity, then sum lines. Complete coordinated TEST Sales36 contract APPROVED; implementation VERIFIED TEST ONLY. Earlier extended-line recommendation/approval-pending text below is historical and superseded. No production activation.**
 
-13 November 2026. **Master system PARTIAL; production handover BLOCKED.**
+14 November 2026. **Master system PARTIAL; production handover BLOCKED.**
 Accepted starting checkpoint: [authoritative TEST Reports40](AUTHORITATIVE_REPORTS40_TEST_IMPLEMENTATION_REPORT.md), unchanged schema39.22 focused cases PASS, final type/36-file zero-warning lint/exact293-source build/preservation PASS. Owner accepts TEST39/bc4e535; prior module evidence reused.50k audit HTTPS14.93 ->8.30s, browser invoice history/detail32.01 ->22.18s, expense summary9.61 ->1.54s. Invoice/full validation remains materially slow; production capacity unaccepted. Safe LOCAL reviewed checkpoint only;33 unrelated files excluded. Commercial POS PARTIAL, production DISABLED.
 
 Latest12 November: owner-approved FINAL OPTION2 and coordinated TEST36 Sales are implemented and verified in isolated TEST runtime. See [current Sales evidence](SALES_SCHEMA36_COORDINATED_TEST_IMPLEMENTATION_REPORT.md). No real-shop maintenance or production activation.
@@ -25,12 +25,12 @@ Current continuation COMPLETE TEST-ONLY: owner-approved TEST41 Products + Settin
 | Reports/dashboard | TEST Reports40 reuses saved source; atomic Dashboard financial/inventory snapshot, Revenue/Profit/Expenses/current Stock Value, complete paged product/stock/cost history and source-bound periods |22 focused cases/type/lint/exact build/preservation PASS; real HTTPS/Chromium, actual crash/restart and1k/10k/50k evidence | Material full-validation latency; target hardware, broader analytics and production gates | Owner review; preserve source-bound totals, no demo fallback |
 | Profit | Saved event-date sale/refund/correction COGS and effective expenses, complete same-period/as-of Gross/Net Profit and independent cash dates | Exact large sums/losses, current valuation separation, revised refund/restock/expense and role-safe reads PASS | Production/capacity gates; TEST40 closing snapshots verified separately | Preserve original COGS; no purchase/expense double count or silent restatement |
 | Daily Closing + Cash Management | Owner-approved A+B implemented in confined TEST40: verified opening/admissions/180-second physical count/signed flows/late reconciliation/non-profit bridges/immutable history/Admin UI and APIs/original-key recovery | 45 distinct focused native/HTTPS/Chromium/crash/recovery/growing-data/regression cases; scoped type/zero-warning lint/exact306-source build PASS | Production disabled; manual physical evidence, independent restore, custody and target hardware acceptance remain separate gates | [Verified TEST40 evidence](DAILY_CLOSING_CASH_SCHEMA40_TEST_IMPLEMENTATION_REPORT.md); owner review, safe LOCAL checkpoint only |
-| Backup | Disabled Settings UI and required design; no portable archive service | No portable/independent restore proof | R/B key custody/portable encrypted archive authority and retention, target media/capacity | Approve key/archive contract; consistent encrypted TEST snapshot plus same-machine verification FIRST; independent recovery separately gated |
+| Backup / isolated restore | Configured TEST age/Ed25519/DPAPI snapshots; dedicated automatic/closing worker, signed original-ID jobs, Admin APIs, existing Backup card and ciphertext exports | 17 new focused +2 selected unchanged regressions PASS across runs; real HTTPS/Chromium/restart/crash/exact reconciliation/retained1k/10k/50k; final type/lint/exact329-source build/preservation PASS | Real custody/independent PC, production maintenance/fencing/TLS/media/retention/cloud acceptance | [Current evidence and honest gates](BACKUP_RESTORE_TEST_IMPLEMENTATION_REPORT.md); reviewed LOCAL checkpoint; production gates remain |
 | Recovery/enrollment | Private auth8 one-time provisioning, DPAPI/vault/owner-authority orchestration and durable anchor; minimal browser marker | Part3S32 new+20 selected checks; marker28; master maintenance50 earlier checks (retained evidence) | Real enrollment ceremony, R/B issuance/lost kit, anchor-to-current-schema maintenance, device/profile replacement | Preserve original anchor; build only approved prerequisites. Owner confirms NO second PC/profile, so independent recovery stays unavailable |
 | Security | Same owner/gateway, exact8/18/35/36/37/38/39/40 authorities; pinned guards, fixed-role bounded APIs and permanent cancellation | Native/HTTPS/Chromium, scoped type/lint and isolated build PASS | Production recovery/key custody/independent restore | Maintain exact endpoint inventory; production disabled |
 | Deployment/offline | Windows Node24 single-process loopback custom Next server, two role origins, controlled shutdown/ownership; disposable TLS only | Real sockets, duplicate-instance/restart and bounded browser tests | Production certificate/signing-key custody, protected maintenance/recovery evidence, target Windows power-loss/performance | Keep production health-only; no fake TLS/LAN/remote switch. Verify safe packaging/lifecycle before activation |
 | Windows packaging/printing | Approved ordinary/80mm receipt preview; Electron candidate design only | No EXE installer/printer/clean-machine acceptance | Bundled native runtime/architecture/signing/installer/custody/target hardware | Later explicitly reviewed bundled Windows/Electron build/IPC/role-window lifecycle; real printer and offline acceptance, no separate developer laptop dependency |
-| Settings/Remote Admin | Public display preferences and frozen disabled backup settings; remote/cloud design only | Preview tests only | Authenticated persistent shop settings, hosted projection/cmd/MFA policy/key custody, cloud costs/retention | Preserve branding/history; remote disabled until strong additional auth; only approved details/selling-price queue, never backup-as-live-DB sync |
+| Settings/Remote Admin | TEST41 saved shared settings/password audit/frozen receipt branding; TEST Backup card now integrated; remote/cloud remains design only | Accepted TEST41 plus current backup UI/API same-machine proof | Production maintenance/custody and hosted projection/MFA policy/costs remain gated | Preserve shared branding/audit; remote disabled; backups are not live DB synchronization |
 
 None of these modules is production accepted. Preview PASS, private TEST PASS, source-reviewed and operational production acceptance are different states. The master assignment supersedes old per-module STOP/new-prompt instructions; continue automatically through safe approved stages, stopping at actual approval/hardware/resource gates only.
 
@@ -219,3 +219,30 @@ Exact confined testSettings plus every prior flag;40 remains admitted under its 
 |POST /api/admin/settings/password/SALESPERSON|Fresh Admin; atomic audited Staff rotation/revocation|
 
 Existing receiving/recovery routes reused, not recounted. Protected /admin/products/:uuid/edit and /admin/settings retain approved designs. Frozen branding never rewrites historical/admitted/corrected receipts. D05/cost/stock/cash/profit and180-second physical-only count lease remain governed by existing approvals. Keys-only recovery/fresh-login UI; no plaintext browser password storage. Production/Backup/Restore/hardware gates remain.
+
+### TEST41 Backup / Restore integration (6 added;102 cumulative entries)
+
+Owner approved the bounded TEST batch. Only configured exact-source capabilities and
+the genuine runtime ownership lease can start the worker. Existing HTTPS/role-host/
+session/Origin/CSRF guards; strict duplicate-safe JSON <=2048 bytes, URLs <=200
+characters, safe status <=50 jobs, private no-store and generic errors. No arbitrary
+filesystem path/URL, key or database/financial payload in HTTP. Background backup
+authority retains no Admin session or business/restore-promotion privilege.
+
+| Method/path | Authority / effect / uncertainty |
+| --- | --- |
+| GET /api/admin/backups/status | Current Admin SQL; configured TEST state, last verified/jobs, separate cloud/off-device/drill status |
+| GET /api/admin/backups/jobs/:uuid | Current Admin SQL; original job ID, UNKNOWN remains unknown |
+| POST /api/admin/backups/manual | Fresh Admin + original UUID; durable queued job before effect; signed restart-safe worker result |
+| POST /api/admin/backups/export | Fresh Admin + original UUID and verified archive ID; authenticated ciphertext to configured TEST destination only |
+| POST /api/admin/backups/restore | Fresh Admin + original UUID and archive ID; one-use bound isolated restore, existing source preserved; login drill separate |
+| GET /api/admin/backups/readiness | Current Admin SQL; readonly exact41 diagnostic; production enrollment/maintenance/activation always blocked |
+
+Every running30-minute interval and committed closing produces current-time jobs;
+powered-off periods have no fabricated snapshots. Immutable closing outbox rows keep
+their historical BLOCKED_NOT_CONFIGURED value; external signed job records hold the
+actual worker outcome. No SQL history rewrite. Pending/failed/unknown copies and all
+verified archives are preserved while owner storage/off-device acceptance is missing.
+No cloud upload, automatic pruning or production writer promotion.
+
+Current evidence: [TEST report](BACKUP_RESTORE_TEST_IMPLEMENTATION_REPORT.md).
