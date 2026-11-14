@@ -1,6 +1,21 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
+import type { SqlTransaction, SqlValue } from "../db/connection";
+import { reviewedMigrations } from "../db/reviewed-schema";
+import { assertSalesSchemaSnapshot } from "../db/sales-migrate";
+import { salesSteps } from "../db/sales-program";
+import { returnsSteps } from "../db/returns-program";
+import { expensesSteps } from "../db/expenses-program";
+import { invoicesSteps } from "../db/invoices-program";
+import { cashSteps } from "../db/cash-program";
+import { settingsSteps } from "../db/settings-program";
+import { invoiceMigrationTransaction } from "../db/invoices-migrate";
+import { cashMigrationTransaction } from "../db/cash-migrate";
+import { settingsMigrationTransaction } from "../db/settings-migrate";
+import { fingerprintTable, type ProofDatabase, verifySchema41 } from "../backup/snapshot";
+import { rowHasher } from "../backup/row-hash";
 import { closeSync, fsyncSync, lstatSync, openSync, opendirSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { adminMaintenanceSourceEvidence, type AdminMaintenanceSource } from "../auth/gateway";
@@ -11,7 +26,7 @@ import { validateReviewedSchema } from "../db/validate-schema";
 import { authenticationBackup8Evidence, type VerifiedAuthenticationBackup8 } from "./authentication-backup";
 import { candidateLedgerContext, candidateRecordBytes, candidateRecordDigest, classifyCandidateLedger, readProtectedCandidateLedger, type CandidateRecord } from "./candidate-records";
 import { enrollmentDigest } from "./database";
-import { inspectLocalVault, type LocalKeyConfiguration } from "./keys";
+import { inspectLocalVault, withProtectedLocalKeys, type LocalKeyConfiguration } from "./keys";
 import { protectedManifestDigest } from "./maintenance-journal";
 import { hasActiveBootstrapLease, type BootstrapLease } from "./ownership";
 import { rejectBootstrap, windowsProtection } from "./windows";
@@ -30,7 +45,7 @@ export function bindTrustedCandidateCopyInteraction(adapter: CopyAdapter): Trust
 }
 declare const copyBrand: unique symbol;
 export interface UnadmittedCandidateCopy8 { readonly [copyBrand]: true }
-interface CopyState { signal?: AbortSignal; source: AdminMaintenanceSource; lease: BootstrapLease; config: LocalKeyConfiguration; backup: VerifiedAuthenticationBackup8; filename: string; identity: string; sourceFingerprint: string; intent: Extract<CandidateRecord, { kind: "INTENT" }>; vault: Awaited<ReturnType<typeof inspectLocalVault>> }
+interface CopyState { stage?: "MIGRATING" | "VERIFIED41" | "COMMITTED41" | "FAILED"; committed?: Extract<CandidateRecord, { kind: "COMMITTED" }>; targetDigest?: string; startedAt?: number; finishedAt?: number; signal?: AbortSignal; source: AdminMaintenanceSource; lease: BootstrapLease; config: LocalKeyConfiguration; backup: VerifiedAuthenticationBackup8; filename: string; identity: string; sourceFingerprint: string; intent: Extract<CandidateRecord, { kind: "INTENT" }>; vault: Awaited<ReturnType<typeof inspectLocalVault>> }
 const copies = new WeakMap<object, CopyState>();
 const claimedSources = new WeakSet<object>();
 const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
@@ -69,7 +84,7 @@ async function snapshot(filename: string): Promise<string> {
 // original genuine Admin scope, source/archive, protected intent and exact file.
 export async function unadmittedCandidateCopy8Evidence(copy: unknown) {
   const c = copy && typeof copy === "object" ? copies.get(copy) : undefined;
-  if (!c) return rejectBootstrap(); guard(c);
+  if (!c || c.stage === "FAILED" || c.stage === "VERIFIED41" || c.stage === "COMMITTED41") return rejectBootstrap(); guard(c);
   const archive = await authenticationBackup8Evidence(c.backup, c.config, c.lease); guard(c);
   if (archive.sourceStateDigest !== c.intent.sourceStateDigest || archive.ciphertextSha256 !== c.intent.backupCiphertextSha256 || fileIdentity(c.filename) !== c.identity) return rejectBootstrap();
   await storage(path.dirname(c.filename), "check", { filename: path.basename(c.filename) }); guard(c);
@@ -131,7 +146,173 @@ export async function withUnadmittedCandidateCopy8<T>(input: LocalKeyConfigurati
     guard(c); if (signal?.aborted || fileIdentity(filename) !== identity || await snapshot(original) !== c.sourceFingerprint || await snapshot(filename) !== c.sourceFingerprint) return rejectBootstrap();
     const copy = Object.freeze({ toJSON: rejectBootstrap }) as unknown as UnadmittedCandidateCopy8;
     copies.set(copy, c);
-    try { await unadmittedCandidateCopy8Evidence(copy); const result = await work(copy); await unadmittedCandidateCopy8Evidence(copy); return result; }
+    try { await unadmittedCandidateCopy8Evidence(copy); const result = await work(copy); if (c.stage === "VERIFIED41" || c.stage === "COMMITTED41") await verifiedCandidate41Evidence(copy); else if (c.stage === undefined) await unadmittedCandidateCopy8Evidence(copy); else return rejectBootstrap(); return result; }
     finally { copies.delete(copy); }
   } catch { return rejectBootstrap(); } // Never claim rollback, completion or quarantine after uncertain I/O.
+}
+
+
+// The only enrolled-candidate DDL issuer. The genuine copy is callback-scoped,
+// one-use and bound to the SAME original runtime/bootstrap fence and intent.
+// No generic TEST connection, arbitrary SQL or persistent file can opt in.
+interface CandidateNative extends ProofDatabase { readonly inTransaction: boolean; }
+const CandidateDriver = createRequire(import.meta.url)("better-sqlite3") as new (filename: string, options: { fileMustExist: true; timeout: number }) => CandidateNative;
+const candidateCopies = new WeakSet<object>();
+function originalTableProofs(db: ProofDatabase) {
+  return fingerprint(db).tables;
+}
+function originalHistoryProof(db: ProofDatabase) {
+  const h = rowHasher();
+  for (const r of db.prepare("SELECT rowid AS __proof_rowid,* FROM schema_migrations WHERE version<=8 ORDER BY rowid").iterate()) h.add(r);
+  return h.result("schema_migrations");
+}
+async function verifyMigrated(c: CopyState) {
+  guard(c);
+  if (fileIdentity(c.filename) !== c.identity || (c.stage !== "VERIFIED41" && c.stage !== "COMMITTED41") || !c.targetDigest || !c.startedAt || !c.finishedAt) return rejectBootstrap();
+  resolveDatabaseLocation({ directory: path.dirname(c.filename), filename: path.basename(c.filename), mode: "test", create: false });
+  const original = resolveDatabaseLocation({ ...c.config.database, create: false }).filename;
+  const source = openProofDatabase(original), target = openProofDatabase(c.filename);
+  try {
+    source.exec("BEGIN"); target.exec("BEGIN");
+    if (enrollmentDigest(fingerprint(source)) !== c.sourceFingerprint) return rejectBootstrap();
+    await verifySchema41(target);
+    const old = originalTableProofs(source), now = originalTableProofs(target);
+    for (const table of old) {
+      const actual = table.name === "schema_migrations" ? originalHistoryProof(target) : now.find(t => t.name === table.name);
+      if (enrollmentDigest(actual) !== enrollmentDigest(table)) return rejectBootstrap();
+    }
+    for (const table of now) if (!old.some(t => t.name === table.name) && table.count !== "0") return rejectBootstrap();
+    const dates = target.prepare("SELECT applied_at FROM schema_migrations WHERE version>8 ORDER BY version").all();
+    if (dates.length !== 33 || dates.some(r => typeof r.applied_at !== "bigint" || r.applied_at < BigInt(c.startedAt!) || r.applied_at > BigInt(c.finishedAt!))) return rejectBootstrap();
+    if (enrollmentDigest(fingerprint(target)) !== c.targetDigest) return rejectBootstrap();
+    target.exec("ROLLBACK"); source.exec("ROLLBACK");
+  } finally { target.close(); source.close(); }
+  guard(c);
+}
+export async function verifiedCandidate41Evidence(copy: unknown) {
+  const c = copy && typeof copy === "object" ? copies.get(copy) : undefined;
+  if (!c || !candidateCopies.has(copy as object)) return rejectBootstrap();
+  await verifyMigrated(c);
+  const archive = await authenticationBackup8Evidence(c.backup, c.config, c.lease); guard(c);
+  if (archive.sourceStateDigest !== c.intent.sourceStateDigest || archive.ciphertextSha256 !== c.intent.backupCiphertextSha256) return rejectBootstrap();
+  await storage(path.dirname(c.filename), "check", { filename: path.basename(c.filename) });
+  const ledger = await readProtectedCandidateLedger(c.vault, c.intent.originalAnchorDigest);
+  const expected = c.stage === "COMMITTED41" ? c.committed : c.intent;
+  if (!expected || ledger.pending.length || candidateRecordDigest(ledger.records.at(-1)!) !== candidateRecordDigest(expected) || ledger.records.filter(r => r.operationId === c.intent.operationId).length !== (c.stage === "COMMITTED41" ? 2 : 1)) return rejectBootstrap();
+  guard(c);
+  return Object.freeze({ operationId: c.intent.operationId, filename: c.filename, sourceFileIdentity: c.intent.sourceFileIdentity, destinationFileIdentity: c.identity,
+    sourceStateDigest: c.intent.sourceStateDigest, targetStateDigest: c.targetDigest!, targetSpecificationDigest: c.intent.targetSpecificationDigest,
+    knownSqlCompletion: true as const, schema: 41 as const, admission: false as const, productionActivation: false as const });
+}
+export async function migrateUnadmittedCandidate8(copy: UnadmittedCandidateCopy8): Promise<void> {
+  const c = copy && typeof copy === "object" ? copies.get(copy) : undefined;
+  if (!c || c.stage || candidateCopies.has(copy)) return rejectBootstrap();
+  // Burn before the first await. Failure/unknown COMMIT can NEVER be replayed.
+  c.stage = "MIGRATING";
+  let db: CandidateNative | undefined;
+  try {
+    // The read-only copy evidence deliberately does not accept a migrated file.
+    await unadmittedCandidateCopy8Evidence(copy); guard(c);
+    const manifest = reviewedMigrations();
+    if (manifest.length !== 41) return rejectBootstrap();
+    c.startedAt = Date.now();
+    db = new CandidateDriver(c.filename, { fileMustExist: true, timeout: 5000 });
+    const native = db;
+    native.defaultSafeIntegers(true);
+    native.exec("PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL; PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=5000;");
+    if (native.prepare("PRAGMA journal_mode").get()?.journal_mode !== "wal" || native.prepare("PRAGMA synchronous").get()?.synchronous !== BigInt(2) || native.prepare("PRAGMA foreign_keys").get()?.foreign_keys !== BigInt(1)) return rejectBootstrap();
+    const unchanged = originalTableProofs(native);
+    let active = false;
+    const tx: SqlTransaction = Object.freeze({
+      get(sql: string, values: readonly SqlValue[] = []) { if (!active || !native.inTransaction) return rejectBootstrap(); return native.prepare(sql).get(...values); },
+      all(sql: string, values: readonly SqlValue[] = []) { if (!active || !native.inTransaction) return rejectBootstrap(); return native.prepare(sql).all(...values); },
+      run(sql: string, values: readonly SqlValue[] = []) { if (!active || !native.inTransaction) return rejectBootstrap(); const r = native.prepare(sql).run(...values) as { changes: number; lastInsertRowid: bigint }; return { changes: BigInt(r.changes), lastInsertRowid: r.lastInsertRowid }; },
+      setSchemaVersion(version: bigint) { if (!active || !native.inTransaction || version < BigInt(8) || version > BigInt(41)) return rejectBootstrap(); native.exec("PRAGMA user_version=" + version); },
+    });
+    const transaction = (work: () => void, foreignKeysOff = false) => {
+      guard(c); if (fileIdentity(c.filename) !== c.identity || native.inTransaction) return rejectBootstrap();
+      if (foreignKeysOff) native.exec("PRAGMA foreign_keys=OFF");
+      try {
+        native.exec("BEGIN IMMEDIATE"); active = true; work(); guard(c);
+        if (!native.inTransaction || native.prepare("PRAGMA foreign_key_check").all().length) return rejectBootstrap();
+        native.exec("COMMIT"); // Only normal acknowledgement establishes this step.
+        if (native.inTransaction) return rejectBootstrap();
+      } catch (error) { if (native.inTransaction) native.exec("ROLLBACK"); throw error; }
+      finally { active = false; if (foreignKeysOff) { native.exec("PRAGMA foreign_keys=ON"); if (native.prepare("PRAGMA foreign_keys").get()?.foreign_keys !== BigInt(1)) return rejectBootstrap(); } }
+    };
+    const steps = (sql: readonly string[]) => { for (const statement of sql) { guard(c); native.prepare(statement).run(); } };
+    transaction(() => {
+      for (const m of manifest.slice(8, 35)) {
+        if (m.objectType === "program") return rejectBootstrap();
+        native.exec(m.sql);
+        tx.run("INSERT INTO schema_migrations VALUES(?,?,?,?)", [m.version, m.name, m.checksum, BigInt(Date.now())]);
+        tx.setSchemaVersion(m.version);
+      }
+      assertSalesSchemaSnapshot(tx, 35);
+    });
+    for (const version of [36, 37, 38] as const) transaction(() => {
+      assertSalesSchemaSnapshot(tx, (version - 1) as 35 | 36 | 37);
+      steps(version === 36 ? salesSteps() : version === 37 ? returnsSteps() : expensesSteps());
+      const m = manifest[version - 1];
+      tx.run("INSERT INTO schema_migrations VALUES(?,?,?,?)", [m.version, m.name, m.checksum, BigInt(Date.now())]);
+      tx.setSchemaVersion(m.version); assertSalesSchemaSnapshot(tx, version);
+    });
+    transaction(() => { invoiceMigrationTransaction(tx, () => steps(invoicesSteps())); }, true);
+    transaction(() => { cashMigrationTransaction(tx, () => steps(cashSteps())); }, true);
+    transaction(() => { settingsMigrationTransaction(tx, () => steps(settingsSteps())); });
+    // Validate every original typed row/hidden rowid before closing this handle.
+    for (const old of unchanged) if (enrollmentDigest(old.name === "schema_migrations" ? originalHistoryProof(native) : fingerprintTable(native, old.name)) !== enrollmentDigest(old)) return rejectBootstrap();
+    c.finishedAt = Date.now(); c.targetDigest = enrollmentDigest(fingerprint(native));
+    native.close(); db = undefined;
+    c.stage = "VERIFIED41"; candidateCopies.add(copy);
+    await verifiedCandidate41Evidence(copy); // Independent NEW native handle.
+  } catch { c.stage = "FAILED"; candidateCopies.delete(copy); return rejectBootstrap(); }
+  finally { if (db) { try { db.close(); } catch { c.stage = "FAILED"; } } }
+}
+
+
+// Narrow key-creation validation, not enrollment or a change to auth SQL. The
+// destination must be this independently validated, never-admitted candidate.
+export async function candidate41KeyEvidence(copy: unknown, config: LocalKeyConfiguration) {
+  const c = copy && typeof copy === "object" ? copies.get(copy) : undefined;
+  if (!c || !config || config.database.create === true || config.database.mode !== "test" ||
+      path.resolve(config.directory).toLowerCase() !== path.dirname(c.filename).toLowerCase() ||
+      resolveDatabaseLocation(config.database).filename.toLowerCase() !== c.filename.toLowerCase()) return rejectBootstrap();
+  const { loadMigrations } = await import("../db/migrate");
+  const actual = loadMigrations(config.migrationsDirectory), expected = reviewedMigrations();
+  if (actual.length !== 41 || actual.some((m, i) => m.name !== expected[i].name || m.version !== expected[i].version || m.checksum !== expected[i].checksum)) return rejectBootstrap();
+  const facts = await verifiedCandidate41Evidence(copy);
+  return Object.freeze({ ...facts, originalCertificateFingerprint: c.vault.metadata.certificateFingerprint,
+    originalInstallationId: c.vault.metadata.installationId, originalDeviceId: c.vault.metadata.deviceId });
+}
+
+
+const completionAttempts = new WeakSet<object>();
+// Authenticated known-completion provenance ONLY. CURRENT/admission remain a
+// separate consumer; a completed target is still forbidden as a business writer.
+export async function recordKnownCandidateCompletion8(copy: UnadmittedCandidateCopy8, input: LocalKeyConfiguration) {
+  const c = copy && typeof copy === "object" ? copies.get(copy) : undefined;
+  if (!c || c.stage !== "VERIFIED41" || completionAttempts.has(copy)) return rejectBootstrap();
+  completionAttempts.add(copy);
+  try {
+    if (!input || !input.database || input.database.create === true || Object.keys(input).sort().join(",") !== "database,directory,migrationsDirectory") return rejectBootstrap();
+    const config = Object.freeze({ directory: input.directory, migrationsDirectory: input.migrationsDirectory, database: Object.freeze({ ...input.database, create: false }) });
+    const facts = await candidate41KeyEvidence(copy, config), destination = await inspectLocalVault(config); guard(c);
+    if (destination.databaseFingerprint !== c.identity || destination.metadata.installationId === facts.originalInstallationId ||
+        destination.metadata.deviceId === facts.originalDeviceId || destination.metadata.certificateFingerprint === facts.originalCertificateFingerprint) return rejectBootstrap();
+    await withProtectedLocalKeys(c.config, async original => withProtectedLocalKeys(config, async target => {
+      if (target.signingSecrets.ADMIN === original.signingSecrets.ADMIN || target.signingSecrets.SALESPERSON === original.signingSecrets.SALESPERSON) return rejectBootstrap();
+    }).then(() => {})); guard(c);
+    await verifyMigrated(c);
+    const committed: Extract<CandidateRecord, { kind: "COMMITTED" }> = { ...c.intent, kind: "COMMITTED", sequence: String(Number(c.intent.sequence) + 1),
+      previousDigest: candidateRecordDigest(c.intent), intentDigest: candidateRecordDigest(c.intent), targetStateDigest: facts.targetStateDigest,
+      targetVaultDigest: destination.vaultDigest, generation: null, createdAtMs: String(Math.max(Date.now(), Number(c.intent.createdAtMs))) };
+    await append(c, committed); // Verified native mutex, flushed no-overwrite + DPAPI readback.
+    c.committed = committed; c.stage = "COMMITTED41";
+    await verifiedCandidate41Evidence(copy);
+    if ((await inspectLocalVault(config)).vaultDigest !== committed.targetVaultDigest) return rejectBootstrap();
+    guard(c);
+    return Object.freeze({ operationId: c.intent.operationId, status: "COMMITTED_UNADMITTED" as const, targetStateDigest: facts.targetStateDigest,
+      targetVaultDigest: committed.targetVaultDigest, completionDigest: candidateRecordDigest(committed), productionActivation: false as const });
+  } catch { return rejectBootstrap(); } // Never downgrade a possibly published completion to quarantine.
 }

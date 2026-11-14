@@ -122,3 +122,56 @@ export async function authenticationBackup8Evidence(proof: unknown, config: Loca
     return saved.evidence;
   } catch { return fail(); }
 }
+
+
+// Read-only restart comparison. It grants no archive, replay, DDL or admission
+// authority; a genuine live lease and original enrolled8 anchor are mandatory.
+export async function protectedAuthenticationSource8Evidence(config: LocalKeyConfiguration, lease: BootstrapLease) {
+  const source = await inspectSource(config, lease);
+  return Object.freeze({ sourceStateDigest: source.stateDigest, originalAnchorDigest: source.anchorDigest,
+    copyFingerprint: enrollmentDigest(source.facts.database), sourceNamespace: source.namespace });
+}
+
+
+declare const recovery8Brand: unique symbol;
+export interface VerifiedAuthenticationRecovery8 { readonly [recovery8Brand]: true }
+const recoveries = new WeakMap<object, { lease: BootstrapLease; filename: string; archive: string; archiveId: string; ciphertextSha256: string; originalStateDigest: string; currentStateDigest: string; originalAnchorDigest: string }>();
+// Reopen the ORIGINAL signed pre-copy after restart. Fresh Admin verification
+// legitimately advances throttling counters; only that table may differ. Every
+// other typed row/rowid, schema byte, anchor and binding must still be exact.
+// This read-only proof grants quarantine comparison ONLY, never backup/replay.
+export async function verifyAuthentication8Recovery(config: LocalKeyConfiguration, lease: BootstrapLease, custody: BackupCustody,
+  archive: string, staging: string, expected: Readonly<{ archiveId: string; ciphertextSha256: string; sourceStateDigest: string; originalAnchorDigest: string }>): Promise<VerifiedAuthenticationRecovery8> {
+  guard(config, lease); testDirectory(staging);
+  if (!expected || Object.keys(expected).sort().join(",") !== "archiveId,ciphertextSha256,originalAnchorDigest,sourceStateDigest" ||
+      !/^[0-9a-f-]{36}$/.test(expected.archiveId) || [expected.ciphertextSha256, expected.sourceStateDigest, expected.originalAnchorDigest].some(v => !/^[a-f0-9]{64}$/.test(v)) ||
+      path.basename(archive) !== expected.archiveId + ".age" || !emptyDirectory(staging)) return fail();
+  await storage(staging, "initialize"); await storage(path.dirname(archive), "check", { filename: path.basename(archive) }); guard(config, lease);
+  const source = await inspectSource(config, lease), plaintext = path.join(staging, "recovery8.sqlite3");
+  try {
+    const free = await storage(staging, "space"); if (typeof free !== "string" || BigInt(free) < source.databaseBytes * BigInt(2) + BigInt(16 * 1024 * 1024)) return fail();
+    const manifest = await decryptSnapshot(custody, archive, plaintext, undefined, undefined, expected.ciphertextSha256, 8); guard(config, lease);
+    if (manifest.archiveId !== expected.archiveId || manifest.sourceNamespace !== source.namespace || source.anchorDigest !== expected.originalAnchorDigest || enrollmentDigest(manifest.fingerprint) !== expected.sourceStateDigest) return fail();
+    const db = openProofDatabase(plaintext); let original: Awaited<ReturnType<typeof inspect8>>;
+    try { db.exec("BEGIN"); original = await inspect8(db, source.records); db.exec("ROLLBACK"); } finally { db.close(); }
+    if (!same(original, manifest.fingerprint)) return fail();
+    const comparable = (facts: typeof original) => ({ ...facts, database: { ...facts.database, tables: facts.database.tables.filter(t => t.name !== "auth_login_attempts") } });
+    if (!same(comparable(original), comparable(source.facts))) return fail();
+    const after = await inspectSource(config, lease); if (!same(after.facts, source.facts)) return fail();
+    const token = Object.freeze({ toJSON: fail }) as unknown as VerifiedAuthenticationRecovery8;
+    recoveries.set(token, { lease, filename: source.filename, archive, archiveId: expected.archiveId, ciphertextSha256: expected.ciphertextSha256,
+      originalStateDigest: expected.sourceStateDigest, currentStateDigest: source.stateDigest, originalAnchorDigest: source.anchorDigest });
+    return token;
+  } catch { return fail(); }
+  finally { await cleanup(staging, ["recovery8.sqlite3", "recovery8.sqlite3-wal", "recovery8.sqlite3-shm"]); }
+}
+export async function authentication8RecoveryEvidence(proof: unknown, config: LocalKeyConfiguration, lease: BootstrapLease) {
+  guard(config, lease); const saved = proof && typeof proof === "object" ? recoveries.get(proof) : undefined;
+  if (!saved || saved.lease !== lease) return fail();
+  await storage(path.dirname(saved.archive), "check", { filename: path.basename(saved.archive) });
+  if ((await hashFile(saved.archive)).sha256 !== saved.ciphertextSha256) return fail();
+  const current = await inspectSource(config, lease);
+  if (current.filename !== saved.filename || current.stateDigest !== saved.currentStateDigest || current.anchorDigest !== saved.originalAnchorDigest) return fail();
+  return Object.freeze({ archiveId: saved.archiveId, ciphertextSha256: saved.ciphertextSha256, sourceStateDigest: saved.originalStateDigest,
+    currentSourceStateDigest: saved.currentStateDigest, originalAnchorDigest: saved.originalAnchorDigest });
+}

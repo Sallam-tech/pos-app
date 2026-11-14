@@ -151,3 +151,30 @@ export async function inspectLocalVault(config: LocalKeyConfiguration) {
       databaseFingerprint: createHash("sha256").update(JSON.stringify(location.binding)).digest("hex") });
   } finally { bytes.fill(0); }
 }
+
+
+// Additive approved candidate path. The pristine enrollment path above retains
+// all its original checks; this path never rewrites accounts, latch or binding.
+export async function createCandidateProtectedLocalKeys(config: LocalKeyConfiguration, tls: LocalTlsMaterial,
+  candidate: import("./candidate-copy8").UnadmittedCandidateCopy8): Promise<LocalIdentityMetadata> {
+  try {
+    const { candidate41KeyEvidence } = await import("./candidate-copy8");
+    const evidence = await candidate41KeyEvidence(candidate, config), initial = locations(config);
+    assertLocalTlsMaterial(tls);
+    if (new X509Certificate(tls.certificate).fingerprint256 === evidence.originalCertificateFingerprint) return rejectBootstrap();
+    const sid = await windowsProtection({ operation: "context" });
+    if (typeof sid !== "string" || sid === "S-1-5-18") return rejectBootstrap();
+    const value: StoredIdentity = { format: "POS_LOCAL_KEYS_V1", installationId: randomUUID(), deviceId: randomUUID(), windowsSid: sid, createdAt: Date.now(),
+      database: initial.binding, signingSecrets: { ADMIN: randomBytes(48).toString("base64url"), SALESPERSON: randomBytes(48).toString("base64url") },
+      tls: { key: tls.key.toString("utf8"), certificate: tls.certificate.toString("utf8"), trustAnchor: tls.trustAnchor.toString("utf8") } };
+    validate(value, sid, initial.binding);
+    if (JSON.stringify(locations(config)) !== JSON.stringify(initial) || value.installationId === evidence.originalInstallationId || value.deviceId === evidence.originalDeviceId) return rejectBootstrap();
+    mkdirSync(initial.directory); // Exclusive. Failed attempts are never repaired.
+    const payload = Buffer.from(JSON.stringify(value));
+    try { if (await windowsProtection({ operation: "seal", directory: initial.directory, payload: payload.toString("base64") }) !== true) return rejectBootstrap(); }
+    finally { payload.fill(0); }
+    const metadata = await withProtectedLocalKeys(config, async () => {});
+    await candidate41KeyEvidence(candidate, config);
+    return metadata;
+  } catch { throw new BootstrapRejected(); }
+}

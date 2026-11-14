@@ -1,3 +1,4 @@
+import { assertProtectedWriterAdmission } from "../bootstrap/writer-admission";
 import {assertSettingsLedgers,currentSettings,settingsContext} from "../settings/model";
 import {uuid,object,text} from "../inventory/validation";
 import type {PasswordOperationKey} from "./types";
@@ -149,7 +150,9 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
   let closePromise: Promise<void> | undefined;
   const local = new AsyncLocalStorage<boolean>();
   const boot = randomUUID(); // Non-secret, non-credential process generation.
-  const available = () => { if (closed) deny(); };
+  let protectedWriter = false;
+  const admission = (full = true) => { if (protectedWriter) try { assertProtectedWriterAdmission(config.protectedAdmission, config.database, config.signingSecrets, full); } catch { deny(); } };
+  const available = () => { if (closed) deny(); admission(false); };
   const track = <T>(operation: Promise<T>) => {
     active.add(operation);
     void operation.finally(() => active.delete(operation)).catch(() => {});
@@ -188,7 +191,12 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
   try {
     owner = openAsyncOwner(config);
     const owned = owner;
+    const marker = owned.get("SELECT user_version FROM pragma_user_version")?.user_version;
+    protectedWriter = typeof marker === "bigint" && marker >= BigInt(35) && !!owned.get("SELECT 1 AS present FROM auth_enrollment_binding LIMIT 1");
+    if (protectedWriter && requiredSchema !== 41) return deny();
+    admission(); // An enrolled candidate cannot opt in through generic TEST flags.
     const requireSchema = async () => {
+      admission();
       if (requiredSchema !== undefined && !(await validateReviewedSchema({
         get: async (sql, values) => owned.get(sql, values), all: async (sql, values) => owned.all(sql, values),
       }, requiredSchema)).ok) return deny();
