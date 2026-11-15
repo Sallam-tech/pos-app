@@ -15,7 +15,8 @@ import { storage, testDirectory } from "../backup/storage";
 import { enrollmentDigest, readEnrollmentSnapshot } from "./database";
 import { classifyEnrollment, readEnrollmentJournal } from "./journal";
 import { candidateLedgerContext, candidateRecordBytes, candidateRecordDigest, classifyCandidateLedger, candidatePendingCompatible, readProtectedCandidateLedger, type CandidateRecord } from "./candidate-records";
-import { inspectHistoricalLocalVault, inspectLocalVault, type LocalKeyConfiguration } from "./keys";
+import { inspectLocalVault, type LocalKeyConfiguration } from "./keys";
+import { readProtectedRootAuthority } from "./root-authority";
 import { hasActiveBootstrapLease, type BootstrapLease } from "./ownership";
 import { protectedManifestDigest } from "./maintenance-journal";
 import { rejectBootstrap, windowsProtection } from "./windows";
@@ -83,10 +84,7 @@ export async function withProtectedRestore41<T>(rootInput: LocalKeyConfiguration
     testDirectory(directory); if (!adapter || sourceClaims.has(source) || readdirSync(directory).length || path.basename(directory) !== operationId || typeof work !== "function") return rejectBootstrap();
     const sourceFacts = adminMaintenanceSourceEvidence(source, sourceConfig.database, lease, { operationId, purpose: "RESTORE41" });
     if (sourceFacts.schema !== 41 || !hasActiveBootstrapLease(lease, sourceConfig.database)) return rejectBootstrap();
-    const original = await inspectHistoricalLocalVault(root), sourceVault = await inspectLocalVault(sourceConfig);
-    const rootDb = dbOpen(resolveDatabaseLocation(root.database).filename); let anchorVersion: 8 | 41;
-    try { const version = rootDb.prepare("PRAGMA user_version").get()?.user_version; if (version !== BigInt(8) && version !== BigInt(41)) return rejectBootstrap(); anchorVersion = Number(version) as 8 | 41; } finally { rootDb.close(); }
-    const records = await readEnrollmentJournal(original, protectedManifestDigest(anchorVersion)), anchor = records.find(r => r.kind === "ENROLLED"); if (!anchor) return rejectBootstrap();
+    const authority=await readProtectedRootAuthority(root),original=authority.vault,sourceVault=await inspectLocalVault(sourceConfig),anchorVersion=authority.anchorVersion,records=authority.records,anchor=authority.anchor;
     const ledger = await readProtectedCandidateLedger(original, enrollmentDigest(anchor)), state = classifyCandidateLedger(ledger);
     if (!candidatePendingCompatible(ledger) || !["ABSENT", "QUARANTINED_ONLY", "RECORDED_CURRENT"].includes(state.status) ||
         sourceVault.databaseFingerprint !== (state.recordedCurrent?.destinationFileIdentity ?? original.databaseFingerprint) || (!state.recordedCurrent && anchorVersion !== 41)) return rejectBootstrap();
@@ -105,8 +103,8 @@ export async function withProtectedRestore41<T>(rootInput: LocalKeyConfiguration
     } finally { db.close(); }
     const file = await open(path.join(directory, "restored41.sqlite3"), "wx"); try { await file.sync(); } finally { await file.close(); }
     const target = configuration({ directory, database: { directory, filename: "restored41.sqlite3", mode: "test", create: false }, migrationsDirectory: sourceConfig.migrationsDirectory });
-    const inheritedTls=state.recordedCurrent?.purpose==="RESTORE41"?(await readProtectedRestoreProvenance(sourceConfig,state.recordedCurrent)).sourceTlsPublicKeyDigests:[];
-    const sourceTlsPublicKeyDigests=Object.freeze([...new Set([original.tlsPublicKeyDigest,sourceVault.tlsPublicKeyDigest,...inheritedTls])]);
+    const inheritedTls=state.recordedCurrent?.purpose==="RESTORE41"&&sourceVault.databaseFingerprint!==original.databaseFingerprint?(await readProtectedRestoreProvenance(sourceConfig,state.recordedCurrent)).sourceTlsPublicKeyDigests:[];
+    const sourceTlsPublicKeyDigests=Object.freeze([...new Set([...authority.sourceTlsPublicKeyDigests,original.tlsPublicKeyDigest,sourceVault.tlsPublicKeyDigest,...inheritedTls])]);
     const receipt: Receipt = { format: "POS_PROTECTED_RESTORE41_V2", operationId, rootVaultDigest: original.vaultDigest, originalAnchorDigest: enrollmentDigest(anchor), sourceFileIdentity: sourceVault.databaseFingerprint,
       destinationFileIdentity: identity(resolveDatabaseLocation(target.database).filename), archive: path.resolve(archive), archiveSha256: cipher.sha256, sourceTlsPublicKeyDigests, manifest, history: histories };
     const previous = ledger.records.at(-1), intent: Extract<CandidateRecord, { kind: "INTENT" }> = { format: "POS_CANDIDATE_LEDGER_V1", kind: "INTENT", sequence: String(previous ? Number(previous.sequence) + 1 : 1), previousDigest: previous ? candidateRecordDigest(previous) : null,
@@ -171,9 +169,7 @@ export async function finalizeProtectedRestore41(rootInput: LocalKeyConfiguratio
   try {
     const root = configuration(rootInput), sourceConfig = configuration(sourceInput), target = configuration(targetInput);
     const guard = () => { if (!hasActiveBootstrapLease(lease, sourceConfig.database) || adminMaintenanceSourceEvidence(source, sourceConfig.database, lease, { operationId, purpose: "RESTORE41" }).schema !== 41) return rejectBootstrap(); };
-    guard(); const original = await inspectHistoricalLocalVault(root), rootDb = dbOpen(resolveDatabaseLocation(root.database).filename); let version: 8 | 41;
-    try { const v = rootDb.prepare("PRAGMA user_version").get()?.user_version; if (v !== BigInt(8) && v !== BigInt(41)) return rejectBootstrap(); version = Number(v) as 8 | 41; } finally { rootDb.close(); }
-    const records = await readEnrollmentJournal(original, protectedManifestDigest(version)), anchor = records.find(r => r.kind === "ENROLLED"); if (!anchor) return rejectBootstrap();
+    guard(); const authority=await readProtectedRootAuthority(root),original=authority.vault,version=authority.anchorVersion,records=authority.records,anchor=authority.anchor;
     const ledger = await readProtectedCandidateLedger(original, enrollmentDigest(anchor)), own = ledger.records.filter(r => r.operationId === operationId), completed = own[1];
     if (!candidatePendingCompatible(ledger, operationId) || own.length !== 2 || own[0].kind !== "INTENT" || !completed || completed.kind !== "COMMITTED" || completed.purpose !== "RESTORE41" || ledger.records.at(-1) !== completed || completed.sourceFileIdentity !== identity(resolveDatabaseLocation(sourceConfig.database).filename)) return rejectBootstrap();
     const verify = async () => {
@@ -200,9 +196,7 @@ export async function quarantineNeverAdmittedRestore41(rootInput: LocalKeyConfig
   try {
     const root = configuration(rootInput), sourceConfig = configuration(sourceInput);
     const guard = () => { if (!hasActiveBootstrapLease(lease, sourceConfig.database) || adminMaintenanceSourceEvidence(source, sourceConfig.database, lease, { operationId, purpose: "RESTORE41" }).schema !== 41) return rejectBootstrap(); };
-    guard(); const vault = await inspectHistoricalLocalVault(root), db = dbOpen(resolveDatabaseLocation(root.database).filename); let version: 8 | 41;
-    try { const n = db.prepare("PRAGMA user_version").get()?.user_version; if (n !== BigInt(8) && n !== BigInt(41)) return rejectBootstrap(); version = Number(n) as 8 | 41; } finally { db.close(); }
-    const records = await readEnrollmentJournal(vault, protectedManifestDigest(version)), anchor = records.find(r => r.kind === "ENROLLED"); if (!anchor) return rejectBootstrap();
+    guard(); const authority=await readProtectedRootAuthority(root),vault=authority.vault,anchor=authority.anchor;
     const ledger = await readProtectedCandidateLedger(vault, enrollmentDigest(anchor)), own = ledger.records.filter(r => r.operationId === operationId), intent = own[0];
     if (own.length !== 1 || !intent || intent.kind !== "INTENT" || intent.purpose !== "RESTORE41" || ledger.records.at(-1) !== intent || intent.sourceFileIdentity !== identity(resolveDatabaseLocation(sourceConfig.database).filename)) return rejectBootstrap();
     const check = () => { guard(); const sourceDb = dbOpen(resolveDatabaseLocation(sourceConfig.database).filename); try { if (sourceState(sourceDb) !== intent.sourceStateDigest) return rejectBootstrap(); } finally { sourceDb.close(); } guard(); };

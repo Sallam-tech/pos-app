@@ -17,7 +17,7 @@ import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import next from "next";
 import type { AuthorizationConfiguration, AuthorizationGateway } from "../auth/types";
-import { createProtectedRootWriterAdmission, createSelectedWriterAdmission } from "../bootstrap/writer-admission";
+import { createProtectedRootWriterAdmission, createSelectedWriterAdmission, createImportedRootWriterAdmission } from "../bootstrap/writer-admission";
 import { withProtectedLocalKeys, type LocalKeyConfiguration } from "../bootstrap/keys";
 import { withAdminMaintenanceSource, type AdminMaintenanceOperation, type AdminMaintenanceSource } from "../auth/gateway";
 import { assertNoAuthorizationOwner, type BootstrapLease } from "../bootstrap/ownership";
@@ -30,7 +30,7 @@ import { acquireRuntimeOwnership, LocalRuntimeRejected } from "./ownership";
 import { createLocalHttpsHost, validateLocalOrigins, type LocalOrigins, type LocalTlsMaterial } from "./https";
 
 export interface LocalRuntimeConfiguration {
-  readonly protectedIdentity?: Readonly<{ root: LocalKeyConfiguration; selected?: LocalKeyConfiguration }>;
+  readonly protectedIdentity?: Readonly<{ root: LocalKeyConfiguration; selected?: LocalKeyConfiguration; importedRoot?: true }>;
   readonly applicationDirectory: string;
   readonly port: number;
   readonly authorization: AuthorizationConfiguration;
@@ -123,13 +123,13 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     const liveGuard = ownership;
     if (input.protectedIdentity) {
       const identity = input.protectedIdentity, selected = identity.selected ?? identity.root;
-      if (Object.keys(identity).some(k => k !== "root" && k !== "selected") || schema !== 41 ||
+      if (Object.keys(identity).some(k => k !== "root" && k !== "selected" && k !== "importedRoot") || (identity.importedRoot !== undefined && identity.importedRoot !== true) || schema !== 41 ||
           resolveDatabaseLocation(selected.database).filename.toLowerCase() !== location.filename.toLowerCase()) return reject();
       await withProtectedLocalKeys(selected, async keys => {
         if (!input.tls.key.equals(keys.tls.key) || !input.tls.certificate.equals(keys.tls.certificate) || !input.tls.trustAnchor.equals(keys.tls.trustAnchor) ||
             config.signingSecrets.ADMIN !== keys.signingSecrets.ADMIN || config.signingSecrets.SALESPERSON !== keys.signingSecrets.SALESPERSON) return reject();
       });
-      config.protectedAdmission = identity.selected ? await createSelectedWriterAdmission(identity.root, identity.selected, liveGuard) : await createProtectedRootWriterAdmission(identity.root, liveGuard, 41);
+      config.protectedAdmission = identity.selected ? await createSelectedWriterAdmission(identity.root, identity.selected, liveGuard) : identity.importedRoot ? await createImportedRootWriterAdmission(identity.root,liveGuard) : await createProtectedRootWriterAdmission(identity.root, liveGuard, 41);
       if (assertProtectedWriterAdmission(config.protectedAdmission, config.database).restored) config.protectedHistory = createProtectedRestoredHistory(config.protectedAdmission, config.database);
     }
     host = createLocalHttpsHost(port, origins, input.tls, async (request, response) => {

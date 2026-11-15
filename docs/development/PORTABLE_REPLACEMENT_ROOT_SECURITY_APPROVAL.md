@@ -20,3 +20,5 @@ Proposed concrete scope for approval:
 Decision requested: approve items1?8 for this additive disposable TEST imported-root implementation, or retain the current original-root-bound restore and read-only portable validation. This is the new trust-issuer decision; existing crypto, migration, CURRENT, quarantine and source-root restore approvals are not requested again.
 
 Owner reply15 November2026: ?Approve TEST imported-root scope?. Production remains DISABLED. This grants no physical fencing/custody acceptance, real imported-root promotion, reset or Phase2/3 authority.
+
+Implementation record15 November2026: items1-8 implemented and verified in PHASE1_SECURITY_RECOVERY_FINAL_REPORT.md and PHASE1_PROTECTED_RECOVERY_RUNBOOK.md. Separate imported provenance/native format and genuine current/snapshot/Admin/fence capabilities are implemented. This records TEST code completion; it does not add real owner/custody/device acceptance or production authority.

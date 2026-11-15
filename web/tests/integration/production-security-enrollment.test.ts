@@ -442,6 +442,7 @@ it("candidate ledger mutex storage preserves source, chains terminal quarantine 
   const f = await candidateStorageFixture(), before = f.state();
   expect(f.classify(await f.read()).status).toBe("ABSENT");
   await f.owned(async () => {
+    await expect(f.native(f.message({...f.first,format:"POS_IMPORTED_ROOT_LEDGER_V1",purpose:"RESTORE41",sourceSchema:"41"}))).rejects.toThrow("Protected setup unavailable.");
     await f.append(f.first);
     expect(f.classify(await f.read()).status).toBe("RECOVERY_REVIEW_REQUIRED");
     const q = f.quarantine(f.first);

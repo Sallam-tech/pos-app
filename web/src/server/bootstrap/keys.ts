@@ -50,9 +50,10 @@ function storedFile(directory: string) {
   rejectRedirectedPath(directory);
   const entries = readdirSync(directory);
   if (realpathSync.native(directory).toLowerCase() !== path.resolve(directory).toLowerCase() ||
-      !entries.includes("identity.dpapi") || entries.some(name => name !== "identity.dpapi" && name !== "enrollment" && name !== "maintenance" && name !== "candidate-authority" && name !== "restore41")) return rejectBootstrap();
+      !entries.includes("identity.dpapi") || entries.some(name => name !== "identity.dpapi" && name !== "enrollment" && name !== "maintenance" && name !== "candidate-authority" && name !== "restore41" && name !== "imported-root")) return rejectBootstrap();
   if (entries.includes("enrollment")) rejectRedirectedPath(path.join(directory, "enrollment"));
   if (entries.includes("maintenance")) rejectRedirectedPath(path.join(directory, "maintenance"));
+  if (entries.includes("imported-root")) rejectRedirectedPath(path.join(directory, "imported-root"));
   if (entries.includes("restore41")) rejectRedirectedPath(path.join(directory, "restore41"));
   if (entries.includes("candidate-authority")) rejectRedirectedPath(path.join(directory, "candidate-authority"));
   const filename = path.join(directory, "identity.dpapi"), stat = lstatSync(filename, { bigint: true });
@@ -163,6 +164,9 @@ export async function createCandidateProtectedLocalKeys(config: LocalKeyConfigur
 }
 export async function createRestoredCandidateProtectedLocalKeys(config: LocalKeyConfiguration, tls: LocalTlsMaterial, candidate: import("./restore41").ProtectedRestoreCandidate41): Promise<LocalIdentityMetadata> {
   const { restoredCandidate41KeyEvidence } = await import("./restore41"); return createDerivedLocalKeys(config, tls, () => restoredCandidate41KeyEvidence(candidate, config));
+}
+export async function createImportedCandidateProtectedLocalKeys(config: LocalKeyConfiguration, tls: LocalTlsMaterial, candidate: import("./imported-root41").ImportedRootCandidate41): Promise<LocalIdentityMetadata> {
+  const { importedCandidateKeyEvidence } = await import("./imported-root41"); return createDerivedLocalKeys(config, tls, () => importedCandidateKeyEvidence(candidate, config));
 }
 async function createDerivedLocalKeys(config: LocalKeyConfiguration, tls: LocalTlsMaterial, validateEvidence: () => Promise<Readonly<{ originalCertificateFingerprint: string; originalInstallationId: string; originalDeviceId: string; forbiddenTlsPublicKeyDigests: readonly string[] }>>): Promise<LocalIdentityMetadata> {
   try {

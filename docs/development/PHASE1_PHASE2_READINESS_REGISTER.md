@@ -1,5 +1,8 @@
 # Phase1 + Phase2 requirement-to-evidence register
 
+Current15 November2026: PHASE1 CODE-LEVEL PASS in the approved disposable TEST scope. Physical/owner acceptance remains BLOCKED/NOT VERIFIED and production DISABLED. Phase2/3 NOT STARTED and not authorized in this run. Current evidence: [final Phase1 report](PHASE1_SECURITY_RECOVERY_FINAL_REPORT.md) and [protected recovery runbook](PHASE1_PROTECTED_RECOVERY_RUNBOOK.md). Final code commit/checks are recorded in phase1-final-local-checkpoint.json/live Git (parent19acb9b). Earlier dated checkpoints below are historical where superseded.
+
+
 14 November2026, Asia/Karachi. Starting checkpoint e1b7df6d07b2760cb2c6cc22bf187709a4573853. **Phase1 IN PROGRESS; Phase2 depends on its code-level exit gate. Production DISABLED. Phase3 not requested and not performed.**
 
 Owner authority: [exact master assignment](SHOP_POS_PHASE1_PHASE2_MASTER_TASK.txt), [24-part permanent contract](SHOP_POS_ULTIMATE_ENGINEERING_SECURITY_CONTRACT.txt), [APPROVED schema41 boundary items1-8](PRODUCTION_SCHEMA41_SECURITY_APPROVAL.md). The approval is non-destructive implementation/testing with disposable identities/databases only. There is no pending approval for that exact batch.
@@ -26,30 +29,30 @@ These statuses cover the requested Phase1/2 result. Existing narrower TEST PASS 
 
 | ID / contract part | Current evidence / implementation | Remaining verification or decision | Status |
 | --- | --- | --- | --- |
-| C01 Frozen frontend | Approved1456ce4 baseline and original prototype located; frontend untouched by current server-only slice | Phase2 per-screen matching-state visual matrix | NOT VERIFIED |
-| C02 Real integration | Existing TEST workflows and cumulative matrix; no production mock fallback enabled | Protected production admission and real packaged UI/API/DB/restart paths for every workflow | BLOCKED |
-| C03 Per-task security | Approved bounded schema41 scope, source inspection, new native failure/recovery tests | Complete authority/maintenance/restore/fencing batch and focused regressions | NOT VERIFIED |
-| C04 API security | Existing [102-endpoint inventory](MASTER_COMPLETION_MATRIX_AND_API_INVENTORY.md); persistent HTTP health-only, no new endpoint | Review changed admission consumers and full relevant role/origin/input/replay matrix | NOT VERIFIED |
-| C05 Secrets | Existing DPAPI/NTFS/key-purpose separation; new fixtures use random disposable secrets, no real custody | Package/output scan, protected production storage and actual owner custody | NOT VERIFIED |
-| C06 Auth lifecycle | Sole two-account writer and accepted exact8+ policies retained; fresh41 V2 setup under genuine owner handle/lease | All current-schema enrollment/maintenance consumers and packaged role/reopen/revocation | NOT VERIFIED |
-| C07 SQLite authority | All41 old SQL bytes unchanged; exact41 schema + empty setup validation, real rollback/uncertain COMMIT checks | Protected enrolled8-to41 maintenance and restart authority; no automatic migration | BLOCKED |
-| C08 Finance/inventory | Accepted Sales/Returns/Expenses/Corrections/Reports/Cash/Settings evidence reused; no financial algorithm changed | Restored and packaged cross-module source/stock/cost/cash/report reconciliation | NOT VERIFIED |
-| C09 Independent scrutiny | Actual affected source/diffs and retained execution logs inspected; initial failed test retained | Review every final changed path and actual result; no final independent audit claimed | NOT VERIFIED |
-| C10 Threat model | Owner spoofing, stale schema/identity, crash uncertainty, stolen B and offline clone limits recorded below | Complete preventive/detection/recovery evidence for changed paths | NOT VERIFIED |
-| C11 Backup/recovery | Accepted age/Ed25519/DPAPI worker and isolated TEST restore PASS | Exact8 TEST prerequisite now verified; persistent provenance/admission, independent-PC/owner copies remain | BLOCKED |
-| C12 Traceability | Original immutable ledgers/anchors retained; new41 enrollment intent/commit/anchor uses existing native journal | Protected maintenance/retirement/restore record chain and restart verification | NOT VERIFIED |
-| C13 Supply chain | Fresh audits0 runtime/7 moderate dev; one affected minimatch root advisory traced to lint toolchain | Scoped compatibility fix or explicit risk disposition; actual final package dependency/SBOM/license/secret scan | NOT VERIFIED |
-| C14 Windows EXE/update | Existing custom Next/Node24/native SQLite lifecycle retained; no new packaging dependency | Architecture/signing review, actual EXE/installer/install/upgrade/reinstall/uninstall retention tests | BLOCKED |
-| C15 Offline/network | Existing loopback role-host TLS boundary preserved; core source uses local SQLite | Genuine packaged offline/lifecycle/foreign-browser/LAN negatives, target TLS trust | NOT VERIFIED |
-| C16 Scale | Accepted1k/10k/50k originals/measurements preserved | Profile cash/count/closing/invoice latency; owner/target-hardware criteria and honest before/after | NOT VERIFIED |
-| C17 Testing | New real SQLite/DPAPI rollback/unknown-COMMIT/tamper plus actual-process test; scoped type PASS | Finish focused changed-path checks/type/lint/build/package/hardware as applicable | NOT VERIFIED |
-| C18 Readiness register | This24-part register + existing module/API matrix; approvals and physical gates explicit | Keep implementation/evidence/status current through both phases | NOT VERIFIED |
-| C19 Approval workflow | Exact original items1-8 approved; no repeated crypto/TEST approvals; candidate selector/quarantine items1-8 OWNER APPROVED for disposable TEST implementation | No pending authority for original/candidate items1-8; genuinely new architecture/visual/signing/real-data decisions only | PASS |
-| C20 Preservation | Fresh34-path/41-migration/329-source starting hash PASS; no reset/clean/push/data replacement | Repeat final preservation and explicit related-only index/secret review before local checkpoint | NOT VERIFIED |
-| C21 Defect response | Initial child-loader failure retained and isolated; no security assertions weakened | Verify correction and record any confirmed implementation finding until fixed | NOT VERIFIED |
-| C22 Three levels | Scoped task and milestone tests underway; Phase3 explicitly reserved | Complete Phase1/2 milestones; separate owner request for final A-Z audit | NOT VERIFIED |
-| C23 Release decision | Production remains DISABLED; no client handover READY claim | Required software/hardware/owner gates and later Phase3 approval | BLOCKED |
-| C24 Communication | Roman Urdu + English, evidence and limits explicit; current memory/owner contracts preserved | Continue concise progress, verified-versus-unverified reporting | PASS |
+| C01 Frozen frontend | All165 accepted frontend source hashes and original prototype/documents preserved; no frontend edits | Per-screen visual/package matrix belongs to unstarted Phase2 | PASS preservation; visual matrix NOT VERIFIED |
+| C02 Real integration | Protected private TEST SQLite/HTTPS/Chromium paths and current admission verified | Production UI integration/packaged distribution reserved for Phase2; no live activation | PASS Phase1 scope; Phase2 NOT STARTED |
+| C03 Per-task security | Native/SQL/crypto/identity/current/snapshot/Admin/fence capability paths reviewed and focused-tested | Real owner/device acceptance remains separate | PASS code scope |
+| C04 API security | No new HTTP endpoint; affected guest/Staff/Origin/session/namespace negatives PASS; existing endpoint matrix reused | Packaged integration matrix belongs to Phase2 | PASS affected scope |
+| C05 Secrets | Native current-user/SYSTEM DPAPI/ACL protection; fresh role/TLS keys; source/client/index scans | Real custody/owner copies and distributed artifact acceptance | PASS code; acceptance BLOCKED |
+| C06 Auth lifecycle | Existing sole account writer/policy/session/revocation/attempt guards retained; fresh41 enrollment and restored both-role login verified | Trusted packaged human entry and real enrollment remain disabled | PASS code scope |
+| C07 SQLite authority | Actual reviewed8-to41 known-COMMIT copy, immutable binding/rows/rowids, generation admission/retirement and unknown-copy quarantine verified | No destructive/in-place/live migration authorized | PASS code scope |
+| C08 Finance/inventory | Nonempty sale/refund/expense/correction/revaluation/cash/closing/Settings history copied and independently reconciled after actual gen2 restart | Target hardware/capacity acceptance remains separate | PASS code scope |
+| C09 Independent scrutiny | Changed paths critically self-reviewed; actual failed/passing logs and final static/build/preservation evidence retained | Separate final independent A-Z audit is Phase3 and NOT performed | PASS task review; Phase3 NOT STARTED |
+| C10 Threat model | B-only/JSON/fake authority, stale generation, wrong TLS lineage, tampering, process death and lost replies covered | Offline clone/old-device physical fence cannot be inferred from local journals | PASS code; physical fence BLOCKED |
+| C11 Backup/recovery | Protected consistent snapshots, signed portable origin/export, independent imported root, persistent41 restore and runtime worker integration verified | Real B copies/separate signer custody/replacement PC/media and retention/RPO/RTO | PASS code; owner/hardware BLOCKED |
+| C12 Traceability | Original anchors/financial audits retained; distinct imported issuer, native CM/CURRENT/Q and historical Settings prefixes verified | No archive deletion, invented ENROLLED record or uncertain SQL replay | PASS |
+| C13 Supply chain | Unchanged lock; runtime audit0; official received response covers570 version pairs with0 High/Critical; moderate dev advisory disposition documented | Full remediation planner timed out; final distributed SBOM/license/bundle acceptance belongs to Phase2 | PASS reviewed scope; limits documented |
+| C14 Windows EXE/update | Patched24.22.3 exact345-source custom-server build verified | EXE/installer/signing/install/upgrade/uninstall retention are Phase2; not started | NOT STARTED Phase2 |
+| C15 Offline/network | Local SQLite and strict loopback role-host TLS boundary retained; no mandatory cloud dependency | Real client LAN/TLS/hardware and packaged offline acceptance | PASS affected code; hardware NOT VERIFIED |
+| C16 Scale | Accepted volume evidence preserved; current validators/hash/row scans remain bounded | Target capacity/performance profiling belongs to Phase2/hardware acceptance | NOT VERIFIED target hardware |
+| C17 Testing | Source-bound22, imported-core12 distinct, affected native/financial/worker/browser and independent gen2 reconciliation evidence retained across focused runs | Not one clean full-suite run; metadata-only test comparison corrected without replaying completed restore | PASS focused code evidence |
+| C18 Readiness register | Current report/memory/runbook distinguish code PASS from physical/owner blocks and Phase2/3 | Keep current after future authorized work | PASS |
+| C19 Approval workflow | Original/candidate/imported-root items1-8 OWNER APPROVED for non-destructive disposable TEST implementation | No repeated approval; real custody/enrollment/promotion and new material decisions require separate authority | PASS |
+| C20 Preservation | 34 unrelated paths,41 SQL,165 frontend and original source documents/attachments hash checked; related-only local commits | No reset/clean/push/WSL/Docker; originals/evidence retained | PASS |
+| C21 Defect response | Distinct imported format, bounded Windows layout, snapshot-origin read-point capability and test-policy/metadata corrections verified | Every failed target/log retained; no security/money/history guard weakened | PASS |
+| C22 Three levels | Phase1 code exit verified; no Phase2/3 performed | Phase2/3 require later user steering under latest instruction | PASS scope boundary |
+| C23 Release decision | Production remains DISABLED; no client handover READY claim | Real owner/hardware gates and later phases remain required | BLOCKED production acceptance |
+| C24 Communication | Concise progress and exact reports/evidence/limits recorded | Final concise code PASS plus blocked owner/hardware gates | PASS |
 
 ## Focused security findings and boundaries
 
@@ -89,3 +92,8 @@ Latest owner instruction is Phase1 ONLY; do not start Phase2/3. Source-bound CUR
 PORTABLE_REPLACEMENT_ROOT_SECURITY_APPROVAL.md items1?8 OWNER APPROVED15 November: ?Approve TEST imported-root scope?. Imported-root origin/admission is APPROVED but NOT IMPLEMENTED at this source-bound milestone. Full Phase1 remains IN PROGRESS; earlier blocked implementation rows above are historical where superseded by the current report. Original source-bound admission still requires its actual original DPAPI root. Continue the approved independent-authority path, without repeating completed checks. Production DISABLED.
 
 Physical owner B copies, independent replacement PC/profile and witnessed old-device fence, target TLS/custody/retention/RPO/RTO/hardware acceptance remain NOT VERIFIED. No production release, enrollment, reset, EXE or deployment authority is implied.
+
+
+## Current Phase1 exit and permitted continuation
+
+Approved code-level work is complete and verified as detailed in PHASE1_SECURITY_RECOVERY_FINAL_REPORT.md. Production remains DISABLED. Do not start Phase2/3 in this run or replay completed/uncertain SQL operations. Physical B copies, independent Windows PC/profile, witnessed old-device fencing, real TLS/custody/media/retention/RPO/RTO and power-loss/disk-full/capacity acceptance remain BLOCKED/NOT VERIFIED. R/reset remains unapproved and disabled. Preserve current commits, all original files and ignored evidence.

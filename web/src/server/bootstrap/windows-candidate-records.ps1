@@ -84,19 +84,29 @@ try {
   $uuid='[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}'
   $keys=@('format','kind','sequence','previousDigest','operationId','purpose','installationId','deviceId','vaultDigest','originalAnchorDigest','rootDatabaseFingerprint','sourceFileIdentity','destinationFileIdentity','sourceSchema','sourceStateDigest','targetSpecificationDigest','backupArchiveId','backupCiphertextSha256','createdAtMs','intentDigest','targetStateDigest','targetVaultDigest','generation')
   function Digest([byte[]]$bytes){$hash=[Security.Cryptography.SHA256]::Create();try{return [BitConverter]::ToString($hash.ComputeHash($bytes)).Replace('-','').ToLowerInvariant()}finally{$hash.Dispose()}}
-  function Read-File([string]$file,[bool]$pending){
+  function Read-File([string]$file,[bool]$pending,[long]$maximumBytes=16384){
     Check-Acl $file $false
     $opened=New-Object IO.FileStream($file,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
     try{
       $info=New-Object ShopPosCandidate.Native+FileInfo
-      if(-not [ShopPosCandidate.Native]::GetFileInformationByHandle($opened.SafeFileHandle,[ref]$info) -or $info.Links -ne 1 -or $opened.Length -gt 16384 -or (-not $pending -and $opened.Length -lt 9)){throw 'Denied'}
+      if(-not [ShopPosCandidate.Native]::GetFileInformationByHandle($opened.SafeFileHandle,[ref]$info) -or $info.Links -ne 1 -or $opened.Length -gt $maximumBytes -or (-not $pending -and $opened.Length -lt 9)){throw 'Denied'}
       $bytes=New-Object byte[] ([int]$opened.Length);$offset=0
       while($offset -lt $bytes.Length){$read=$opened.Read($bytes,$offset,$bytes.Length-$offset);if($read -lt 1){throw 'Denied'};$offset+=$read}
       return ,$bytes
     }finally{$opened.Dispose()}
   }
+  function Validate-ImportedRecord($record){
+    $importDirectory=[IO.Path]::Combine($parent,'imported-root');Check-Acl $importDirectory $true
+    $receiptBytes=Read-File ([IO.Path]::Combine($importDirectory,'restore.dpapi')) $false 196608
+    $receiptPlain=[Security.Cryptography.ProtectedData]::Unprotect($receiptBytes,[Text.Encoding]::UTF8.GetBytes('ShopPOS.BackupRestore.v1'),[Security.Cryptography.DataProtectionScope]::CurrentUser)
+    try{
+      $receipt=$utf8.GetString($receiptPlain) | ConvertFrom-Json
+      if($receipt.format -cne 'POS_IMPORTED_ROOT41_V1' -or $receipt.operationId -cne $record.operationId -or $receipt.destinationFileIdentity -cne $record.rootDatabaseFingerprint -or $receipt.destinationFileIdentity -cne $record.destinationFileIdentity -or $receipt.vaultDigest -cne $record.vaultDigest -or $receipt.installationId -cne $record.installationId -or $receipt.deviceId -cne $record.deviceId -or $record.purpose -cne 'RESTORE41' -or $record.sourceSchema -cne '41'){throw 'Denied'}
+      if($receipt.packet.origin.sourceFileIdentity -cne $record.sourceFileIdentity -or $receipt.packet.origin.originalAnchorDigest -cne $record.originalAnchorDigest -or $receipt.packet.origin.archiveSha256 -cne $record.backupCiphertextSha256 -or $receipt.packet.origin.manifest.archiveId -cne $record.backupArchiveId -or $receipt.fence.destinationFileIdentity -cne $record.destinationFileIdentity -or $receipt.fence.operationId -cne $record.operationId -or $receipt.fence.physicalAcceptance -cne 'NOT_WITNESSED' -or $receipt.fence.productionActivation -ne $false){throw 'Denied'}
+    }finally{[Array]::Clear($receiptPlain,0,$receiptPlain.Length);[Array]::Clear($receiptBytes,0,$receiptBytes.Length)}
+  }
   function Validate-Record($record){
-    if((@($record.PSObject.Properties.Name | Sort-Object -CaseSensitive) -join ',') -cne (@($keys | Sort-Object -CaseSensitive) -join ',') -or $record.format -cne 'POS_CANDIDATE_LEDGER_V1' -or $record.kind -cnotmatch '^(INTENT|COMMITTED|CURRENT|QUARANTINED_NO_ADMISSION)$'){throw 'Denied'}
+    if((@($record.PSObject.Properties.Name | Sort-Object -CaseSensitive) -join ',') -cne (@($keys | Sort-Object -CaseSensitive) -join ',') -or $record.format -cnotin @('POS_CANDIDATE_LEDGER_V1','POS_IMPORTED_ROOT_LEDGER_V1') -or $record.kind -cnotmatch '^(INTENT|COMMITTED|CURRENT|QUARANTINED_NO_ADMISSION)$'){throw 'Denied'}
     if($record.sequence -isnot [string] -or $record.sequence -cnotmatch '^[1-9][0-9]?$' -or [int]$record.sequence -gt 64 -or $record.operationId -cnotmatch ('^'+$uuid+'$') -or $record.backupArchiveId -cnotmatch ('^'+$uuid+'$')){throw 'Denied'}
     foreach($key in @('installationId','deviceId','vaultDigest','originalAnchorDigest','rootDatabaseFingerprint')){if($record.$key -isnot [string] -or $record.$key -cne $m.$key){throw 'Denied'}}
     foreach($key in @('vaultDigest','originalAnchorDigest','rootDatabaseFingerprint','sourceFileIdentity','destinationFileIdentity','sourceStateDigest','targetSpecificationDigest','backupCiphertextSha256')){if($record.$key -isnot [string] -or $record.$key -cnotmatch '^[a-f0-9]{64}$'){throw 'Denied'}}
@@ -105,6 +115,7 @@ try {
     foreach($key in @('format','kind','purpose','sourceSchema','installationId','deviceId')){if($record.$key -isnot [string]){throw 'Denied'}}
     foreach($key in @('installationId','deviceId')){if($record.$key -cnotmatch ('^'+$uuid+'$')){throw 'Denied'}}
     if(($record.purpose -ceq 'UPGRADE8' -and $record.sourceSchema -ceq '8') -or ($record.purpose -ceq 'RESTORE41' -and $record.sourceSchema -ceq '41')){}else{throw 'Denied'}
+    if($record.format -ceq 'POS_IMPORTED_ROOT_LEDGER_V1'){Validate-ImportedRecord $record}
     if($record.sourceFileIdentity -ceq $record.destinationFileIdentity){throw 'Denied'}
     if($record.kind -ceq 'INTENT'){
       if($null -ne $record.intentDigest -or $null -ne $record.targetStateDigest -or $null -ne $record.targetVaultDigest -or $null -ne $record.generation){throw 'Denied'}
@@ -124,7 +135,7 @@ try {
     if($record.kind -ceq 'INTENT'){
       if($null -ne $state){throw 'Denied'}
       foreach($operation in $ledger.operations.Values){if($operation.status -in @('INTENT','COMMITTED')){throw 'Denied'}}
-      $expectedSource=if($null -eq $ledger.current){$record.rootDatabaseFingerprint}else{$ledger.current.record.destinationFileIdentity}
+      $expectedSource=if($null -eq $ledger.current){if($record.format -ceq 'POS_IMPORTED_ROOT_LEDGER_V1' -and $ledger.records.Count -eq 0){$record.sourceFileIdentity}else{$record.rootDatabaseFingerprint}}else{$ledger.current.record.destinationFileIdentity}
       if($record.sourceFileIdentity -cne $expectedSource -or ($null -ne $ledger.current -and $record.sourceSchema -cne '41')){throw 'Denied'}
     }elseif($record.kind -ceq 'QUARANTINED_NO_ADMISSION'){
       if($null -ne $state){if($state.status -cne 'INTENT'){throw 'Denied'};Same-Operation $record $state.intent.record;if($record.intentDigest -cne $state.intent.digest){throw 'Denied'}}elseif($null -ne $record.intentDigest){throw 'Denied'}

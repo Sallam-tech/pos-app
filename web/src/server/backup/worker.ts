@@ -1,3 +1,4 @@
+import { inspectPortableOrigin41, exportPortableOrigin41 } from "../bootstrap/portable-origin41";
 import "server-only";
 import { assertProtectedWriterAdmission, type ProtectedWriterAdmission } from "../bootstrap/writer-admission";
 import { protectedRestoredHistory, type ProtectedRestoredHistory } from "./protected-history";
@@ -24,13 +25,18 @@ type Capability={setup:Setup;custody:BackupCustody;database:DatabaseOptions;rest
 const configurations=new WeakMap<object,Capability>();
 function mint(c:Capability){const result=Object.freeze({toJSON:fail}) as unknown as TestBackupConfiguration;configurations.set(result,c);return result;}
 function source(database:DatabaseOptions){if(database.mode!=="test")return fail();return resolveDatabaseLocation({...database,create:false}).filename;}
+// Bound the complete job/try/verification/publication paths used by inbox
+// Windows PowerShell and native SQLite. Never move or repair an existing root.
+function protectedStoragePaths(root:string,exportDirectory:string){if(path.resolve(root).length>120||path.resolve(exportDirectory).length>200)return fail();}
 async function checkSource(c:Capability){
+ if(c.admission)protectedStoragePaths(c.setup.root,c.setup.exportDirectory);
  if(testSourceNamespace(source(c.database))!==c.setup.namespace)return fail();
  if(c.admission){const facts=assertProtectedWriterAdmission(c.admission,c.database,undefined,true);if(facts.schema!==41||facts.maintenanceOnly||facts.restored&&!c.protectedHistory)return fail();protectedRestoredHistory(c.protectedHistory,c.database);}else restoredHistory(c.restoreProof,c.database);
  const db=openProofDatabase(source(c.database));try{await verifySchema41(db);}finally{db.close();}
 }
 async function configureBackups(g:AuthorizationGateway,request:Request,password:unknown,custody:BackupCustody,database:DatabaseOptions,root:string,exportDirectory:string,restoreProof?:VerifiedTestRestore,admission?:ProtectedWriterAdmission,protectedHistory?:ProtectedRestoredHistory){
  testDirectory(root);testDirectory(exportDirectory);if(path.resolve(root)===path.resolve(exportDirectory))return fail();
+ if(admission)protectedStoragePaths(root,exportDirectory);
  const filename=source(database),namespace=testSourceNamespace(filename),receipt=await g.verifyAdminPassword(password);
  await g.withFreshAdminTransaction(request,receipt,async(tx,actor)=>{
   if(actor.role!=="ADMIN")return fail();
@@ -104,7 +110,7 @@ export async function startTestBackupWorker(configuration:TestBackupConfiguratio
  }
  async function verifyArchive(filename:string,id:string){
   const directory=path.join(c!.setup.root,"verify-"+randomUUID());mkdirSync(directory);
-  const v=await inspectTestPortableArchive(c!.custody,filename,directory);if(v.archiveId!==id)return fail();return {sha256:v.archiveSha256,bytes:v.archiveBytes};
+  const v=await inspectTestPortableArchive(c!.custody,filename,directory);if(v.archiveId!==id)return fail();if(c!.admission){const packet=await inspectPortableOrigin41(c!.custody,filename);if(packet.origin.manifest.sourceNamespace!==c!.setup.namespace)return fail();}return {sha256:v.archiveSha256,bytes:v.archiveBytes};
  }
  async function recoverArchive(job:BackupJob){
   const root=path.join(c!.setup.root,"job-"+job.id);let names:string[];try{names=readdirSync(root);}catch(e){if((e as {code?:string}).code==="ENOENT")return undefined;throw e;}
@@ -131,6 +137,7 @@ export async function startTestBackupWorker(configuration:TestBackupConfiguratio
      ownership.assertHeld();await storage(c!.setup.exportDirectory,"publish",{source:pending,target:source.id+".age"});
      if(canonical(await hashFile(final))!==canonical(facts))return fail();
     }
+    if(c!.admission){await exportPortableOrigin41(c!.custody,filename,c!.setup.exportDirectory);await checkSource(c!);ownership.assertHeld();}
     await append({...running,state:"EXPORTED",sha256:facts.sha256,bytes:facts.bytes,updatedAtMs:Math.max(Date.now(),job.updatedAtMs)});return;
    }
    let found=await recoverArchive(job);

@@ -93,7 +93,15 @@ async function cleanupStaging(directory:string,names:readonly string[]){
   if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1)return fail();await unlink(filename);
  }
 }
-async function createArchive(custody:BackupCustody,database:DatabaseOptions,directory:string,prior:readonly HistoricalSettings[],guard:()=>void,signal?:AbortSignal,archiveId?:string){
+const protectedArchiveCopies=new WeakMap<object,{admission:ProtectedWriterAdmission;namespace:string;archive:string;manifestDigest:string;ciphertextSha256:string}>();
+// Only the actual guarded online-copy controller can mint this evidence. JSON,
+// a legacy TEST archive or caller-supplied facts cannot skip source comparison.
+export function protectedArchiveCreationEvidence(value:unknown,admission:ProtectedWriterAdmission,database:DatabaseOptions,archive:string,manifest:unknown,ciphertextSha256:string){
+ const saved=value&&typeof value==="object"?protectedArchiveCopies.get(value):undefined;
+ if(!saved||saved.admission!==admission||saved.namespace!==testSourceNamespace(resolveDatabaseLocation(database).filename)||saved.archive!==path.resolve(archive).toLowerCase()||saved.manifestDigest!==digest(manifest)||saved.ciphertextSha256!==ciphertextSha256)return fail();
+ assertProtectedWriterAdmission(admission,database,undefined,true);
+}
+async function createArchive(custody:BackupCustody,database:DatabaseOptions,directory:string,prior:readonly HistoricalSettings[],guard:()=>void,signal?:AbortSignal,archiveId?:string,protectedAdmission?:ProtectedWriterAdmission){
  guard();if(database.mode!=="test")return fail();testDirectory(directory);
  await storage(directory,"initialize");
  try{
@@ -114,7 +122,9 @@ async function createArchive(custody:BackupCustody,database:DatabaseOptions,dire
  guard();const name=manifest.archiveId+".age";await storage(directory,"publish",{source:"archive.pending",target:name});
  guard();
  // SNAPSHOT_VERIFIED is deliberately distinct from app/independent restore PASS.
- return Object.freeze({archive:path.join(directory,name),manifest,state:"SNAPSHOT_VERIFIED_APP_RESTORE_PENDING" as const,keyId:custodyMetadata(custody).id});
+ const result=Object.freeze({archive:path.join(directory,name),manifest,state:"SNAPSHOT_VERIFIED_APP_RESTORE_PENDING" as const,keyId:custodyMetadata(custody).id});
+ if(protectedAdmission){assertProtectedWriterAdmission(protectedAdmission,database,undefined,true);const cipher=await hashFile(result.archive);guard();protectedArchiveCopies.set(result,{admission:protectedAdmission,namespace,archive:path.resolve(result.archive).toLowerCase(),manifestDigest:digest(manifest),ciphertextSha256:cipher.sha256});}
+ return result;
  }finally{await cleanupStaging(directory,["snapshot.sqlite3","snapshot.sqlite3-wal","snapshot.sqlite3-shm","snapshot.sqlite3-journal","verification.sqlite3","verification.sqlite3-wal","verification.sqlite3-shm","verification.sqlite3-journal"]);}
 }
 export function createTestArchive(custody:BackupCustody,database:DatabaseOptions,directory:string,priorProof?:VerifiedTestRestore,signal?:AbortSignal,archiveId?:string){
@@ -122,7 +132,12 @@ export function createTestArchive(custody:BackupCustody,database:DatabaseOptions
 }
 export function createProtectedArchive41(custody:BackupCustody,database:DatabaseOptions,directory:string,admission:ProtectedWriterAdmission,history?:ProtectedRestoredHistory,signal?:AbortSignal,archiveId?:string){
  const guard=()=>{const facts=assertProtectedWriterAdmission(admission,database,undefined,true);if(facts.schema!==41||facts.maintenanceOnly||facts.restored&&!history)return fail();};
- guard();const prior=protectedRestoredHistory(history,database);return createArchive(custody,database,directory,prior,guard,signal,archiveId);
+ guard();const prior=protectedRestoredHistory(history,database);return createArchive(custody,database,directory,prior,guard,signal,archiveId,admission).then(async result=>{
+  const {protectedWriterSourceConfiguration}=await import("../bootstrap/writer-admission"),{preparePortableOrigin41,publishPortableOrigin41}=await import("../bootstrap/portable-origin41");
+  const verification=path.join(directory,"portable-origin");(await import("node:fs")).mkdirSync(verification);
+  const packet=await preparePortableOrigin41(custody,protectedWriterSourceConfiguration(admission,database),admission,result.archive,verification,result);guard();
+  const portableOrigin=await publishPortableOrigin41(directory,packet);guard();return Object.freeze({...result,portableOrigin});
+ });
 }
 export async function restoreTestArchive(custody:BackupCustody,authority:TestRestoreAuthority,archive:string,directory:string,signal?:AbortSignal){
  const a=authorities.get(authority);authorities.delete(authority);

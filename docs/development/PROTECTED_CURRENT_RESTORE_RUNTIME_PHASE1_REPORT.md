@@ -1,5 +1,7 @@
 # Phase1 protected current, restore and runtime evidence
 
+Historical verified milestone19acb9b. Current Phase1 code completion and imported-root evidence are in [PHASE1_SECURITY_RECOVERY_FINAL_REPORT.md](PHASE1_SECURITY_RECOVERY_FINAL_REPORT.md); statements below about remaining imported-root work describe this earlier milestone. Production remains DISABLED.
+
 14?15 November2026. Parent code81c8bfe, documentation470b26f. Existing schema41 and candidate addendum items1?8 apply. Disposable TEST identities only; production DISABLED; Phase2/3 not started.
 
 Status: approved original-root-bound implementation VERIFIED. Full Phase1 remains IN PROGRESS: the replacement-machine imported-root protocol is now separately OWNER APPROVED and not yet implemented. No production-readiness claim.

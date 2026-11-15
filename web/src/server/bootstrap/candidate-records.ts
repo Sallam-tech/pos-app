@@ -10,7 +10,7 @@ import { rejectBootstrap, windowsProtection } from "./windows";
 // Authenticated storage facts ONLY. No reader/classifier issues SQL, login,
 // enrollment, maintenance, restore, selection or runtime-admission authority.
 interface Common {
-  readonly format: "POS_CANDIDATE_LEDGER_V1";
+  readonly format: "POS_CANDIDATE_LEDGER_V1" | "POS_IMPORTED_ROOT_LEDGER_V1";
   readonly sequence: string; readonly previousDigest: string | null;
   readonly operationId: string; readonly purpose: "UPGRADE8" | "RESTORE41";
   readonly installationId: string; readonly deviceId: string; readonly vaultDigest: string;
@@ -47,7 +47,7 @@ const filename = (r: CandidateRecord) => r.sequence.padStart(6, "0") + "." + r.o
 function parse(value: unknown, vault: VaultInspection, anchor: string): CandidateRecord {
   if (!object(value) || Object.keys(value).sort().join(",") !== keys.join(",")) return rejectBootstrap();
   const v = value;
-  if (v.format !== "POS_CANDIDATE_LEDGER_V1" || !decimal(v.sequence) || BigInt(v.sequence) > BigInt(64) || !uuid(v.operationId) || !uuid(v.backupArchiveId) ||
+  if (!["POS_CANDIDATE_LEDGER_V1", "POS_IMPORTED_ROOT_LEDGER_V1"].includes(String(v.format)) || !decimal(v.sequence) || BigInt(v.sequence) > BigInt(64) || !uuid(v.operationId) || !uuid(v.backupArchiveId) ||
     !uuid(v.installationId) || !uuid(v.deviceId) || v.installationId !== vault.metadata.installationId || v.deviceId !== vault.metadata.deviceId || v.vaultDigest !== vault.vaultDigest ||
     !hex(anchor) || v.originalAnchorDigest !== anchor || v.rootDatabaseFingerprint !== vault.databaseFingerprint ||
     !decimal(v.createdAtMs) || BigInt(v.createdAtMs) > BigInt("8640000000000000") ||
@@ -77,7 +77,7 @@ export function classifyCandidateLedger(facts: CandidateLedgerFacts) {
     if (r.sequence !== String((previous ? Number(previous.sequence) : 0) + 1) || r.previousDigest !== (previous ? candidateRecordDigest(previous) : null) || (previous && BigInt(r.createdAtMs) < BigInt(previous.createdAtMs))) return rejectBootstrap();
     const state = operations.get(r.operationId);
     if (r.kind === "INTENT") {
-      if (state || [...operations.values()].some(s => s.status === "INTENT" || s.status === "COMMITTED") || r.sourceFileIdentity !== (current?.destinationFileIdentity ?? r.rootDatabaseFingerprint) || (current && r.sourceSchema !== "41")) return rejectBootstrap();
+      if (state || [...operations.values()].some(s => s.status === "INTENT" || s.status === "COMMITTED") || r.sourceFileIdentity !== (current?.destinationFileIdentity ?? (r.format === "POS_IMPORTED_ROOT_LEDGER_V1" && !previous ? r.sourceFileIdentity : r.rootDatabaseFingerprint)) || (current && r.sourceSchema !== "41")) return rejectBootstrap();
       operations.set(r.operationId, { status: r.kind, intent: r });
     } else if (r.kind === "QUARANTINED_NO_ADMISSION") {
       if (state) { if (state.status !== "INTENT" || !state.intent || r.intentDigest !== candidateRecordDigest(state.intent)) return rejectBootstrap(); sameOperation(r, state.intent); }
