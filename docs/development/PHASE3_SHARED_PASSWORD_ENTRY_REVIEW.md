@@ -1,0 +1,12 @@
+# Shared password login: bounded TEST security review
+
+Owner requirement: ONE existing password screen; genuine Admin password opens Admin Dashboard, genuine Salesperson password opens POS. Current fixed-role login does not meet it. Layout, CSS, approved JSX and business data stay unchanged.
+
+This changes the reviewed fixed-origin credential-entry boundary. AGENTS.md says "Ask before destructive operations, deployments, or major architectural changes." Previous desktop/native approvals separately reserve material security changes. Functional intent is explicit; these new security semantics need the owner's bounded decision before implementation.
+
+1. Trusted backend discovers role from the genuine existing password only, never client-supplied role. Same owner/native KDF/credential snapshot and unchanged five-second, one-use proofs/session issuance. Fail closed on ambiguity, corruption, changed credentials, expiry, shutdown or concurrent attempts.
+2. Preserve five ROLE failures/30-second cooldown, durable pre-KDF charging and restart protection. A shared wrong password charges both eligible role buckets; blocked roles are never verified. A completed correct-role login clears only its own streak; remove only the other role's charge for this exact pending attempt, preserving all prior failures/cooldown. Interrupted verification conservatively retains charges. No new GLOBAL policy or public role/hash/account oracle.
+3. Narrow native IPC accepts a bounded password only from the exact trusted shared-login main frame, one in-flight request and one-use request/window identity. Backend verifies and issues only the matching role session. Native shell hands it directly to the existing matching isolated HTTPS role partition; renderer never gets a bearer token, arbitrary origin, cookie writer or account selector. No password in URLs, logs, persistent storage or retained preview. Revocation/cleanup on canceled or failed handoff; no silent fallback using guessed identities.
+4. Handler-only integration of the existing single screen; Admin destination is /admin/dashboard, Staff /pos. Existing role APIs/origins/session checks and operation-key custody remain. Mandatory wrong-password/cooldown/crash/restart, sender/replay/cancel, both-role and cross-role-denial tests before accepting an installer.
+
+Disposable, reversible TEST only. No production, signing, credential resets, client delivery or real custody.

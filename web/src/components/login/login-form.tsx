@@ -74,12 +74,17 @@ export function LoginForm({ testRole,testSales=false }: { testRole?: "ADMIN" | "
     busy.current = true; setFresh(false); setErrors({}); setState("loading"); setShowPassword(false);
     if (password.current) password.current.value = "";
     try {
+      if(window.shopPosRecovery?.login){
+        const result=await window.shopPosRecovery.login(supplied);
+        if(!result?.ok||generation.current!==current)throw Error();
+        return; // Trusted native handoff performs the role-bound destination load.
+      }
       const response = await fetch("/api/auth/login", { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: supplied }), signal: abort.signal });
       if (!response.ok || (await response.json())?.ok !== true) throw Error();
       const status = await fetch("/api/auth/session", { credentials: "same-origin", cache: "no-store", redirect: "error", signal: abort.signal });
       if (!status.ok || (await status.json())?.authenticated !== true || generation.current !== current) throw Error();
       // This UI result is never page/API authorization; each destination checks SQL.
-      if (testRole === "ADMIN") window.location.replace("/admin/products");
+      if (testRole === "ADMIN") window.location.replace("/admin/dashboard");
       else if(testSales)window.location.replace("/pos");
       else { busy.current = false; setState("authenticated"); }
     } catch {
@@ -121,7 +126,7 @@ export function LoginForm({ testRole,testSales=false }: { testRole?: "ADMIN" | "
     }, 700);
   }
 
-  return <form aria-label={testRole ? testRole + " sign in" : "Login UI preview"} noValidate autoComplete="off" onSubmit={signIn}>
+  return <form aria-label={testRole ? "Secure TEST sign in" : "Login UI preview"} noValidate autoComplete="off" onSubmit={signIn}>
     {!ready && <p className="mt-3 text-sm leading-5 text-muted-foreground">{testRole ? "JavaScript is required for secure TEST sign-in." : "JavaScript is required to try the form preview. Sign-in remains unavailable."}</p>}
     <fieldset disabled={!ready || state === "loading" || (testRole !== undefined && (!fresh || state === "authenticated"))} className="mt-4 grid min-w-0 gap-3">
       <legend className="sr-only">{testRole ? "Sign-in details" : "Preview login details"}</legend>

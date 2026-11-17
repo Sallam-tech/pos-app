@@ -1,6 +1,18 @@
+import {resumeGuardInputs,retainGuardInputs,captureGuardInputs,guardInputsUnchanged,type GuardInputPoint} from "../auth/database";
 import "server-only";
 import type {AuthorizedTransaction} from "../auth/types";
+const continuationOwner=Object.freeze({});
+const checkpoints=new WeakMap<object,GuardInputPoint>();
 export async function assertExpenseLedgers(tx:Pick<AuthorizedTransaction,"get"|"all">){
+ if(resumeGuardInputs(tx,"EXPENSE",continuationOwner))return;
+ const previous=checkpoints.get(tx);
+ if(previous&&guardInputsUnchanged(tx,"EXPENSE",previous))return;
+ checkpoints.delete(tx);const point=captureGuardInputs(tx,"EXPENSE");
+ await assertExpenseLedgersFull(tx);
+ // A scan with any intervening write cannot mint a reusable verdict.
+ if(point&&guardInputsUnchanged(tx,"EXPENSE",point,true)){checkpoints.set(tx,point);retainGuardInputs(tx,"EXPENSE",point,continuationOwner);}
+}
+export async function assertExpenseLedgersFull(tx:Pick<AuthorizedTransaction,"get"|"all">){
  const bad=async(sql:string)=>{if(await tx.get(sql))throw Error("Expense ledger unavailable.");};
  await bad("SELECT r.id FROM expense_revisions r JOIN expenses e ON e.id=r.expense_id LEFT JOIN expense_revisions p ON p.id=r.previous_id WHERE r.effective_date<>e.business_date OR (r.revision=1 AND (r.previous_id IS NOT NULL OR r.expense_delta_m<>r.effective_m)) OR (r.revision>1 AND (p.id IS NULL OR p.expense_id<>r.expense_id OR p.revision<>r.revision-1 OR p.status<>'POSTED' OR r.expense_delta_m<>r.effective_m-p.effective_m)) LIMIT 1");
  await bad("SELECT r.id FROM expense_revisions r LEFT JOIN financial_events f ON f.expense_revision_id=r.id LEFT JOIN cash_movements c ON c.expense_revision_id=r.id WHERE (r.expense_delta_m=0 AND (f.id IS NOT NULL OR c.id IS NOT NULL)) OR (r.expense_delta_m<>0 AND (f.id IS NULL OR c.id IS NULL OR f.kind<>'EXPENSE' OR c.kind<>'EXPENSE' OR f.expense_delta_m<>r.expense_delta_m OR f.revenue_delta_m<>0 OR f.cogs_delta_m<>0 OR f.valuation_delta_m<>0 OR f.effective_date<>r.effective_date OR c.amount_m<>r.cash_delta_m OR c.cash_date<>r.cash_date OR c.recorded_at_ms<>r.recorded_at_ms OR f.recorded_at_ms<>r.recorded_at_ms)) LIMIT 1");

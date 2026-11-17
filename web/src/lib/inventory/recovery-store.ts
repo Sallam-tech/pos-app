@@ -1,4 +1,5 @@
 "use client";
+import {desktopRecovery,desktopMarkerAccess} from "../desktop/recovery-store";
 import type { Kind } from "@/server/inventory/contracts";
 // The ONLY persisted business-operation data is this <=512-byte, non-bearer marker.
 export interface RecoveryMarker { v: 1; context: string; key: string; kind: Kind; state: "PENDING" | "CONFIRMED" }
@@ -32,6 +33,7 @@ function open(): Promise<IDBDatabase> {
 // Network awaits NEVER occur in an IDB transaction. Admission/deletion uses one
 // strict-durability read/compare/write transaction, not a tab-local busy flag.
 async function access<T>(write: boolean, work: (marker: RecoveryMarker | null) => { value: T; next?: RecoveryMarker | null }): Promise<T> {
+ if(desktopRecovery())return desktopMarkerAccess("inventory",write,validateMarker,work);
  const db = await open();
  try {
   return await new Promise<T>((resolve, reject) => {

@@ -1,0 +1,18 @@
+{
+  "name": "shop-pos-sqlite-b1a-experiment",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Disposable TEST-only Windows SQLite safety experiment; never production shop data",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-timeout=20000 --test-reporter=spec safety.test.cjs"
+  },
+  "engines": {
+    "node": ">=24.11.0 <25",
+    "npm": ">=11.6.1 <12"
+  },
+  "packageManager": "npm@11.6.1",
+  "dependencies": {
+    "better-sqlite3": "13.0.3"
+  }
+}
+

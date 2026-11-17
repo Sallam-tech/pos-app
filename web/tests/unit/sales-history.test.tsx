@@ -3,13 +3,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import HistoryPage from "@/app/pos/history/page";
 import { mockSales } from "@/lib/admin/mock-sales";
 import { filterHistoricalSales, historicalTimeLabel, orderHistoricalSales, recordedSaleAmount } from "@/lib/sales-history-preview";
+// Pure demo projection only. Real auth/render fences are verified by the compiled HTTPS suites.
+vi.mock("next/server",()=>({connection:async()=>{}}));
+vi.mock("@/server/hosting/invoices-render",()=>({readTestInvoicesRender:()=>false}));
+vi.mock("@/server/hosting/sales-render",()=>({isTestSalesRender:()=>false}));
+vi.mock("@/server/hosting/returns-render",()=>({readTestReturnsRender:()=>false}));
+vi.mock("@/server/hosting/reports-render",()=>({readTestReportsRender:()=>false}));
 beforeEach(() => {
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value: function(this: HTMLDialogElement) { this.setAttribute("open", ""); } });
   Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value: function(this: HTMLDialogElement) { this.removeAttribute("open"); } });
 });
 describe("original demo Sales History", () => {
-  it("allowlists only safe historical fields, with all eight original sale references and exact totals", () => {
-    const page = HistoryPage(), sales = page.props.children.props.sales;
+  it("allowlists only safe historical fields, with all eight original sale references and exact totals", async () => {
+    const page = await HistoryPage(), sales = page.props.children.props.sales;
     expect(sales).toHaveLength(8);
     for (const sale of sales) expect(Object.keys(sale)).toEqual(["id", "businessDate", "productName", "quantity", "unitPricePaise"]);
     render(page);
@@ -21,8 +27,8 @@ describe("original demo Sales History", () => {
     expect(screen.getAllByRole("columnheader").map((node) => node.textContent)).toEqual(["Invoice", "Date / Time", "Customer", "Total", "Action"]);
     expect(screen.getByLabelText("Product name", { exact: true }).closest("details")).not.toHaveAttribute("open");
   });
-  it("combines ID, product and date filters, handles no results and restores focus on clear", () => {
-    render(<HistoryPage />);
+  it("combines ID, product and date filters, handles no results and restores focus on clear", async () => {
+    render(await HistoryPage());
     fireEvent.change(screen.getByLabelText("Find invoice..."), { target: { value: "DEMO-SALE-2" } });
     expect(screen.getAllByRole("rowheader")).toHaveLength(1);
     expect(screen.getByRole("rowheader")).toHaveTextContent("demo-sale-2");
@@ -37,10 +43,10 @@ describe("original demo Sales History", () => {
     expect(filterHistoricalSales(mockSales, "", "", "2026-02-30")).toEqual([]);
     expect(filterHistoricalSales([{ ...mockSales[0], receiptNumber: "known-recorded-reference" }], "RECORDED", "", "")).toHaveLength(1);
   });
-  it("prints a labeled historical copy with recorded prices only and no invented cash, discounts or timestamps", () => {
+  it("prints a labeled historical copy with recorded prices only and no invented cash, discounts or timestamps", async () => {
     const original = JSON.stringify(mockSales);
     const print = vi.spyOn(window, "print").mockImplementation(() => {});
-    render(<HistoryPage />);
+    render(await HistoryPage());
     fireEvent.click(screen.getByRole("button", { name: "View Receipt for demo-sale-2" }));
     const dialog = screen.getByRole("dialog", { name: "Sample Receipt" });
     expect(within(dialog).getByText("demo-sale-2")).toBeVisible();

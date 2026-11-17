@@ -1,7 +1,6 @@
 # POS: plan for a fully connected shop app and remote Admin EXE
 
-Date: 8 November 2026, Asia/Karachi
-
+Date: 8 November 2026, Asia/Karachi  
 Status: planning only; proposed design awaits review. No backend, cloud infrastructure or EXE has been implemented by this task.
 
 ## 1. What we are building

@@ -1,0 +1,15 @@
+import {act,render,screen,waitFor} from "@testing-library/react";
+import {beforeEach,describe,expect,it,vi} from "vitest";
+import {TestExpenseFinancials} from "@/components/admin/test-expense-financials";
+import {TestSales} from "@/components/pos/test-sales";
+const calls=vi.hoisted(()=>({report:vi.fn(),sales:vi.fn(),marker:vi.fn(),submit:vi.fn()}));
+vi.mock("@/lib/reports/client",async original=>({...await original<typeof import("@/lib/reports/client")>(),reportFetch:calls.report}));
+vi.mock("@/lib/sales/client",async original=>({...await original<typeof import("@/lib/sales/client")>(),salesFetch:calls.sales,submitSale:calls.submit,submitCashSale:calls.submit,prepareCashSale:calls.submit}));
+vi.mock("@/lib/sales/recovery-store",async original=>({...await original<typeof import("@/lib/sales/recovery-store")>(),readMarker:calls.marker}));
+beforeEach(()=>{calls.report.mockReset();calls.sales.mockReset();calls.marker.mockReset();calls.submit.mockReset();calls.sales.mockResolvedValue({items:[]});calls.marker.mockResolvedValue(null);});
+const zero={from:"2026-11-17",to:"2026-11-17",asOfMs:"1794866400000",revenuePaisa:"0",cogsPaisa:"0",grossProfitPaisa:"0",expensesPaisa:"0",netProfitPaisa:"0",refundsPaisa:"0",inventory:{overall:{products:"0",quantity:"0",lowStock:"0",stockValuePaisa:"0"}},products:[],timeSeries:[],financialComplete:true};
+describe("approved initial and empty display states",()=>{
+ it("keeps pending dashboard values distinct from an authoritative empty shop",async()=>{let complete!:(value:typeof zero)=>void;calls.report.mockReturnValue(new Promise(resolve=>complete=resolve));render(<TestExpenseFinancials mode="dashboard" authoritativeReports/>);await waitFor(()=>expect(calls.report).toHaveBeenCalledTimes(1));expect(screen.queryByText("Unavailable")).not.toBeInTheDocument();expect(screen.getAllByText("Loading…").length).toBeGreaterThan(3);await act(async()=>complete(zero));await waitFor(()=>expect(screen.queryByText("Loading…")).not.toBeInTheDocument());expect(screen.queryByRole("alert")).not.toBeInTheDocument();expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(3);});
+ it("reports a failed protected read as unavailable rather than inventing zeros",async()=>{calls.report.mockRejectedValue(Error("Protected report refused"));render(<TestExpenseFinancials mode="dashboard" authoritativeReports/>);expect(await screen.findByRole("alert")).toHaveTextContent("Protected report refused");expect(screen.getAllByText("Unavailable").length).toBeGreaterThan(3);expect(screen.queryByText("0")).not.toBeInTheDocument();});
+ it("shows a zero draft total for an empty cart without admitting a financial request",async()=>{const view=render(<TestSales cashManaged/>);await waitFor(()=>expect(calls.marker).toHaveBeenCalled());expect(screen.getByTestId("sale-total")).toHaveTextContent(/^Rs\. 0$/);expect(screen.getByRole("button",{name:"Create Invoice"})).toBeDisabled();expect(calls.submit).not.toHaveBeenCalled();view.unmount();});
+});

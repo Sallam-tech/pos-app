@@ -4,6 +4,7 @@ import { performance } from "node:perf_hooks";
 import { addInt64, int64 } from "../db/integers";
 import type { openAsyncOwner } from "./database";
 import type { Role } from "./types";
+import type { SqlRow, SqlValue } from "../db/connection";
 
 // Owner-approved: five consecutive ROLE failures, then 30 seconds; no escalation.
 // GLOBAL is retained only for legacy state validation/high-water coherence.
@@ -43,14 +44,35 @@ const signature = (states: State[]) => states.map(s =>
 // check/admit/reset/refund bypass. The private gateway supplies the trusted verifier.
 export function createLoginAttemptProtection(dependencies: Dependencies) {
   const { owner, withOwnerTransaction, verifyCredential } = dependencies;
-  if (!owner || typeof owner !== "object" || typeof withOwnerTransaction !== "function" ||
-      typeof verifyCredential !== "function" || mounted.has(owner)) throw failed();
-  mounted.add(owner);
+  return createPersistentLoginAttemptProtection({
+    identity: owner,
+    read: () => owner.all("SELECT " + fields + " FROM auth_login_attempts ORDER BY bucket"),
+    update: values => owner.run(update, values).changes,
+    reserve: () => { owner.run("UPDATE auth_login_attempts SET last_seen_ms=last_seen_ms WHERE bucket=?", ["GLOBAL"]); },
+    inTransaction: () => owner.inTransaction(), quarantine: () => owner.quarantine(),
+    withTransaction: withOwnerTransaction, verifyCredential,
+  });
+}
+// Internal persistence transport. The policy, pessimistic reservation, monotonic
+// clock and success reconciliation below are shared unchanged by SQL login and
+// fenced, read-only restored-candidate authentication. This grants no account,
+// session, SQL or writer authority; callers must supply their genuine fence.
+export interface LoginAttemptPersistence {
+  identity: object; read(): SqlRow[]; update(values: readonly SqlValue[]): bigint;
+  reserve(): void; inTransaction(): boolean; quarantine(): void;
+  withTransaction<T>(work: () => Promise<T>): Promise<T>;
+  verifyCredential(role: Role, password: unknown): Promise<boolean>;
+}
+export function createPersistentLoginAttemptProtection(persistence: LoginAttemptPersistence) {
+  const { identity, withTransaction: withOwnerTransaction, verifyCredential } = persistence;
+  if (!identity || typeof identity !== "object" || typeof withOwnerTransaction !== "function" ||
+      typeof verifyCredential !== "function" || mounted.has(identity)) throw failed();
+  mounted.add(identity);
   let busy = false, poisoned = false;
   let anchor: { logical: bigint; monotonic: bigint } | undefined, previousMonotonic = zero;
 
   function load(): State[] {
-    const rows = owner.all("SELECT " + fields + " FROM auth_login_attempts ORDER BY bucket");
+    const rows = persistence.read();
     if (rows.length !== buckets.length) throw failed(); // Never recreate missing state.
     const states = rows.map((row, index) => {
       if (row.bucket !== buckets[index] || row.format_version !== one) throw failed();
@@ -105,7 +127,7 @@ export function createLoginAttemptProtection(dependencies: Dependencies) {
     for (const state of states) {
       const next = addInt64(state.revision, one);
       const values = [...state.failures, ...Array<bigint>(10 - state.failures.length).fill(zero)];
-      if (owner.run(update, [next, time, state.until, ...values, state.bucket, state.revision]).changes !== one) throw failed();
+      if (persistence.update([next, time, state.until, ...values, state.bucket, state.revision]) !== one) throw failed();
       state.revision = next; state.seen = time;
     }
   }
@@ -113,16 +135,16 @@ export function createLoginAttemptProtection(dependencies: Dependencies) {
     let ran = false, live = true;
     try {
       const result = await withOwnerTransaction(async () => {
-        if (!live || ran || poisoned || !owner.inTransaction()) throw failed();
+        if (!live || ran || poisoned || !persistence.inTransaction()) throw failed();
         ran = true;
         // Supported Kysely BEGIN is deferred: reserve BEFORE reading counters.
-        owner.run("UPDATE auth_login_attempts SET last_seen_ms=last_seen_ms WHERE bucket=?", ["GLOBAL"]);
+        persistence.reserve();
         return work();
       });
-      if (!ran || owner.inTransaction()) throw failed();
+      if (!ran || persistence.inTransaction()) throw failed();
       return result;
     } catch {
-      if (owner.inTransaction()) { poisoned = true; owner.quarantine(); }
+      if (persistence.inTransaction()) { poisoned = true; persistence.quarantine(); }
       throw failed();
     } finally { live = false; }
   }
@@ -131,7 +153,7 @@ export function createLoginAttemptProtection(dependencies: Dependencies) {
     busy = true;
     try {
       // Verification must never join an existing protected/write transaction.
-      if (owner.inTransaction()) throw failed();
+      if (persistence.inTransaction()) throw failed();
       const reserved = await transaction(() => {
         const states = load(), time = now(states);
         prune(states, time);
@@ -163,7 +185,39 @@ export function createLoginAttemptProtection(dependencies: Dependencies) {
     } catch { throw failed(); }
     finally { busy = false; }
   }
+  async function attemptShared(password:unknown):Promise<Role>{
+    if(busy||poisoned||persistence.inTransaction())throw failed();
+    busy=true;
+    try{
+      const reserved=await transaction(()=>{
+        const states=load(),time=now(states);prune(states,time);
+        const eligible=(["ADMIN","SALESPERSON"] as const).filter(role=>states.find(s=>s.bucket===role)!.until<=time);
+        const previousUntil={ADMIN:zero,SALESPERSON:zero};
+        for(const role of eligible){const s=states.find(s=>s.bucket===role)!;previousUntil[role]=s.until;s.failures.push(time);if(s.failures.length===limit(role))s.until=addInt64(time,cooldownMs);}
+        save(states,time);return{signature:signature(states),time,eligible,previousUntil};
+      });
+      // Independent original KDFs may overlap, but every one MUST settle before
+      // releasing admission or reconciling durable charges, including on error.
+      const checks=await Promise.allSettled(reserved.eligible.map(role=>verifyCredential(role,password)));
+      if(checks.some(check=>check.status!=="fulfilled"))throw failed();
+      const matches=reserved.eligible.filter((_role,index)=>{
+        const check=checks[index];return check.status==="fulfilled"&&check.value===true;
+      });
+      if(matches.length!==1)throw failed();
+      const role=matches[0];
+      await transaction(()=>{
+        const states=load(),time=now(states);if(signature(states)!==reserved.signature)throw failed();
+        for(const candidate of reserved.eligible){const s=states.find(s=>s.bucket===candidate)!;if(s.failures.at(-1)!==reserved.time)throw failed();
+          if(candidate===role){s.failures=[];s.until=zero;}
+          else{s.failures.pop();s.until=reserved.previousUntil[candidate];} // Remove ONLY this exact pessimistic charge.
+        }
+        prune(states,time);save(states,time);
+      });
+      return role;
+    }catch{throw failed();}finally{busy=false;}
+  }
   return Object.freeze({
+    verifySharedPassword:attemptShared,
     verifyAdminPassword: (password: unknown) => attempt("ADMIN", password),
     verifySalespersonPassword: (password: unknown) => attempt("SALESPERSON", password),
   });

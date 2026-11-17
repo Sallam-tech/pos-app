@@ -1,5 +1,5 @@
 import "server-only";
-import {createHash} from "node:crypto";
+import {hash} from "node:crypto";
 import {canonical} from "../inventory/validation";
 // Check every byte/hash on every read. This caches neither data nor validation.
 // Canonical persisted JSON can be hashed directly after checking its key order;
@@ -20,6 +20,6 @@ export function verifiedJson(encoded:unknown,checksum:unknown,requireCanonical=f
  const value:unknown=JSON.parse(encoded),fast=JSON.stringify(value)===encoded&&ordered(value);
  if(requireCanonical&&!fast)throw Error("Immutable JSON unavailable.");
  const bytes=fast?encoded:canonical(value);
- if(createHash("sha256").update(bytes).digest("hex")!==checksum)throw Error("Immutable JSON unavailable.");
+ if(hash("sha256",bytes,"hex")!==checksum)throw Error("Immutable JSON unavailable.");
  return value;
 }

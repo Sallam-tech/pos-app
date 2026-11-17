@@ -1,0 +1,26 @@
+{
+  "name": "pos-auth-b1b-transaction-experiment",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Disposable TEST-only Better Auth transactions; no application integration",
+  "scripts": {
+    "preflight": "node preflight.mjs",
+    "test": "node run.mjs"
+  },
+  "engines": {
+    "node": ">=24.11.0 <25",
+    "npm": ">=11.6.1 <12"
+  },
+  "dependencies": {
+    "@better-auth/core": "1.7.18",
+    "better-auth": "1.7.18",
+    "better-sqlite3": "13.0.3",
+    "kysely": "0.29.0",
+    "@better-auth/kysely-adapter": "1.7.18"
+  },
+  "overrides": {
+    "node-addon-api": "8.9.2"
+  },
+  "packageManager": "npm@11.6.1"
+}

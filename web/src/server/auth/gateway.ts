@@ -1,5 +1,6 @@
+import {channel} from "node:diagnostics_channel";
 import { assertProtectedWriterAdmission } from "../bootstrap/writer-admission";
-import {assertSettingsLedgers,currentSettings,settingsContext} from "../settings/model";
+import {assertAccountSettingsLedgers,assertSettingsLedgers,currentSettings,settingsContext} from "../settings/model";
 import {uuid,object,text} from "../inventory/validation";
 import type {PasswordOperationKey} from "./types";
 import "server-only";
@@ -29,6 +30,17 @@ const rotationOperationLifetimeMs = 30000; // Part3M owner-approved execution bo
 const processState = globalThis as typeof globalThis & { [key: symbol]: boolean | undefined };
 const roles = ["ADMIN", "SALESPERSON"] as const;
 const deny = (): never => { throw new AuthorizationDenied(); };
+type ReadHook=<T>(role:Role,request:Request,work:(tx:AuthorizedTransaction,actor:Actor)=>Promise<T>)=>Promise<T>;
+type SharedCredential=Readonly<{role:Role;receipt:VerifiedCredential}>;
+const sharedCredentialReaders=new WeakMap<object,(password:unknown)=>Promise<SharedCredential>>();
+export function verifySharedPassword(gateway:AuthorizationGateway,password:unknown):Promise<SharedCredential>{
+ const access=sharedCredentialReaders.get(gateway);if(!access)return Promise.reject(new AuthorizationDenied());return access(password);
+}
+const dependencyReaders=new WeakMap<object,ReadHook>();
+// Only the real gateway registers this read-only path; structural gateways fail closed.
+export function withDependencyRead<T>(gateway:AuthorizationGateway,role:Role,request:Request,work:(tx:AuthorizedTransaction,actor:Actor)=>Promise<T>):Promise<T>{const read=dependencyReaders.get(gateway);if(!read)return Promise.reject(new AuthorizationDenied());return read(role,request,work);}
+// Preserve existing HTTP cancellation fences when wrapping a genuine gateway.
+export function bindDependencyReads(source:AuthorizationGateway,target:AuthorizationGateway,live:()=>void):void{const read=dependencyReaders.get(source);if(!read)return;dependencyReaders.set(target,async(role,request,work)=>{live();const result=await read(role,request,async(tx,actor)=>{live();const value=await work(tx,actor);live();return value;});live();return result;});}
 const deniedGateway = (): AuthorizationGateway => Object.freeze({
   publicShopName:async()=>deny(),
   verifyAdminPassword: async () => deny(),
@@ -164,7 +176,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
     tail = operation.then(() => undefined, () => undefined);
     return track(operation);
   };
-  let verification: { role: Role; snapshot?: CredentialState } | undefined;
+  let verification: { role: Role; snapshot?: CredentialState; shared?:boolean; snapshots?:Record<Role,CredentialState> } | undefined;
   type ReceiptState = CredentialState & { boot: string; expiresAtMonotonic: number };
   const receipts = new WeakMap<VerifiedCredential, ReceiptState>();
   let issuing = false, rotating = false;
@@ -211,8 +223,9 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
     // Startup is private and precedes session portals or request admission. Same
     // native handle, one consistent transaction, no manufactured Admin session.
     if (requiredSchema !== undefined) await owned.db.transaction().execute(requireSchema);
-    const gatewayTransaction = <T>(adapter: typeof contexts.ADMIN.adapter, work: () => Promise<T>) =>
-      runWithTransaction(adapter, async () => { await requireSchema(); const guard=()=>{available();if(!owned.inTransaction())deny();};if(requiredSchema===41)await assertSettingsLedgers(owned.scope(guard));const result = await work();if(requiredSchema===41)await assertSettingsLedgers(owned.scope(guard));await requireSchema(); return result; });
+    const gatewayTransaction = <T>(adapter: typeof contexts.ADMIN.adapter, work: () => Promise<T>,accountOnly=false) =>
+      runWithTransaction(adapter, async () => { await requireSchema();owned.reserve("ADMIN");let live=true; const guard=()=>{available();if(!live||!owned.inTransaction())deny();};try{const validate=accountOnly?assertAccountSettingsLedgers:assertSettingsLedgers;if(requiredSchema===41)await validate(owned.scope(guard,true));const result = await work();if(requiredSchema===41)await validate(owned.scope(guard,true));await requireSchema(); return result;}finally{live=false;} });
+    const accountTransaction=<T>(adapter:typeof contexts.ADMIN.adapter,work:()=>Promise<T>)=>gatewayTransaction(adapter,work,true);
     const makePortal = (role: Role) => betterAuth({
       baseURL: origins[role], secret: config.signingSecrets[role],
       database: { db: owned.db, type: "sqlite", transaction: true },
@@ -270,10 +283,15 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
         if (!current || local.getStore()) return deny();
         return enqueue(async () => {
           try {
-            return await gatewayTransaction(contexts[current.role].adapter, async () => {
+            return await accountTransaction(contexts[current.role].adapter, async () => {
               available();
               if (closing || verification !== current) return deny();
-              owned.run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?", [current.role]);
+              owned.reserve(current.role);
+              if(current.shared){
+                const snapshots={ADMIN:credentialState("ADMIN"),SALESPERSON:credentialState("SALESPERSON")};
+                if(current.snapshots&&roles.some(role=>!sameCredential(snapshots[role],current.snapshots![role])))return deny();
+                current.snapshots??=snapshots;
+              }
               const state = credentialState(current.role);
               // Equality here detects changed trusted SQL state, never verifies a password.
               if (current.snapshot && !sameCredential(state, current.snapshot)) return deny();
@@ -287,7 +305,9 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
       },
       verifyCredential: async (role, password) => {
         const current = verification;
-        if (!current || current.role !== role || !current.snapshot || typeof password !== "string" || closing || closed) return false;
+        if(!current||typeof password!=="string"||closing||closed)return false;
+        if(current.shared){if(!current.snapshots)return false;return local.run(true,()=>contexts[role].password.verify({hash:current.snapshots![role].hash,password}));}
+        if(current.role!==role||!current.snapshot)return false;
         // Actual pinned private Better Auth callback; no public API/checkPassword
         // lookup, default verifier, session issuance or client-selected hash.
         return local.run(true, () => contexts[role].password.verify({ hash: current.snapshot!.hash, password }));
@@ -329,6 +349,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
     };
     const receiptLive = (saved: ReceiptState) => {
       const tick = Math.floor(performance.now());
+      if(tick>=saved.expiresAtMonotonic){const events=channel("shop-pos.test.cash-proof-window");if(events.hasSubscribers)try{events.publish({stage:"PROOF_EXPIRED",tick,overdueMs:tick-saved.expiresAtMonotonic});}catch{/* Observers cannot alter denial. */}}
       if (!Number.isSafeInteger(tick) || tick < saved.expiresAtMonotonic - receiptLifetimeMs ||
           tick >= saved.expiresAtMonotonic || saved.boot !== boot) return deny();
       return tick;
@@ -362,9 +383,9 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
           // BEGIN; this capability must own its transaction and COMMIT boundary.
           if (owned.inTransaction() || await getCurrentAdapter(contexts[role].adapter) !== contexts[role].adapter) return deny();
           transactionStarted = true;
-          const response = await gatewayTransaction(contexts[role].adapter, async () => {
+          const response = await accountTransaction(contexts[role].adapter, async () => {
             available(); if (closing || !owned.inTransaction()) return deny();
-            owned.run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?", [role]);
+            owned.reserve(role);
             current(); // Holds writer from this read through registration COMMIT.
             const now = securityTime(), expires = int64(now + BigInt(sessionLifetimeSeconds * 1000));
             // JavaScript Date is used only after exact safe timestamp range validation.
@@ -409,7 +430,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
           if (transactionStarted && owned.inTransaction()) quarantine();
           else if (registered && created) {
             try {
-              await gatewayTransaction(contexts[role].adapter, async () => {
+              await accountTransaction(contexts[role].adapter, async () => {
                 if (!owned.inTransaction()) return deny();
                 owned.run("UPDATE auth_session_authorizations SET revoked_at_ms=created_at_ms " +
                   "WHERE session_id=? AND principal_id=? AND boot_generation=?", [created!.id, role, boot]);
@@ -450,9 +471,9 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
           });
           const session = verified ? boundSession(verified.session) : undefined;
           if (session && (session.userId !== role || session.roleBinding !== role || session.bootGeneration !== boot)) return deny();
-          await gatewayTransaction(contexts[role].adapter, async () => {
+          await accountTransaction(contexts[role].adapter, async () => {
             available(); if (!owned.inTransaction()) return deny();
-            owned.run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?", [role]);
+            owned.reserve(role);
             const now = securityTime(); provisioned(now);
             // Confirm registry availability for idempotent no-session logout too.
             owned.get("SELECT session_id FROM auth_session_authorizations LIMIT 0");
@@ -615,7 +636,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
         finally { rotating = false; }
       })());
     };
-    const execute = <T>(role: Role, request: Request, work: (tx: AuthorizedTransaction, actor: Actor) => Promise<T>) => {
+    const execute = <T>(role: Role, request: Request, work: (tx: AuthorizedTransaction, actor: Actor) => Promise<T>,readOnly=false) => {
       if (local.getStore() || closed || closing) return Promise.reject(new AuthorizationDenied());
       return enqueue(async () => {
         try {
@@ -632,18 +653,18 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
             // Kysely's supported SQLite transaction starts deferred. This no-change
             // UPDATE acquires the writer reservation BEFORE the authorization read,
             // excluding external revocation/check/write races through COMMIT.
-            owned.run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?", [role]);
+            owned.reserve(role);
             const actor = authority(role, session);
             let live = true;
             const guard = () => { available(); if (!live || !owned.inTransaction()) deny(); };
             try {
               return await local.run(true, async () => {
-                const result = await work(owned.scope(guard), actor);
+                const result = await work(owned.scope(guard,readOnly), actor);
                 guard(); authority(role, session); // Expiry/revocation before publication/commit.
                 return result;
               });
             } finally { live = false; }
-          });
+          },readOnly);
         } catch {
           quarantineIfNeeded();
           return deny();
@@ -744,7 +765,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
       return result;
     };
     const gateway: AuthorizationGateway = Object.freeze({
-      publicShopName:()=>{if(requiredSchema!==41||local.getStore()||closed||closing)return Promise.reject(new AuthorizationDenied());return enqueue(()=>owned.db.transaction().execute(async()=>{available();await requireSchema();const guard=()=>{available();if(!owned.inTransaction())deny();};const tx=owned.scope(guard);await assertSettingsLedgers(tx);const value=await currentSettings(tx);guard();await requireSchema();return value?.settings.shopName??null;}));},
+      publicShopName:()=>{if(requiredSchema!==41||local.getStore()||closed||closing)return Promise.reject(new AuthorizationDenied());return enqueue(()=>owned.db.transaction().execute(async()=>{available();await requireSchema();const guard=()=>{available();if(!owned.inTransaction())deny();};const tx=owned.scope(guard,true);await assertAccountSettingsLedgers(tx);const value=await currentSettings(tx);guard();await requireSchema();return value?.settings.shopName??null;}));},
       withFreshAdminTransaction:fresh,
       verifyAdminPassword: (password: unknown) => verify("ADMIN", password),
       verifySalespersonPassword: (password: unknown) => verify("SALESPERSON", password),
@@ -754,8 +775,8 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
       logoutSalesperson: (request: Request) => logout("SALESPERSON", request),
       rotateAdminPassword: (request: Request, proof: unknown, password: unknown, operation?:PasswordOperationKey) => rotate("ADMIN", request, proof, password, operation),
       rotateSalespersonPassword: (request: Request, proof: unknown, password: unknown, operation?:PasswordOperationKey) => rotate("SALESPERSON", request, proof, password, operation),
-      authorizeAdmin: (request: Request) => execute("ADMIN", request, async (_tx, actor) => actor),
-      authorizeSalesperson: (request: Request) => execute("SALESPERSON", request, async (_tx, actor) => actor),
+      authorizeAdmin: (request: Request) => execute("ADMIN", request, async (_tx, actor) => actor,true),
+      authorizeSalesperson: (request: Request) => execute("SALESPERSON", request, async (_tx, actor) => actor,true),
       withAdminTransaction: <T>(request: Request, work: (tx: AuthorizedTransaction, actor: Actor) => Promise<T>) => execute("ADMIN", request, work),
       withSalespersonTransaction: <T>(request: Request, work: (tx: AuthorizedTransaction, actor: Actor) => Promise<T>) => execute("SALESPERSON", request, work),
       close: () => closeGateway(),
@@ -769,6 +790,13 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
         issueAdminSession: gateway.issueAdminSession, issueSalespersonSession: gateway.issueSalespersonSession, authorizeAdmin: gateway.authorizeAdmin,
         authorizeSalesperson: gateway.authorizeSalesperson, logoutAdmin: gateway.logoutAdmin, logoutSalesperson: gateway.logoutSalesperson, close: gateway.close });
     }
+    sharedCredentialReaders.set(gateway,(password:unknown)=>{
+      if(typeof password!=="string"||password.length>256||Array.from(password).length<8||Array.from(password).length>128||Buffer.byteLength(password)>512||local.getStore()||closed||closing||verification||issuing||rotating)return Promise.reject(new AuthorizationDenied());
+      invalidateReceipt();const admitted=transition;
+      const current:{role:Role;snapshot?:CredentialState;shared?:boolean;snapshots?:Record<Role,CredentialState>}={role:"ADMIN",shared:true};verification=current;
+      return track((async()=>{try{const role=await attempts.verifySharedPassword(password);available();if(closing||admitted!==transition||!current.snapshots)return deny();current.role=role;return Object.freeze({role,receipt:issueReceipt(current.snapshots[role])});}catch{invalidateReceipt();return deny();}finally{verification=undefined;}})());
+    });
+    dependencyReaders.set(gateway,<T>(role:Role,request:Request,work:(tx:AuthorizedTransaction,actor:Actor)=>Promise<T>)=>execute(role,request,work,true));
     maintenanceGateways.set(gateway, maintenance);
     return gateway;
   } catch {

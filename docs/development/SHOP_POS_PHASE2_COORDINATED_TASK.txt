@@ -1,0 +1,166 @@
+# SHOP POS — COMPLETE PHASE 2 IN ONE COORDINATED EXECUTION
+
+Continue the EXISTING Shop POS at `D:\pos`. Never restart or rebuild the project.
+
+Act as Principal Architect, Windows Desktop Engineer, Security Engineer, Financial Systems Engineer and QA Lead.
+
+Read the complete attached SHOP POS Ultimate Engineering & Security Contract, project memory, AGENTS.md, module checklist, current completion matrix and latest verified Phase 1 reports.
+
+Verify Phase 1 checkpoint `28350e2`, actual Git state, historical migrations and unrelated working-tree files before changes.
+
+## MISSION
+
+Complete Phase 2: **Real Frontend–Backend–SQLite Integration + Windows 10/11 EXE + Installer + Receipt Printer + Performance + Comprehensive Development-Level Verification.**
+
+Include all relevant Phase 3 security, functional, financial, recovery and deployment checks NOW.
+
+The separate final independent A–Z audit is reserved for explicit owner request after development.
+
+**Do not stop at an arbitrary PARTIAL checkpoint while safe authorized work remains. Continue through implementation, fixes and verification. Stop only for genuine owner approval, safety blocker, unavailable essential hardware or execution limit.**
+
+### 1. COMPLETE REAL INTEGRATION
+
+Verify every actual UI workflow against authenticated APIs and persistent SQLite:
+
+Login, Admin/Salesperson roles, Products, Inventory, Sales, Invoices, Returns, Refunds, Expenses, Corrections, Dashboard, Revenue, Profit, Reports, Daily Closing, Cash, Settings and Backup/Restore.
+
+For each required action verify UI → validation → authentication → authorization → SQLite transaction → committed result → updated UI → downstream financial consistency → restart durability.
+
+Fix disconnected controls, demo-only paths, fake success states, missing persistence and incorrect reports. Preserve historical financial records and all approved PKR, stock, refund, expense, profit and cash rules.
+
+Do not redevelop already verified functionality.
+
+### 2. ABSOLUTE FRONTEND FREEZE
+
+The approved frontend design MUST remain unchanged without owner approval.
+
+Preserve layouts, typography, colors, spacing, themes, navigation, buttons, headers, branding and receipt design.
+
+Compare every affected screen with the original approved baseline. Record actual file diffs and relevant visual/browser regression evidence.
+
+Backend integration may update genuine data and required error/loading states, but must not silently redesign the UI.
+
+If visual preservation cannot be proven, report NOT VERIFIED rather than claiming success.
+
+### 3. COMPLETE WINDOWS DESKTOP APPLICATION
+
+Build a real standalone offline Shop POS executable and installer compatible with:
+
+- Windows 10 22H2 x64
+- Windows 11 x64
+
+Verify OS/runtime compatibility and support/security limitations separately. Do not assume testing on one OS proves the other.
+
+Package the EXISTING frontend, backend and SQLite using a secure maintainable architecture.
+
+Include correct Node/native SQLite runtime, application process lifecycle, single-instance handling, protected HTTPS loopback service, safe startup/shutdown, Admin/Salesperson boundaries and offline functionality.
+
+No VS Code, Codex, development server or internet required for normal shop operation.
+
+Keep databases, keys, configuration and backups in protected persistent locations outside replaceable application files.
+
+Implement and verify safe installation, restart, upgrades, uninstall/reinstall policy, database compatibility, backup-before-risky-update and recovery from failed upgrades.
+
+Never embed reusable production credentials, private keys or backup recovery secrets in distributed binaries.
+
+Use the verified patched runtime where required. Review package integrity, commercial licenses, dependencies and Windows signing/trust strategy.
+
+Test the ACTUAL packaged application and installer, not only Next.js builds.
+
+### 4. FINISH SECURITY DEPENDENCIES WHEN ENCOUNTERED
+
+Reuse Phase 1's verified security/recovery implementation.
+
+If any unfinished security prerequisite is discovered during integration or packaging, IMPLEMENT and TEST it at that point before proceeding with the dependent operation.
+
+Do not bypass, disable, postpone or silently accept incomplete CURRENT/generation admission, writer fencing, persistent restore, enrollment, TLS, recovery custody, authentication or financial protection.
+
+Ask for approval only for genuinely new material security architecture, key custody, irreversible changes or real production decisions. Group related approvals once. Continue independent safe work while awaiting an unrelated decision.
+
+Production remains DISABLED. Use disposable TEST identities and data. No real shop enrollment or production activation without explicit approval.
+
+### 5. RECEIPT PRINTER
+
+Integrate genuine saved invoices with ordinary Windows printing and 80mm thermal receipt support.
+
+Verify correct branding, items, quantities, discounts, totals, invoice versions, reprints, printer failure and retry handling.
+
+Printing/reprinting must never duplicate financial transactions.
+
+Preserve approved receipt layout. Test print output programmatically; mark physical printer acceptance BLOCKED until a real device is tested.
+
+### 6. PERFORMANCE AND RELIABILITY
+
+Investigate and improve known 50k-record latency in cash counting, Daily Closing and invoice search/detail.
+
+Profile actual bottlenecks; measure consistent 1k/10k/50k scenarios, RAM use, SQLite locking and packaged-app behavior.
+
+Never weaken financial validation, auditing, authorization or test assertions for speed.
+
+Address crash/restart, UNKNOWN COMMIT, duplicate requests, concurrent stock changes, disk failures, interrupted updates, offline operation and backup/restore integrity.
+
+Record actual before/after results and remaining capacity limits.
+
+### 7. INCLUDE PHASE 3-LEVEL CHECKS DURING PHASE 2
+
+Perform comprehensive development-level verification of:
+
+- All screens and real frontend/API/database connections.
+- Endpoint security, RBAC, IDOR, CSRF, XSS, injection and data exposure.
+- Login/session/credential handling and role isolation.
+- Exact financial calculations and cross-module reconciliation.
+- Inventory, invoices, refunds, corrections, expenses, profit and cash.
+- Migration, backup, restored financial records and recovery provenance.
+- Crash recovery, concurrent writes and original-key idempotency.
+- Installer, upgrade, reinstall, offline operation and persistent data.
+- Packaged-runtime security and secret/dependency scanning.
+- Print correctness and failure behavior.
+- Windows 10/11 compatibility and realistic performance.
+- Frozen frontend design preservation.
+
+Use focused actual SQLite/HTTPS/Chromium/native Windows tests during implementation, plus an appropriately scoped integrated regression before declaring Phase 2 complete.
+
+Do not repeat previously verified suites without a real regression reason. Do not fabricate hardware tests, dismiss failures or substitute mocks for required real integration evidence.
+
+**This is development verification, NOT the separate final independent Phase 3 audit.**
+
+### 8. EXECUTION, APPROVALS AND USAGE
+
+The owner has limited Codex usage and wants Phase 2 completed as efficiently as safely possible.
+
+- Inspect relevant files only and reuse existing evidence.
+- Execute related work sequentially, minimizing heavy parallel builds on the Windows laptop.
+- Fix actual defects instead of generating endless reports.
+- Continue approved tasks automatically after safe checkpoints.
+- Do not stop merely because one submodule passes.
+- If interrupted, preserve exact implementation state, failed-operation identities, current blockers and next steps for safe resumption.
+- No repeated uncertain financial operations or migrations.
+- Preserve approved frontend, all business data, migrations, backups, secrets, Git history and unrelated working-tree changes.
+- Safe reviewed LOCAL Git commits after coherent verified milestones.
+- No blind staging, push, reset, clean, stash, WSL, Docker, VM or unauthorized OS-security/driver changes.
+- Never skip necessary security tests merely to save usage.
+
+### 9. FINAL PHASE 2 EXIT CRITERIA
+
+Before reporting Phase 2 COMPLETE, require:
+
+1. All mandatory real frontend/API/SQLite integration verified.
+2. Approved frontend preserved with evidence.
+3. Working Windows EXE and installer built and tested on available compatible Windows environment.
+4. Secure packaged-runtime lifecycle, database persistence, offline operation and recovery verified.
+5. Receipt-printing implementation verified; physical limitations disclosed.
+6. No unresolved known Critical/High security, financial-integrity or data-loss defects.
+7. Material performance issues measured, addressed or explicitly assessed against approved acceptance criteria.
+8. Relevant functional, security, financial and regression tests PASS.
+9. Complete requirement/status register with PASS, FAIL, BLOCKED and NOT VERIFIED.
+10. Safe LOCAL Git checkpoint and exact packaged artifact locations.
+
+Do not claim Windows 11 physical PASS from Windows 10 testing, or physical printer/replacement-PC PASS from simulation.
+
+**Deliver the working application, not merely documentation.**
+
+If a genuine blocker remains, explain its exact technical cause and preserve safe progress. Continue all other authorized work. Never falsely mark Phase 2 complete.
+
+**STOP after Phase 2. DO NOT perform the separate independent Phase 3 A–Z audit or activate production.**
+
+**START FROM THE VERIFIED PHASE 1 CHECKPOINT. IMPLEMENT → CONNECT → PACKAGE → TEST → FIX → VERIFY → CHECKPOINT.**

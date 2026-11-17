@@ -1,3 +1,4 @@
+import {bindDependencyReads} from "../auth/gateway";
 ﻿import "server-only";
 import type {IncomingMessage,ServerResponse} from "node:http";
 import type {AuthorizationGateway} from "../auth/types";
@@ -17,6 +18,7 @@ export function createInvoicesDispatcher(gateway:AuthorizationGateway,schema:39|
  const bad=inventoryRequestHeaders(req,c,mutate,false,role,65536);if(bad){send(bad,{error:"Invoice unavailable."});return;}
  const request=inventorySessionRequest(req,c),live=()=>{if(!c.isLive()||req.aborted||res.destroyed)throw Error();};
  const guarded:AuthorizationGateway={...gateway,withAdminTransaction:(r,w)=>gateway.withAdminTransaction(r,async(t,a)=>{live();const v=await w(t,a);live();return v;}),withSalespersonTransaction:(r,w)=>gateway.withSalespersonTransaction(r,async(t,a)=>{live();const v=await w(t,a);live();return v;}),withFreshAdminTransaction:(r,proof,w)=>gateway.withFreshAdminTransaction(r,proof,async(t,a)=>{live();const v=await w(t,a);live();return v;})};
+ bindDependencyReads(gateway,guarded,live);
  const api=createInvoicesService(guarded,schema),ctx=()=>{const v=req.headers["x-invoice-context"];if(typeof v!=="string"||!/^[0-9a-f]{64}$/.test(v))throw new InvoiceError();return v;};
  try{try{await (role==="ADMIN"?gateway.authorizeAdmin(request):gateway.authorizeSalesperson(request));}catch{send(403,{error:"Invoice unavailable."});return;}const allowed=p==="/api/admin/invoices/history"?["from","to","query","cursor"]:detail.test(p)?["before"]:[];const seen=new Set<string>();for(const k of url.searchParams.keys()){if(!allowed.includes(k)||seen.has(k))throw new InvoiceError();seen.add(k);}let result:unknown;
  if(p==="/api/admin/invoices/context")result=await api.context(request);

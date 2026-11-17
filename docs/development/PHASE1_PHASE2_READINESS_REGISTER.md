@@ -1,3 +1,7 @@
+> CURRENT17 November: TEST11 targeted native setup-policy feedback and installed product/sale/restart PASS; TEST10 backend/frontend/dependency evidence reused by exact byte proof. Owner manual initial setup/walkthrough and production external gates remain OPEN. Current installer/checksum: PHASE2_TEST_DELIVERY_STATUS.md. Earlier dated notes below are retained history.
+
+ > CURRENT17 November2026: TEST10 listed available-machine checks PASS; Phase3 final production signoff OPEN/NO-GO. Physical printer, clean Windows11/client, independent custody/replacement-device acceptance, representative-data capacity and historical startup incident limits remain open. See docs/development/PHASE2_TEST_DELIVERY_STATUS.md and PHASE3_AUDIT_STATUS.md. Earlier dated statements below are historical.
+
 # Phase1 + Phase2 requirement-to-evidence register
 
 Current15 November2026: PHASE1 CODE-LEVEL PASS in the approved disposable TEST scope. Physical/owner acceptance remains BLOCKED/NOT VERIFIED and production DISABLED. Phase2/3 NOT STARTED and not authorized in this run. Current evidence: [final Phase1 report](PHASE1_SECURITY_RECOVERY_FINAL_REPORT.md) and [protected recovery runbook](PHASE1_PROTECTED_RECOVERY_RUNBOOK.md). Final code commit/checks are recorded in phase1-final-local-checkpoint.json/live Git (parent19acb9b). Earlier dated checkpoints below are historical where superseded.

@@ -25,6 +25,7 @@ export interface LocalTlsMaterial {
   readonly certificate: Buffer;
   readonly trustAnchor: Buffer;
 }
+export type HostDrainStage="HTTP_STOPPED"|"HTTP_AUTH_PENDING"|"HTTP_BUSINESS_PENDING"|"HTTP_PAGE_PENDING"|"HTTP_HEALTH_PENDING"|"HTTP_HANDLERS_DRAINED"|"HTTP_SOCKETS_CLOSED"|"HTTP_LISTENER_CLOSED";
 export type LocalOrigins = Readonly<Record<Role, string>>;
 export interface LocalRequestContext { readonly role: Role; readonly origin: string; readonly isLive: () => boolean }
 type Handler = (request: IncomingMessage, response: ServerResponse, context: LocalRequestContext) => Promise<void>;
@@ -81,11 +82,12 @@ function respond(response: ServerResponse, status: number) {
 
 // Internal transport, NOT a gateway/role authorization capability. No HTTP
 // backend, proxy, redirects, auth endpoint, upgrade or forwarded transport trust.
-export function createLocalHttpsHost(port: number, origins: LocalOrigins, tls: LocalTlsMaterial, handler: Handler, authentication?: Handler, inventory?: Handler, pages?: Handler) {
+export function createLocalHttpsHost(port: number, origins: LocalOrigins, tls: LocalTlsMaterial, handler: Handler, authentication?: Handler, inventory?: Handler, pages?: Handler, onDrainStage?: (stage:HostDrainStage)=>void) {
   assertPatchedLocalRuntime();
   const m = material(tls);
   let stopping = false, listening = false;
-  const sockets = new Set<Duplex>(), active = new Set<Promise<void>>();
+  const sockets = new Set<Duplex>(), active = new Set<Promise<void>>(),kinds=new Map<Promise<void>,HostDrainStage>();
+  const report=(stage:HostDrainStage)=>{try{onDrainStage?.(stage);}catch{/* Observation never alters drain. */}};
   const server = https.createServer({
     key: m.key, cert: m.cert, minVersion: "TLSv1.2", maxHeaderSize: 8192,
     handshakeTimeout: 5000, requestTimeout: 10000, headersTimeout: 5000,
@@ -134,7 +136,7 @@ export function createLocalHttpsHost(port: number, origins: LocalOrigins, tls: L
     const finished = new Promise<void>(resolve => { response.once("finish", resolve); response.once("close", resolve); });
     const work = Promise.resolve().then(() => dispatch(request, response, context)).catch(() => respond(response, 503));
     const task = Promise.allSettled([finished, work]).then(() => {});
-    active.add(task); void task.finally(() => active.delete(task));
+    active.add(task);kinds.set(task,authPath?"HTTP_AUTH_PENDING":inventoryPath?"HTTP_BUSINESS_PENDING":pagePath?"HTTP_PAGE_PENDING":"HTTP_HEALTH_PENDING");void task.finally(() => {active.delete(task);kinds.delete(task);});
   });
   m.key.fill(0); m.cert.fill(0); m.ca.fill(0);
   server.maxHeadersCount = 64;
@@ -166,10 +168,12 @@ export function createLocalHttpsHost(port: number, origins: LocalOrigins, tls: L
     close() {
       closed ??= (async () => {
         stopping = true; // Synchronous admission stop, including existing keep-alive sockets.
+        report("HTTP_STOPPED");for(const kind of new Set(kinds.values()))report(kind);
         const stopped = listening ? new Promise<void>((resolve, fail) => server.close(error => error ? fail(new LocalRuntimeRejected()) : resolve())) : Promise.resolve();
         await Promise.allSettled([...active]); // Never tear down an admitted handler/write.
+        report("HTTP_HANDLERS_DRAINED");
         for (const socket of sockets) socket.destroy(); // Idle/incomplete TLS only after drain.
-        await stopped;
+        report("HTTP_SOCKETS_CLOSED");await stopped;report("HTTP_LISTENER_CLOSED");
       })();
       return closed;
     },

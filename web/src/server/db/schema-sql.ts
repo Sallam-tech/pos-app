@@ -5,9 +5,12 @@ import "server-only";
 export function schemaTokens(sql: string): string {
   if (typeof sql !== "string" || sql.length > 65536 || sql.includes("\0")) throw new Error("Invalid schema text.");
   const tokens: string[] = [];
+  // Exact ASCII predicates from the original regular expressions; all quoted
+  // text, comments, bounds and rejection paths remain unchanged.
+  const word=(n:number)=>n>=48&&n<=57||n>=65&&n<=90||n>=97&&n<=122||n===95;
   for (let i = 0; i < sql.length;) {
     const c = sql[i];
-    if (/[ \t\n\r\f]/.test(c)) { i++; continue; }
+    if (c === " " || c === "\t" || c === "\n" || c === "\r" || c === "\f") { i++; continue; }
     if (sql.startsWith("--", i)) { const end = sql.indexOf("\n", i + 2); i = end < 0 ? sql.length : end + 1; continue; }
     if (sql.startsWith("/*", i)) {
       const end = sql.indexOf("*/", i + 2); if (end < 0) throw new Error("Unclosed schema comment.");
@@ -23,8 +26,8 @@ export function schemaTokens(sql: string): string {
       }
       if (!closed) throw new Error("Unclosed schema token.");
       tokens.push(sql.slice(start, i));
-    } else if (/[a-zA-Z_0-9]/.test(c)) {
-      const start = i++; while (i < sql.length && /[a-zA-Z_0-9$]/.test(sql[i])) i++;
+    } else if (word(sql.charCodeAt(i))) {
+      const start = i++; while (i < sql.length && (word(sql.charCodeAt(i)) || sql.charCodeAt(i)===36)) i++;
       tokens.push(sql.slice(start, i).toLowerCase());
     } else {
       const pair = sql.slice(i, i + 2);

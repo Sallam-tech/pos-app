@@ -1,4 +1,4 @@
-﻿import { randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -280,7 +280,7 @@ describe("Owner-requested native audit guard review; candidate SQL only", () => 
  });
  it("keeps review fixture outside the application migration directory and contains exactly seventeen reviewed programs", () => {
   expect(programs).toHaveLength(17); expect(original).toHaveLength(13);
-  expect(readdirSync(source).filter(f => f.endsWith(".sql"))).toHaveLength(35);
+  expect(readdirSync(source).filter(f => /^\d{4}_.*\.sql$/.test(f)).map(f=>Number(f.slice(0,4))).sort((a,b)=>a-b)).toEqual(Array.from({length:41},(_,i)=>i+1));
   expect(readdirSync(legacy18).filter(f=>f.endsWith(".sql"))).toHaveLength(18);
   expect(programs.map(p => p.name.slice(0, 4))).toEqual(Array.from({ length: 17 }, (_, i) => String(i + 19).padStart(4, "0")));
  });

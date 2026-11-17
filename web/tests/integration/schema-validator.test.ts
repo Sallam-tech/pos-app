@@ -9,7 +9,6 @@ import { validateReviewedSchema, type ReviewedSchemaVersion } from "../../src/se
 import { schemaTokens } from "../../src/server/db/schema-sql";
 import { openAsyncOwner } from "../../src/server/auth/database";
 import { openAuthorizationGateway } from "../../src/server/auth/gateway";
-import { runTrustedFirstRunSetup } from "../../src/server/auth/provision";
 import type { AuthorizationConfiguration, AuthorizationGateway, AuthorizedTransaction, Role } from "../../src/server/auth/types";
 import { createInventoryService } from "../../src/server/inventory/service";
 const probe = vi.hoisted(() => ({ badManifest: false }));
@@ -43,10 +42,12 @@ function fixture(version: ReviewedSchemaVersion = 18) {
 beforeAll(() => {
  mkdirSync(auth8);
  for (const name of readdirSync(source).filter(n => /^000[1-8]_/.test(n))) copyFileSync(path.join(source, name), path.join(auth8, name));
+ const inventory18=path.join(run,"inventory18");mkdirSync(inventory18);
+ for(const name of readdirSync(source).filter(n=>/^\d{4}_/.test(n)&&Number(n.slice(0,4))<=18))copyFileSync(path.join(source,name),path.join(inventory18,name));
  for (const version of [8, 18]) {
   const directory = path.join(run, "base" + version); mkdirSync(directory);
   const db = openDatabase({ ...configuration(directory, version).database, create: true });
-  try { expect(applyMigrations(db, version === 8 ? auth8 : source).version).toBe(BigInt(version)); }
+  try { expect(applyMigrations(db, version === 8 ? auth8 : inventory18).version).toBe(BigInt(version)); }
   finally { db.close(); }
   bases.set(version, path.join(directory, "test.sqlite3"));
  }
@@ -221,20 +222,11 @@ describe("B2 Part3 metadata failures and real authorization preservation", () =>
   expect(result).toEqual({ ok: true, version: 18, scope: "SCHEMA_AND_HISTORY_ONLY" });
  });
  it("preserves real auth/inventory data under the same signed-cookie Admin gateway; anonymous and Salesperson cannot invoke it", async () => {
-  const directory = mkdtempSync(path.join(run, "enrolled-")); copyFileSync(bases.get(8)!, path.join(directory, "test.sqlite3"));
-  const passwords = { ADMIN: randomBytes(18).toString("base64url"), SALESPERSON: randomBytes(18).toString("base64url") };
-  await runTrustedFirstRunSetup(configuration(directory, 8), async () => passwords);
-  let db = openDatabase(configuration(directory, 8).database);
-  try {
-   db.transaction(tx => { tx.run("INSERT INTO auth_enrollment_binding VALUES(?,?,?,?,?,?,?)", [BigInt(1), BigInt(1), BigInt(1), randomUUID(), randomUUID(), randomUUID(), "0".repeat(64)]); });
-   // Non-authorizing disposable TEST binding only; no vault/anchor or production enrollment.
-   expect(applyMigrations(db, source).version).toBe(BigInt(18));
-  } finally { db.close(); }
-  const origins = { ADMIN: "https://localhost:9773", SALESPERSON: "https://127.0.0.1:9773" };
-  const signingSecrets = { ADMIN: randomBytes(48).toString("base64url"), SALESPERSON: randomBytes(48).toString("base64url") };
-  const config: AuthorizationConfiguration = { ...configuration(directory, 18), origins, signingSecrets, sessionLifetimeSeconds: 3600 };
-  const gateway = await openAuthorizationGateway(config); gateways.push(gateway);
-  const sensitive = [...Object.values(passwords), ...Object.values(signingSecrets)];
+  const fixtureModule=await import("../helpers/inventory-http-fixture");await fixtureModule.initialize();
+  const fresh=await fixtureModule.fixture(),config:AuthorizationConfiguration=fresh.config.authorization;
+  const directory=config.database.directory,passwords=fixtureModule.passwords,origins=config.origins,signingSecrets=config.signingSecrets;
+  const gateway=await openAuthorizationGateway(config,35);gateways.push(gateway);
+  const sensitive=[...Object.values(passwords),...Object.values(signingSecrets) ];
   async function login(role: Role) {
    const proof = await (role === "ADMIN" ? gateway.verifyAdminPassword(passwords.ADMIN) : gateway.verifySalespersonPassword(passwords.SALESPERSON));
    const response = await (role === "ADMIN" ? gateway.issueAdminSession(proof) : gateway.issueSalespersonSession(proof));
@@ -250,7 +242,7 @@ describe("B2 Part3 metadata failures and real authorization preservation", () =>
   const product = await inventory.createProduct(admin, { requestKey: randomUUID(), name: "TEST schema sentinel", unit: "PACK", buyingPricePaisa: "1250", sellingPricePaisa: "1800", sellingActive: true, openingQuantity: "5", lowStockThreshold: "2" });
   await inventory.receiveStock(admin, { requestKey: randomUUID(), productId: product.product.id, expectedProductVersion: product.product.productVersion,
    expectedBalanceVersion: product.product.balanceVersion, quantity: "2", unitBuyingPricePaisa: "1250", reason: "TEST receipt" });
-  db = openDatabase(configuration(directory, 18).database);
+  const db = openDatabase(config.database);
   try {
    const tables = ["auth_users", "auth_credentials", "auth_principals", "auth_provisioning", "auth_enrollment_binding", "auth_session_authorizations", "auth_login_attempts", "schema_migrations",
     "products", "stock_balances", "inventory_operations", "stock_movements", "product_events", "product_identifiers"];
@@ -258,8 +250,8 @@ describe("B2 Part3 metadata failures and real authorization preservation", () =>
    const before = snapshot(); const calls: string[] = [];
    const result = await gateway.withAdminTransaction(admin, async tx => validateReviewedSchema({
     async get(...args) { calls.push(args[0]); return tx.get(...args); }, async all(...args) { calls.push(args[0]); return tx.all(...args); },
-   }, 18));
-   expect(result).toEqual({ ok: true, version: 18, scope: "SCHEMA_AND_HISTORY_ONLY" }); expect(calls.every(c => c.startsWith("SELECT "))).toBe(true);
+   }, 35));
+   expect(result).toEqual({ ok: true, version: 35, scope: "SCHEMA_AND_HISTORY_ONLY" }); expect(calls.every(c => c.startsWith("SELECT "))).toBe(true);
    expect(snapshot() === before).toBe(true); expect(db.all("SELECT * FROM pragma_foreign_key_check")).toEqual([]);
    const ledger = db.all("SELECT before_q,delta_q,after_q FROM stock_movements WHERE product_id=? ORDER BY balance_version", [product.product.id]);
    expect(ledger).toHaveLength(2); expect(ledger[0]).toEqual({ before_q: BigInt(0), delta_q: BigInt(5000000), after_q: BigInt(5000000) });

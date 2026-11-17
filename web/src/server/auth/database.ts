@@ -1,4 +1,9 @@
 import "server-only";
+import {createReadStatements} from "./read-statements";
+import {createNativeInputJournal,reviewedMetadataTarget,type GuardInputs} from "./native-input-journal";
+import {cashObjects} from "../db/cash-program";
+import {storedTriggerSql} from "../db/inventory-trigger-policy";
+import {schemaTokens} from "../db/schema-sql";
 import { protectedRestoredHistory } from "../backup/protected-history";
 import { assertProtectedWriterAdmission } from "../bootstrap/writer-admission";
 import {restoredHistory,verifyHistoricalPrefixes,type HistoricalSettings} from "../backup/service";
@@ -56,6 +61,22 @@ const leaseOwners = new WeakMap<object, object>();
 // native owner can supply it; structural readers and expired scopes fail closed.
 const fileScopes = new WeakMap<object, () => string>();
 const restoredScopes = new WeakMap<object, () => Promise<readonly HistoricalSettings[]>>();
+// Registration stays private to the native owner. These receipts confer NO
+// authorization; only a guard's private WeakMap retains one after its full scan.
+declare const guardInputsBrand:unique symbol;
+export interface GuardInputPoint {readonly [guardInputsBrand]:true}
+const inputScopes=new WeakMap<object,{capture(kind:GuardInputs):object|undefined;unchanged(point:object,kind:GuardInputs,noWrites:boolean):boolean;resume(kind:GuardInputs,owner:object):boolean;retain(point:object,kind:GuardInputs,owner:object):void}>();
+const inputPoints=new WeakMap<object,{scope:object;kind:GuardInputs;point:object}>();
+export function captureGuardInputs(scope:object,kind:GuardInputs):GuardInputPoint|undefined{
+ const point=inputScopes.get(scope)?.capture(kind);if(!point)return;
+ const proof=Object.freeze({}) as GuardInputPoint;inputPoints.set(proof,{scope,kind,point});return proof;
+}
+export function guardInputsUnchanged(scope:object,kind:GuardInputs,proof:GuardInputPoint,noWrites=false):boolean{
+ const saved=inputPoints.get(proof);return !!saved&&saved.scope===scope&&saved.kind===kind&&!!inputScopes.get(scope)?.unchanged(saved.point,kind,noWrites);
+}
+// Guard-only continuation; no callback, data, Actor, session or proof is extended.
+export function resumeGuardInputs(scope:object,kind:GuardInputs,owner:object):boolean{return inputScopes.get(scope)?.resume(kind,owner)??false;}
+export function retainGuardInputs(scope:object,kind:GuardInputs,proof:GuardInputPoint,owner:object):void{const p=inputPoints.get(proof);if(p?.scope===scope&&p.kind===kind)inputScopes.get(scope)?.retain(p.point,kind,owner);}
 export async function restoredSettingsHistory(scope:AuthorizedTransaction):Promise<readonly HistoricalSettings[]>{const read=restoredScopes.get(scope);if(!read)return deny();return read();}
 export function authorizedFileNamespace(scope: AuthorizedTransaction): string {
   const read = fileScopes.get(scope); if (!read) return deny(); return read();
@@ -92,7 +113,10 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
   const native = new Constructor(location.filename, { timeout: location.busyTimeoutMs, fileMustExist: true });
   let generation = {}, closingReads = false, boundLease: BootstrapLease | undefined;
   const ownerIdentity = {};
-  const invalidate = () => { generation = {}; };
+  let reservedGeneration:object|undefined;
+  let journal:ReturnType<typeof createNativeInputJournal>|undefined;let continuations=new WeakMap<object,{kind:GuardInputs;point:object}>();
+  const preparedReads=createReadStatements((sql:string)=>native.prepare(sql).safeIntegers(true),()=>native.open&&native.inTransaction&&reservedGeneration===generation&&!closingReads);
+  const invalidate = () => { preparedReads.clear();generation = {}; journal=undefined;continuations=new WeakMap(); };
   const releaseLeaseOwner = () => { if (boundLease && leaseOwners.get(boundLease) === ownerIdentity) leaseOwners.delete(boundLease); };
   const sameFile = () => {
     const current = lstatSync(resolveDatabaseLocation(options).filename, { bigint: true });
@@ -110,10 +134,16 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
         native.pragma("quick_check", { simple: true }) !== "ok") deny();
     // Bounded64MiB SQLite page cache for the approved TEST38/39 report books. This is native
     // coherent page storage, never a cache of authorization/validation results.
-    if(options.mode==="test"&&[38,39,40,41].includes(native.pragma("user_version",{simple:true}) as number)){native.pragma("cache_size=-65536");if(native.pragma("cache_size",{simple:true})!==-65536)deny();}
+    if(options.mode==="test"&&[38,39,40,41].includes(native.pragma("user_version",{simple:true}) as number)){native.pragma("cache_size=-131072");if(native.pragma("cache_size",{simple:true})!==-131072)deny();
+      // Native read-only page mapping avoids redundant OS/page-cache copies.
+      // SQLite still reads the current snapshot/WAL and writes through FULL WAL;
+      // every authorization, row/hash guard and native file fence remains fresh.
+      native.pragma("mmap_size=536870912");const mapped=native.pragma("mmap_size",{simple:true});
+      // Unsupported VFS/builds may retain zero; that is the original safe I/O path.
+      if(typeof mapped!=="number"||!Number.isSafeInteger(mapped)||mapped<0||mapped>536870912)deny();}
     // Pure, direct-only Unicode text folding for admitted TEST report/history
     // searches. No SQL, I/O, authorization or persisted schema capability.
-    if(options.mode==="test"&&[38,39,40,41].includes(native.pragma("user_version",{simple:true}) as number))native.function("pos_lower",{deterministic:true,directOnly:true},value=>typeof value==="string"?value.toLowerCase():null);
+    if(options.mode==="test"&&[36,37,38,39,40,41].includes(native.pragma("user_version",{simple:true}) as number))native.function("pos_lower",{deterministic:true,directOnly:true},value=>typeof value==="string"?value.toLowerCase():null);
     // Pinned adapter converts boolean columns only when they are JS Numbers.
     // Its tables contain only 0/1 numeric fields. All authorization/business SQL
     // below opts into safeIntegers per statement; no financial Number reads.
@@ -139,27 +169,66 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
     db = new Kysely({ dialect: new SqliteDialect({ database: dialectDatabase }) });
     const get = (sql: string, values: readonly SqlValue[] = []): SqlRow | undefined => {
       if (!/^\s*(?:SELECT|WITH)\b/i.test(sql)) return deny();
-      const s = native.prepare(sql).safeIntegers(true);
+      const s = preparedReads.read(sql);
       if (!s.readonly) return deny();
-      const row = s.get(bindings(values)); return row === undefined ? undefined : asRow(row);
+      try{const row = s.get(bindings(values)); return row === undefined ? undefined : asRow(row);}catch(error){preparedReads.clear();throw error;}
     };
     const all = (sql: string, values: readonly SqlValue[] = []): SqlRow[] => {
       if (!/^\s*(?:SELECT|WITH)\b/i.test(sql)) return deny();
-      const s = native.prepare(sql).safeIntegers(true);
+      const s = preparedReads.read(sql);
       if (!s.readonly) return deny();
-      return s.all(bindings(values)).map(asRow);
+      try{return s.all(bindings(values)).map(asRow);}catch(error){preparedReads.clear();throw error;}
     };
-    const run = (sql: string, values: readonly SqlValue[] = []) => {
+    const rawRun = (sql: string, values: readonly SqlValue[] = []) => {
+      preparedReads.clear(); // Every attempted write, including failures/no-effect writes.
       if (!/^\s*(?:INSERT|UPDATE|DELETE)\b/i.test(sql)) return deny();
-      const result = native.prepare(sql).safeIntegers(true).run(bindings(values));
+      const before=get("SELECT total_changes() AS n")?.n,result = native.prepare(sql).safeIntegers(true).run(bindings(values));
       if (typeof result.changes !== "number" || !Number.isSafeInteger(result.changes) || result.changes < 0) return deny();
+      const after=get("SELECT total_changes() AS n")?.n;
+      // A real write on THIS handle inside this generation proves SQLite's
+      // writer reservation; transaction controls invalidate the generation.
+      if(native.inTransaction&&result.changes>0&&typeof before==="bigint"&&typeof after==="bigint"&&after-before>=BigInt(result.changes))reservedGeneration=generation;
       return { changes: BigInt(result.changes) };
     };
-    const scope = (guard: () => void): AuthorizedTransaction => {
+      const observe=()=>{
+        if(!native.open||!native.inTransaction||closingReads||reservedGeneration!==generation)return deny();sameFile();
+        if(config.protectedAdmission)assertProtectedWriterAdmission(config.protectedAdmission,options,undefined,true);
+        const row=get("SELECT total_changes() AS n,(SELECT schema_version FROM pragma_schema_version) AS s"),temp=asRow(native.prepare("PRAGMA temp.schema_version").safeIntegers(true).get([]));
+        if(!row||typeof row.n!=="bigint"||typeof row.s!=="bigint"||typeof temp.schema_version!=="bigint")return deny();
+        if(all("SELECT name FROM pragma_database_list").some(r=>r.name!=="main"&&r.name!=="temp")||get("SELECT name FROM temp.sqlite_schema LIMIT 1"))return deny();
+        const sidecars=["-wal","-shm"].map(suffix=>{const st=lstatSync(location.filename+suffix,{bigint:true});if(!st.isFile()||st.isSymbolicLink()||st.nlink!==BigInt(1))return deny();return [st.dev.toString(),st.ino.toString()];}).flat().join(":");
+        return {changes:row.n,schema:row.s,tempSchema:temp.schema_version,identity:sidecars,generation};
+      };
+      const reviewInsert=(table:string)=>{
+        // Compare ALL actual target triggers/table SQL with pinned reviewed
+        // programs. The reviewed INSERT triggers only read/RAISE, never write.
+        const expected=cashObjects(),actual=all("SELECT name,type,tbl_name,sql FROM main.sqlite_schema WHERE tbl_name=? AND type IN ('table','trigger')",[table]);
+        const definitions=[...expected.entries()].filter(([,o])=>o.table===table&&(o.type==="table"||o.type==="trigger"));
+        return definitions.length===actual.length&&actual.every(r=>{const e=expected.get(String(r.name));return e&&e.table===table&&e.type===r.type&&typeof r.sql==="string"&&(r.type==="trigger"?storedTriggerSql(r.sql)===storedTriggerSql(e.sql):schemaTokens(r.sql)===schemaTokens(e.sql));});
+      };
+    const run=(sql:string,values:readonly SqlValue[]=[])=>{if(!journal)return rawRun(sql,values);
+          const table=reviewedMetadataTarget(sql),absent=table&&values.length>0&&!get("SELECT id FROM main."+table+" WHERE id=?",[values[0]]);
+          return journal.mutate(sql,()=>rawRun(sql,values),(target,result)=>{
+            // total_changes==1 PLUS an absent-before, exact complete new row
+            // proves the sole native effect belongs to this reviewed table.
+            // Same-count redirected or fabricated writes cannot establish reuse.
+            if(!absent||result.changes!==BigInt(1))return false;
+            const columns=all("SELECT name FROM pragma_table_info(?)",[target]),row=get("SELECT * FROM main."+target+" WHERE id=?",[values[0]]);
+            return !!row&&columns.length===values.length&&columns.every((column,i)=>row[String(column.name)]===values[i]);
+          });
+    };
+    const reserve=(role:string)=>{if(reservedGeneration!==generation){if(run("UPDATE auth_principals SET auth_epoch=auth_epoch WHERE id=?",[role]).changes!==BigInt(1))return deny();}};
+    const scope = (guard: () => void,readOnly=false): AuthorizedTransaction => {
       const transaction = Object.freeze({
         async get(sql: string, values: readonly SqlValue[] = []) { guard(); return get(sql, values); },
         async all(sql: string, values: readonly SqlValue[] = []) { guard(); return all(sql, values); },
-        async run(sql: string, values: readonly SqlValue[] = []) { guard(); return run(sql, values); },
+        async run(sql:string,values:readonly SqlValue[]=[]){guard();if(readOnly)return deny();return run(sql,values);},
+      });
+      inputScopes.set(transaction,{
+        capture(kind){guard();if(options.mode!=="test"||reservedGeneration!==generation)return;const version=get("SELECT user_version FROM pragma_user_version")?.user_version;if(version!==BigInt(40)&&version!==BigInt(41))return;journal??=createNativeInputJournal(observe,reviewInsert);return journal.capture(kind);},
+        unchanged(point,kind,noWrites){guard();return !!journal&&journal.unchanged(point,kind,noWrites);},
+        resume(kind,owner){guard();const saved=continuations.get(owner);return saved?.kind===kind&&!!journal&&journal.unchanged(saved.point,kind); },
+        retain(point,kind,owner){guard();if(journal?.unchanged(point,kind,true))continuations.set(owner,{kind,point});}
       });
       fileScopes.set(transaction, () => {
         guard(); if ((options.mode !== "test" && !config.protectedAdmission) || !native.open || !native.inTransaction || closingReads) return deny();
@@ -202,7 +271,7 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
       sameFile();
       return Object.freeze({ filename: location.filename.toLowerCase(), device: String(identity.dev), inode: String(identity.ino) });
     };
-    return { db, get, all, run, scope, withBootstrapReadScope, fileIdentity, inTransaction: () => native.inTransaction,
+    return { db, get, all, run, reserve, scope, withBootstrapReadScope, fileIdentity, inTransaction: () => native.inTransaction,
       async close() { closingReads = true; invalidate(); if (!native.open) { releaseLeaseOwner(); return; } try { await db!.destroy(); } finally { if (native.open) native.close(); if (!native.open) releaseLeaseOwner(); } },
       quarantine() { closingReads = true; invalidate(); try { if (native.open) native.close(); if (!native.open) releaseLeaseOwner(); } catch { /* No further access is allowed. */ } }
     };

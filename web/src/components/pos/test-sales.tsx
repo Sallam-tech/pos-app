@@ -27,7 +27,7 @@ export function TestSales({cashManaged=false}:{cashManaged?:boolean}){
  useEffect(()=>{if(!query.trim())return;let active=true;const timer=setTimeout(()=>{void salesFetch("/api/pos/products?query="+encodeURIComponent(query.trim())).then(r=>{if(active)setCatalog(r.items);}).catch(()=>{if(active)setError("Catalog search unavailable.");});},150);return()=>{active=false;clearTimeout(timer);};},[query]);
  const changed=()=>{const c=new BroadcastChannel("pos-test-sales-changes");c.postMessage("changed");c.close();};
  const totals=items.map(i=>quote(i.price,i.quantity,i.discount)),rawSum=totals.every(v=>v!==null)?totals.reduce((a,b)=>a+BigInt(b!),BigInt(0)):null;
- const valid=!!items.length&&rawSum!==null&&rawSum>BigInt(0)&&rawSum<=BigInt("9223372036854775807"),sum=valid?rawSum:null;
+ const valid=!!items.length&&rawSum!==null&&rawSum>BigInt(0)&&rawSum<=BigInt("9223372036854775807"),sum=items.length===0?BigInt(0):valid?rawSum:null;
  const add=(p:CatalogProduct)=>{setItems(old=>{const found=old.find(i=>i.product.id===p.id);return found?old.map(i=>i===found&&/^[1-9][0-9]{0,11}$/.test(i.quantity)&&BigInt(i.quantity)<BigInt("999999999999")?{...i,quantity:(BigInt(i.quantity)+BigInt(1)).toString()}:i):old.length>=50?old:[...old,{product:p,quantity:"1",price:(BigInt(p.sellingPricePaisa)/BigInt(100)).toString(),discount:"0"}];});setQuery("");};
  const edit=(id:string,field:"quantity"|"price"|"discount",v:string)=>setItems(old=>old.map(i=>i.product.id===id?{...i,[field]:v}:i));
  const submit=async()=>{

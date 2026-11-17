@@ -146,7 +146,7 @@ describe("Part3I real private credential verification", () => {
     expect(probe.calls).toBe(2); expect(JSON.stringify(f.persistent(), (_key, value) => typeof value === "bigint" ? String(value) : value) ===
       JSON.stringify(before, (_key, value) => typeof value === "bigint" ? String(value) : value)).toBe(true);
     expect(f.reader.get("SELECT count(*) AS n FROM auth_session_authorizations")?.n).toBe(zero);
-    expect(Object.keys(f.gateway).sort()).toEqual(["authorizeAdmin", "authorizeSalesperson", "close",
+    expect(Object.keys(f.gateway).sort()).toEqual(["publicShopName", "withFreshAdminTransaction", "authorizeAdmin", "authorizeSalesperson", "close",
       "verifyAdminPassword", "verifySalespersonPassword", "issueAdminSession", "issueSalespersonSession", "logoutAdmin", "logoutSalesperson", "rotateAdminPassword", "rotateSalespersonPassword", "withAdminTransaction", "withSalespersonTransaction"].sort());
   });
   it("binds each fixed role to its own credential and rejects caller envelopes", async () => {

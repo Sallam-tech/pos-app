@@ -1,0 +1,18 @@
+[
+    {
+        "before":  "SELECT l.id FROM sale_lines l LEFT JOIN financial_events f ON f.sale_line_id=l.id WHERE f.id IS NULL OR f.kind\u003c\u003e\u0027SALE\u0027 OR f.revenue_delta_m\u003c\u003el.charged_m OR f.cogs_delta_m\u003c\u003el.cogs_m OR f.valuation_delta_m\u003c\u003e0 OR f.effective_date\u003c\u003e(SELECT business_date FROM sales WHERE id=l.invoice_id) OR f.recorded_at_ms\u003c\u003e(SELECT recorded_at_ms FROM sales WHERE id=l.invoice_id) LIMIT 1",
+        "file":  "returns/ledgers.ts"
+    },
+    {
+        "before":  "SELECT e.id FROM cash_flow_evidence e WHERE e.admission_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM counter_cash_admission_resolutions r WHERE r.admission_id=e.admission_id AND r.outcome=\u0027POSTED\u0027) LIMIT 1",
+        "file":  "cash/source.ts"
+    },
+    {
+        "before":  "SELECT e.id FROM cash_flow_evidence e LEFT JOIN cash_flow_evidence p ON p.id=e.previous_id WHERE (e.previous_id IS NOT NULL AND (p.id IS NULL OR p.movement_id\u003c\u003ee.movement_id OR p.rowid\u003e=e.rowid)) OR (e.previous_id IS NULL AND EXISTS(SELECT 1 FROM cash_flow_evidence x WHERE x.movement_id=e.movement_id AND x.previous_id IS NULL AND x.rowid\u003ce.rowid)) LIMIT 1",
+        "file":  "cash/source.ts"
+    },
+    {
+        "before":  "SELECT r.id FROM counter_cash_admission_resolutions r JOIN counter_cash_admissions a ON a.id=r.admission_id LEFT JOIN cash_action_operations o ON o.id=r.recovery_operation_id LEFT JOIN cash_action_requests q ON q.id=o.request_id LEFT JOIN sale_operations s ON s.id=r.sale_operation_id WHERE (a.source_kind=\u0027SALE\u0027 AND r.actor_id=\u0027ADMIN\u0027 AND r.outcome=\u0027POSTED\u0027 AND r.recovery_operation_id IS NULL) OR (r.recovery_operation_id IS NOT NULL AND (a.source_kind\u003c\u003e\u0027SALE\u0027 OR o.id IS NULL OR q.action\u003c\u003e\u0027RESOLVE_ADMISSION\u0027 OR json_extract(q.payload_json,\u0027$.resolution\u0027) IS NOT \u0027RECORD_PRIOR_SALE\u0027 OR json_extract(q.payload_json,\u0027$.admissionId\u0027) IS NOT a.id OR json_extract(o.result_json,\u0027$.invoiceId\u0027) IS NOT s.invoice_id)) LIMIT 1",
+        "file":  "cash/source.ts"
+    }
+]

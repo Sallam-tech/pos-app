@@ -125,11 +125,9 @@ async function fixture(seed = true) {
   const directory = mkdtempSync(path.join(run, "db-")), migrationsDirectory = mkdtempSync(path.join(run, "migrations-"));
   const source = path.resolve("src/server/db/migrations");
   for (const name of readdirSync(source).filter(name => name.endsWith(".sql"))) copyFileSync(path.join(source, name), path.join(migrationsDirectory, name));
-  // Disposable TEST-only schema for an actual deferred-FK COMMIT failure.
-  writeFileSync(path.join(migrationsDirectory, "0009_test_commit_guard.sql"),
-    "CREATE TABLE test_commit_guard(parent TEXT NOT NULL REFERENCES auth_users(id) DEFERRABLE INITIALLY DEFERRED) STRICT;\n", { flag: "wx" });
   const options = { directory, filename: "test.sqlite3", mode: "test" as const, create: true, busyTimeoutMs: 75 };
-  const reader = openDatabase(options); readers.push(reader); applyMigrations(reader, migrationsDirectory);
+  const reader = openDatabase(options); readers.push(reader); applyMigrations(reader, migrationsDirectory); // Extra unrelated TEST table is outside the reviewed migration chain.
+  reader.transaction(tx=>tx.run("CREATE TABLE test_commit_guard(parent TEXT NOT NULL REFERENCES auth_users(id) DEFERRABLE INITIALLY DEFERRED) STRICT"));
   const config: AuthorizationConfiguration = { database: { ...options, create: false }, migrationsDirectory,
     origins: { ADMIN: "https://admin.sessions.invalid", SALESPERSON: "https://staff.sessions.invalid" },
     signingSecrets: { ADMIN: fake(48), SALESPERSON: fake(48) }, sessionLifetimeSeconds: 120 };

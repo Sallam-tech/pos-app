@@ -1,3 +1,6 @@
+export const SALE_FINANCIAL_GUARD="SELECT l.id FROM sale_lines l LEFT JOIN financial_events f ON f.sale_line_id=l.id LEFT JOIN sales parent ON parent.id=l.invoice_id WHERE f.id IS NULL OR f.kind<>'SALE' OR f.revenue_delta_m<>l.charged_m OR f.cogs_delta_m<>l.cogs_m OR f.valuation_delta_m<>0 OR f.effective_date<>parent.business_date OR f.recorded_at_ms<>parent.recorded_at_ms LIMIT 1";
+export const SALE_PAYMENT_GUARD="SELECT p.id FROM sale_payments p JOIN sales s ON s.id=p.invoice_id LEFT JOIN cash_movements c ON c.sale_payment_id=p.id WHERE p.net_received_m<>s.charged_m OR p.recorded_at_ms<>s.recorded_at_ms OR c.id IS NULL OR c.kind<>'SALE' OR c.amount_m<>p.net_received_m OR c.cash_date<>coalesce(json_extract((SELECT payload_json FROM sale_operations WHERE id=s.operation_id),'$.cashDate'),s.business_date) LIMIT 1";
+import {resumeGuardInputs,retainGuardInputs,captureGuardInputs,guardInputsUnchanged,type GuardInputPoint} from "../auth/database";
 import {assertInvoiceLedgers} from "../invoices/ledgers";
 import "server-only";
 import {randomUUID} from "node:crypto";
@@ -11,10 +14,21 @@ export async function postSaleLedgers(tx:AuthorizedTransaction,invoice:string){
  const p=await tx.get("SELECT id,net_received_m,recorded_at_ms FROM sale_payments WHERE invoice_id=?",[invoice]);
  if(p)await tx.run("INSERT INTO cash_movements(id,kind,sale_payment_id,refund_payment_id,amount_m,cash_date,recorded_at_ms,provenance) VALUES(?,?,?,?,?,?,?,?)",[randomUUID(),"SALE",p.id,null,p.net_received_m,JSON.parse(String(s.payload_json)).cashDate??s.business_date,p.recorded_at_ms,"SOURCE_RECORDED"]);
 }
+const continuationOwner=Object.freeze({});
+const checkpoints=new WeakMap<object,GuardInputPoint>();
 export async function assertReturnLedgers(tx:Pick<AuthorizedTransaction,"get"|"all">){
+ if(resumeGuardInputs(tx,"RETURN",continuationOwner))return;
+ const previous=checkpoints.get(tx);
+ if(previous&&guardInputsUnchanged(tx,"RETURN",previous))return;
+ checkpoints.delete(tx);const point=captureGuardInputs(tx,"RETURN");
+ await assertReturnLedgersFull(tx);
+ // A scan with any intervening write cannot mint a reusable verdict.
+ if(point&&guardInputsUnchanged(tx,"RETURN",point,true)){checkpoints.set(tx,point);retainGuardInputs(tx,"RETURN",point,continuationOwner);}
+}
+export async function assertReturnLedgersFull(tx:Pick<AuthorizedTransaction,"get"|"all">){
  const bad=async(sql:string)=>{if(await tx.get(sql))throw Error("Ledger unavailable.");};
- await bad("SELECT l.id FROM sale_lines l LEFT JOIN financial_events f ON f.sale_line_id=l.id WHERE f.id IS NULL OR f.kind<>'SALE' OR f.revenue_delta_m<>l.charged_m OR f.cogs_delta_m<>l.cogs_m OR f.valuation_delta_m<>0 OR f.effective_date<>(SELECT business_date FROM sales WHERE id=l.invoice_id) OR f.recorded_at_ms<>(SELECT recorded_at_ms FROM sales WHERE id=l.invoice_id) LIMIT 1");
- await bad("SELECT p.id FROM sale_payments p JOIN sales s ON s.id=p.invoice_id LEFT JOIN cash_movements c ON c.sale_payment_id=p.id WHERE p.net_received_m<>s.charged_m OR p.recorded_at_ms<>s.recorded_at_ms OR c.id IS NULL OR c.kind<>'SALE' OR c.amount_m<>p.net_received_m OR c.cash_date<>coalesce(json_extract((SELECT payload_json FROM sale_operations WHERE id=s.operation_id),'$.cashDate'),s.business_date) LIMIT 1");
+ await bad(SALE_FINANCIAL_GUARD);
+ await bad(SALE_PAYMENT_GUARD);
  await bad("SELECT l.id FROM return_lines l JOIN returns r ON r.id=l.return_id LEFT JOIN financial_events f ON f.return_line_id=l.id WHERE f.id IS NULL OR f.kind<>'REFUND' OR f.revenue_delta_m<>-l.refund_m OR f.cogs_delta_m<>0 OR f.effective_date<>r.cash_date LIMIT 1");
  await bad("SELECT r.id FROM returns r LEFT JOIN refund_payments p ON p.id=r.refund_payment_id AND p.return_id=r.id LEFT JOIN cash_movements c ON c.refund_payment_id=p.id WHERE p.id IS NULL OR r.total_m<>p.amount_m OR r.cash_date<>p.cash_date OR c.id IS NULL OR c.kind<>'REFUND' OR c.amount_m<>-r.total_m OR c.cash_date<>r.cash_date OR r.line_count<>(SELECT count(*) FROM return_lines WHERE return_id=r.id) OR r.total_m<>(SELECT sum(refund_m) FROM return_lines WHERE return_id=r.id) LIMIT 1");
  await bad("SELECT sale_line_id FROM return_lines GROUP BY sale_line_id HAVING sum(quantity_q)>max(original_quantity_q) OR sum(refund_m)>max(original_paid_m) LIMIT 1");

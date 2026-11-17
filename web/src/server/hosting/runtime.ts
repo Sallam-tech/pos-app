@@ -1,3 +1,4 @@
+import {renderReadOnlyResponse} from "./read-only-response";
 import { createProtectedRestoredHistory } from "../backup/protected-history";
 import { assertProtectedWriterAdmission } from "../bootstrap/writer-admission";
 import { assertPatchedLocalRuntime } from "./runtime-policy";
@@ -21,15 +22,29 @@ import { createProtectedRootWriterAdmission, createSelectedWriterAdmission, crea
 import { withProtectedLocalKeys, type LocalKeyConfiguration } from "../bootstrap/keys";
 import { withAdminMaintenanceSource, type AdminMaintenanceOperation, type AdminMaintenanceSource } from "../auth/gateway";
 import { assertNoAuthorizationOwner, type BootstrapLease } from "../bootstrap/ownership";
-import { openAuthorizationGateway } from "../auth/gateway";
+import { openAuthorizationGateway,verifySharedPassword } from "../auth/gateway";
 import { confinedTestAuthentication, createAuthenticationDispatcher } from "./auth-http";
 import { createInventoryPageDispatcher } from "./inventory-pages";
 import { createInventoryDispatcher } from "./inventory-http";
 import { rejectRedirectedPath, resolveDatabaseLocation } from "../db/location";
 import { acquireRuntimeOwnership, LocalRuntimeRejected } from "./ownership";
-import { createLocalHttpsHost, validateLocalOrigins, type LocalOrigins, type LocalTlsMaterial } from "./https";
+import { createLocalHttpsHost, validateLocalOrigins, type HostDrainStage, type LocalOrigins, type LocalTlsMaterial } from "./https";
 
+import {openDesktopOperationKeys} from "../desktop/operation-keys";
+import type {Role} from "../auth/types";
+import type {MarkerSnapshot} from "../desktop/recovery-contract";
+type OperationKeyAccess=(role:Role,cookie:string,command:unknown)=>Promise<MarkerSnapshot>;
+const operationKeyRuntimes=new WeakMap<object,OperationKeyAccess>();
+type SharedLoginAccess=(password:unknown)=>Promise<Readonly<{role:Role;cookies:string[]}>>;
+const sharedLoginRuntimes=new WeakMap<object,SharedLoginAccess>();
+export function withLocalRuntimeSharedLogin(runtime:LocalRuntime,password:unknown){const access=sharedLoginRuntimes.get(runtime);if(!access)return Promise.reject(new LocalRuntimeRejected());return access(password);}
+// Private native adapter, never an HTTP endpoint or serializable authority.
+export function withLocalRuntimeOperationKeys(runtime:LocalRuntime,role:Role,cookie:string,command:unknown){
+ const access=operationKeyRuntimes.get(runtime);if(!access)return Promise.reject(new LocalRuntimeRejected());return access(role,cookie,command);
+}
 export interface LocalRuntimeConfiguration {
+  readonly testDesktopOperationKeys?:true;
+  readonly onDrainStage?: (stage: "TRANSPORT"|"BACKUPS"|"AUTHORIZATION"|"FRAMEWORK"|"OWNERSHIP"|"DRAINED"|HostDrainStage) => void;
   readonly protectedIdentity?: Readonly<{ root: LocalKeyConfiguration; selected?: LocalKeyConfiguration; importedRoot?: true }>;
   readonly applicationDirectory: string;
   readonly port: number;
@@ -117,6 +132,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     if(input.testCash!==undefined&&(input.testCash!==true||!testAuthentication||!input.testReports))return reject();
     if(input.testSettings!==undefined&&(input.testSettings!==true||!testAuthentication||!input.testCash))return reject();
     if(input.testBackups!==undefined&&(!testAuthentication||!input.testSettings))return reject();
+    if(input.testDesktopOperationKeys!==undefined&&(input.testDesktopOperationKeys!==true||!testAuthentication||!input.testSettings||!input.protectedIdentity))return reject();
     const schema=input.testSettings?41:input.testCash?40:input.testInvoiceCorrections?39:input.testExpenses?38:input.testReturns?37:salesShop?36:35;
     const conf = applicationConfig(input.applicationDirectory);
     ownership = await acquireRuntimeOwnership(location.filename);
@@ -134,7 +150,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     }
     host = createLocalHttpsHost(port, origins, input.tls, async (request, response) => {
       liveGuard.assertHeld();
-      await handler(request, response);
+      await renderReadOnlyResponse(request,response,()=>handler(request,response));
     }, testAuthentication ? async (request, response, context) => {
       liveGuard.assertHeld();
       await authentication(request, response, context);
@@ -144,8 +160,9 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     } : undefined, testAuthentication ? async (request, response, context) => {
       liveGuard.assertHeld();
       await pages(request, response, context);
-    } : undefined);
+    } : undefined,stage=>{try{input.onDrainStage?.(stage);}catch{/* Observation only. */}});
     gateway = await openAuthorizationGateway(config, testAuthentication ? schema : undefined); // SAME existing single native owner.
+    const operationKeys=input.testDesktopOperationKeys?await openDesktopOperationKeys(input.protectedIdentity!.root,input.protectedIdentity!.selected??input.protectedIdentity!.root,()=>liveGuard.assertHeld()):undefined;
     const backupConfiguration=input.testBackups&&config.protectedAdmission?rebindProtectedBackupAdmission(input.testBackups,config.protectedAdmission,config.protectedHistory):input.testBackups;
     if(backupConfiguration)backupWorker=await startTestBackupWorker(backupConfiguration,liveGuard,config.database);
     const backups=input.testSettings?createBackupDispatcher(gateway,config.database,backupWorker,backupConfiguration):undefined;
@@ -171,6 +188,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     const pages = createInventoryPageDispatcher(gateway, async (request, response) => { await handler(request, response); },schema,!!salesShop,!!input.testReturns,!!input.testExpenses,!!input.testInvoiceCorrections,!!input.testReports,!!input.testCash);
     liveGuard.assertHeld();
     await host.listen(); // Nothing accepts HTTP until every startup check succeeded.
+    const drainStage=(stage: Parameters<NonNullable<LocalRuntimeConfiguration["onDrainStage"]>>[0])=>{try{input.onDrainStage?.(stage);}catch{/* Diagnostics never change ownership or drain. */}};
     let closePromise: Promise<void> | undefined;
     const liveHost = host, liveGateway = gateway, liveOwnership = ownership;
     let maintenanceStarted = false, finishingMaintenance = false;
@@ -181,14 +199,31 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
         closePromise ??= (async () => {
           // close() stops transport admission immediately, drains admitted HTTP,
           // then the gateway rejects/drains its own work, clears RAM and closes SQLite.
-          await liveHost.close();
-          await backupWorker?.stop();
-          await liveGateway.close();
-          await closeApp();
-          assertNoAuthorizationOwner(); await liveOwnership.close(); // Release cross-process guard LAST.
+          drainStage("TRANSPORT");await liveHost.close();
+          drainStage("BACKUPS");await backupWorker?.stop();
+          drainStage("AUTHORIZATION");await liveGateway.close();
+          drainStage("FRAMEWORK");await closeApp();
+          drainStage("OWNERSHIP");assertNoAuthorizationOwner(); await liveOwnership.close(); // Release cross-process guard LAST.
+          drainStage("DRAINED");
         })().catch(() => reject()); // Keep ownership on uncertain closure.
         return closePromise;
       },
+    });
+    if(operationKeys)sharedLoginRuntimes.set(result,async password=>{
+      if(maintenanceStarted||closePromise)return reject();liveGuard.assertHeld();
+      const verified=await verifySharedPassword(liveGateway,password);
+      if(maintenanceStarted||closePromise)return reject();liveGuard.assertHeld();
+      const response=verified.role==="ADMIN"?await liveGateway.issueAdminSession(verified.receipt):await liveGateway.issueSalespersonSession(verified.receipt);
+      const cookies=response.headers.getSetCookie(),prefix=verified.role==="ADMIN"?"__Secure-pos-admin.":"__Secure-pos-salesperson.";
+      if(maintenanceStarted||closePromise||response.status!==200||await response.text()!=='{"ok":true}'||!cookies.length||cookies.length>8||cookies.some(v=>v.length>4096||!v.startsWith(prefix)||/[\r\n]/.test(v)||/(?:^|;)\s*Domain=/i.test(v)||!/(?:^|;)\s*Secure(?:;|$)/i.test(v)||!/(?:^|;)\s*HttpOnly(?:;|$)/i.test(v)||!/(?:^|;)\s*SameSite=Strict(?:;|$)/i.test(v)||!/(?:^|;)\s*Path=\/(?:;|$)/i.test(v)))return reject();
+      liveGuard.assertHeld();return Object.freeze({role:verified.role,cookies});
+    });
+    if(operationKeys)operationKeyRuntimes.set(result,async(role,cookie,command)=>{
+      if(maintenanceStarted||closePromise||!["ADMIN","SALESPERSON"].includes(role)||typeof cookie!=="string"||!cookie||cookie.length>4096||/[\r\n\x00]/.test(cookie))return reject();
+      const names=cookie.split(";").map(v=>v.trim().split("=")[0]);if(names.some(n=>!n)||new Set(names).size!==names.length)return reject();
+      const request=new Request(origins[role]+"/",{headers:{cookie,origin:origins[role]}});
+      const work=async()=>{liveGuard.assertHeld();if(maintenanceStarted||closePromise)return reject();const value=await operationKeys(role,command);liveGuard.assertHeld();return value;};
+      return role==="ADMIN"?liveGateway.withAdminTransaction(request,work):liveGateway.withSalespersonTransaction(request,work);
     });
     maintenanceRuntimes.set(result, async (password, operation, work) => {
       if (maintenanceStarted || closePromise || typeof work !== "function") return reject();
@@ -196,7 +231,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
       try {
         await liveHost.close(); await backupWorker?.stop(); await closeApp(); liveOwnership.assertHeld();
         const proof = await liveGateway.verifyAdminPassword(password); password = undefined;
-        return await withAdminMaintenanceSource(liveGateway, proof, liveOwnership, operation, work);
+        return await withAdminMaintenanceSource(liveGateway, proof, liveOwnership, operation, async(source,lease)=>{await operationKeys?.assertSettled();return work(source,lease);});
       } finally { finishingMaintenance = true; await result.close(); }
     });
     return result;

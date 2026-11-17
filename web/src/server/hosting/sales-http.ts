@@ -1,3 +1,4 @@
+import {bindDependencyReads} from "../auth/gateway";
 import "server-only";
 import type {IncomingMessage,ServerResponse} from "node:http";
 import type {AuthorizationGateway} from "../auth/types";
@@ -46,6 +47,7 @@ export function createSalesDispatcher(gateway:AuthorizationGateway,shopName:stri
   const guarded:AuthorizationGateway={...gateway,
    withAdminTransaction:(r,w)=>gateway.withAdminTransaction(r,async(tx,a)=>{live();const v=await w(tx,a);live();return v;}),
    withSalespersonTransaction:(r,w)=>gateway.withSalespersonTransaction(r,async(tx,a)=>{live();const v=await w(tx,a);live();return v;})};
+ bindDependencyReads(gateway,guarded,live);
   const api=createSalesService(guarded,shopName,schema);
   try{live();await(admin?gateway.authorizeAdmin(session):gateway.authorizeSalesperson(session));}catch{send(403,{error:"Sale unavailable."});return;}
   try{
@@ -58,7 +60,7 @@ export function createSalesDispatcher(gateway:AuthorizationGateway,shopName:stri
    else if(url.pathname==="/api/pos/sales/context"){if(url.search)throw new SaleError();result=await api.context(session);}
    else if(url.pathname==="/api/pos/products"){if([...url.searchParams.keys()].some(k=>k!=="query")||url.searchParams.getAll("query").length>1)throw new SaleError();result=await api.catalog(session,url.searchParams.get("query")??"");}
    else if(mutate){if(url.search)throw new SaleError();result=await api.create(session,await readSalesBody(req));}
-   else{if([...url.searchParams.keys()].some(k=>!["cursor","query"].includes(k))||url.searchParams.getAll("cursor").length>1||url.searchParams.getAll("query").length>1)throw new SaleError();result=await api.history(session,url.searchParams.get("cursor")??undefined,url.searchParams.get("query")??"");}
+   else{if([...url.searchParams.keys()].some(k=>!["cursor","query","from","to"].includes(k))||["cursor","query","from","to"].some(k=>url.searchParams.getAll(k).length>1))throw new SaleError();result=await api.history(session,url.searchParams.get("cursor")??undefined,url.searchParams.get("query")??"",url.searchParams.has("from")||url.searchParams.has("to")?{from:url.searchParams.get("from")??undefined,to:url.searchParams.get("to")??undefined}:undefined);}
    live();send((result as {state?:string})?.state==="UNKNOWN"?404:200,result);
   }catch(e){const code=e instanceof SaleError?e.code:"UNAVAILABLE";send(code==="NOT_FOUND"?404:code==="CONFLICT"||code==="PRICE_NOT_ALLOWED"?409:code==="INVALID_INPUT"?400:503,{error:"Sale unavailable.",code});}
  };

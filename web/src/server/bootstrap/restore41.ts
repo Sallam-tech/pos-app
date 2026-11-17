@@ -210,3 +210,29 @@ export async function quarantineNeverAdmittedRestore41(rootInput: LocalKeyConfig
 }
 
 export async function readProtectedRestoreReceipt(target:LocalKeyConfiguration,selected:CandidateRecord):Promise<readonly HistoricalSettings[]>{return (await readProtectedRestoreProvenance(target,selected)).history;}
+
+// Native desktop authentication is additional to the unchanged Phase1 selector.
+// Genuine, live, known-COMMITTED candidate only; no SQL or writer authority.
+export async function restoredCandidate41AuthenticationEvidence(candidate:ProtectedRestoreCandidate41){
+ const s=candidates.get(candidate);if(!s||s.stage!=="COMMITTED"||!s.completed||selectionClaims.has(candidate))return rejectBootstrap();await verifyTarget(s);
+ const ledger=await readProtectedCandidateLedger(s.original,s.intent.originalAnchorDigest);
+ return Object.freeze({target:s.target,rootDirectory:s.root.directory,rootVaultDigest:s.original.vaultDigest,anchor:s.intent.originalAnchorDigest,archive:s.receipt.archiveSha256,
+  selection:Object.freeze({action:"SELECT_KNOWN_COMPLETED_WRITER" as const,operationId:s.operationId,destinationFileIdentity:s.intent.destinationFileIdentity,targetStateDigest:s.targetDigest,targetVaultDigest:s.completed.targetVaultDigest,productionActivation:false as const}),
+  previous:ledger.records.filter(r=>r.kind==="INTENT"&&r.purpose==="RESTORE41"&&r.operationId!==s.operationId).map(r=>r.backupCiphertextSha256),
+  binding:enrollmentDigest({operation:s.operationId,file:s.intent.destinationFileIdentity,state:s.targetDigest,vault:s.completed.targetVaultDigest,archive:s.receipt.archiveSha256}),
+  guard:()=>{if(candidates.get(candidate)!==s||s.stage!=="COMMITTED")return rejectBootstrap();guard(s);},verify:()=>verifyTarget(s)});
+}
+// Explicit restart authentication only. Reconstruct the opaque callback candidate
+// from an already authenticated COMMITTED record; never copy SQL or retry an
+// uncertain operation. INTENT/pending/stale/changed sources cannot enter here.
+export async function withKnownCommittedRestoreCandidate41<T>(rootInput:LocalKeyConfiguration,sourceInput:LocalKeyConfiguration,targetInput:LocalKeyConfiguration,source:AdminMaintenanceSource,lease:BootstrapLease,operationId:string,work:(candidate:ProtectedRestoreCandidate41)=>Promise<T>){
+ const root=configuration(rootInput),sourceConfig=configuration(sourceInput),target=configuration(targetInput);
+ if(sourceClaims.has(source)||typeof work!=="function"||!hasActiveBootstrapLease(lease,sourceConfig.database)||adminMaintenanceSourceEvidence(source,sourceConfig.database,lease,{operationId,purpose:"RESTORE41"}).schema!==41)return rejectBootstrap();
+ const authority=await readProtectedRootAuthority(root),ledger=await readProtectedCandidateLedger(authority.vault,authority.originalAnchorDigest),own=ledger.records.filter(r=>r.operationId===operationId),intent=own[0],completed=own[1];
+ if(!candidatePendingCompatible(ledger,operationId)||own.length!==2||intent?.kind!=="INTENT"||completed?.kind!=="COMMITTED"||completed.purpose!=="RESTORE41"||ledger.records.at(-1)!==completed||completed.sourceFileIdentity!==identity(resolveDatabaseLocation(sourceConfig.database).filename))return rejectBootstrap();
+ await readProtectedRestoreProvenance(target,completed);const encoded=await storage(path.join(target.directory,"protected-identity/restore41"),"unseal-record");if(typeof encoded!=="string")return rejectBootstrap();const bytes=Buffer.from(encoded,"base64");let receipt:Receipt;
+ try{receipt=JSON.parse(new TextDecoder("utf8",{fatal:true}).decode(bytes));if(enrollmentDigest(receipt)!==completed.targetSpecificationDigest)return rejectBootstrap();}finally{bytes.fill(0);}
+ const s:State={root,sourceConfig,target,source,lease,operationId,original:authority.vault,sourceVault:await inspectLocalVault(sourceConfig),anchorVersion:authority.anchorVersion,records:authority.records,sourceDigest:intent.sourceStateDigest,intent,receipt,targetDigest:completed.targetStateDigest,stage:"COMMITTED",completed};
+ await verifyTarget(s);sourceClaims.add(source);const candidate=Object.freeze({toJSON:rejectBootstrap}) as unknown as ProtectedRestoreCandidate41;candidates.set(candidate,s);
+ try{const result=await work(candidate);await verifyTarget(s);return result;}catch{s.stage="FAILED";return rejectBootstrap();}finally{candidates.delete(candidate);}
+}

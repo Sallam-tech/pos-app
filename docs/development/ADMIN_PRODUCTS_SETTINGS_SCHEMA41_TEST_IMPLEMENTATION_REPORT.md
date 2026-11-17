@@ -1,7 +1,7 @@
 # Admin Products + Settings TEST41 — verified TEST-only
 
 14 November2026, Asia/Karachi. Owner approved the full contract. Functional TEST PASS; commercial system PARTIAL and production DISABLED. Parent4ebfd614; live Git supplies reviewed LOCAL checkpoint hash/outcome. No hardware acceptance.
-
+ 
 - Reused eight inventory actions/UI/auth; real metadata/price/status/archive/stock/history controls. Fixed missing39/40 whole-PKR/D05 checks, silent-effect verification and missing invoice-correction stock provenance. Original sold costs/profit, D05 valuation and archived stock preserved.
 - Five additive STRICT guarded tables; explicit unenrolled disposable TEST40→41 only.27 steps, SHA256552fd86ef14c1eb2bf98a2d104ebbbfcb3e8eefd84b7ca4b967853c0a7e40211. Old migrations/records/physical rowids/auth preserved; no startup/shop migration.
 - Shared explicit Settings/revisions; signed Staff public branding only, Login name only. Frozen admission/invoice sidecars preserve recovered/corrected receipts; missing old fields stay absent. No browser-demo import or invented first revision.

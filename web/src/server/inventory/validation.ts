@@ -1,5 +1,5 @@
 import "server-only";
-import { createHash } from "node:crypto";
+import { hash } from "node:crypto";
 import { int64, INT64_MAX } from "../db/integers";
 import { InventoryError, type InventoryCode, type Kind, type ProductQuery } from "./contracts";
 export const SCALE = BigInt(1000000), MAX_WHOLE = BigInt("999999999999"), MAX_PRICE = BigInt("99999999999999");
@@ -9,7 +9,7 @@ export function object(input: unknown, required: readonly string[], optional: re
    ![Object.prototype, null].includes(Object.getPrototypeOf(input)) || Object.getOwnPropertySymbols(input).length) return reject();
  const entries = Object.getOwnPropertyDescriptors(input);
  if (Object.keys(entries).length > 24 || required.some(k => !Object.hasOwn(entries,k)) ||
-   Object.entries(entries).some(([k,v]) => ![...required,...optional].includes(k) || !("value" in v))) return reject();
+   Object.entries(entries).some(([k,v]) => (!required.includes(k)&&!optional.includes(k)) || !("value" in v))) return reject();
  return input as Record<string, unknown>;
 }
 export function text(value: unknown, max: number, empty = false): string {
@@ -49,7 +49,7 @@ export function canonical(value: unknown): string {
  return JSON.stringify(value,(_,v)=>v && typeof v==="object" && !Array.isArray(v) ?
    Object.fromEntries(Object.entries(v).sort(([a],[b])=>a<b?-1:a>b?1:0)) : v);
 }
-export const digest = (value: unknown) => createHash("sha256").update(canonical(value)).digest("hex");
+export const digest = (value: unknown) => hash("sha256",canonical(value),"hex");
 export function now(): bigint {
  const n=Date.now();
  if (!Number.isSafeInteger(n) || n<=0 || n>8640000000000000) return reject("UNAVAILABLE");

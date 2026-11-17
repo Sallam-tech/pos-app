@@ -1,0 +1,223 @@
+"use strict";
+const {app,BrowserWindow,Menu,ipcMain,dialog,session}=require("electron");
+const {spawn,spawnSync}=require("node:child_process");
+const {createHash,X509Certificate,randomUUID}=require("node:crypto");
+const {verifyPayload}=require("./payload-integrity.cjs");
+const {passwordInput,cookiesForRole}=require("./shared-login.cjs");
+const fs=require("node:fs"),path=require("node:path"),{pathToFileURL}=require("node:url");
+const payload=path.join(process.resourcesPath,"payload"),root=process.resourcesPath;
+const roleWindows=new Map(),roleOrigins=new Map();let child,setupWindow,pendingSetup,setupValues,ready,quitting=false,shutdownStarted=false,initializing=true;
+app.enableSandbox();
+let ownerWindow,ownerRequest,recoveryBusy=false,recoveryCompleted=false;
+let sharedLoginBusy=false;const sharedLoginRequests=new Map();
+const diagnosticHarness=process.argv.includes("--disposable-harness");let diagnosticPath,diagnosticStreamOpen=true;if(diagnosticHarness)process.stderr.on("error",()=>{diagnosticStreamOpen=false;});
+function diagnostic(value){if(diagnosticHarness){if(diagnosticPath)try{fs.appendFileSync(diagnosticPath,value+"\n");}catch{}if(diagnosticStreamOpen)try{process.stderr.write("SHOP_POS_TEST_LIFECYCLE "+value+"\n",error=>{if(error)diagnosticStreamOpen=false;});}catch{diagnosticStreamOpen=false;}}}
+const safeError="Shop POS TEST unavailable. Existing data has been retained. No production activation or automatic reset was performed.";
+function protectData(directory){
+ // These tiny native helpers are pinned before first execution. The complete
+ // inventory is still verified before any backend/database/account startup.
+ const helpers={"private-data.ps1":"ad53c8fcce4e7c5cfb9178385e648d2ddd5bbe4c46b52cd19597cbaa4b64f3e3","lifecycle.ps1":"39f98e78923ce65c8cc665289bf4b12381f67c70c0739239a80ec27416b7a7b9"};
+ for(const [name,expected]of Object.entries(helpers)){const file=path.join(__dirname,name),stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||createHash("sha256").update(fs.readFileSync(file)).digest("hex")!==expected)throw Error();}
+ const result=spawnSync(path.join(process.env.SystemRoot,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-File",path.join(__dirname,"private-data.ps1")],{windowsHide:true,input:JSON.stringify({directory}),encoding:"utf8",maxBuffer:8192,timeout:15000});
+ if(result.error||result.status!==0||result.stderr||result.stdout!=="true")throw Error();
+}
+function harden(window,allowed){
+ window.webContents.setWindowOpenHandler(()=>({action:"deny"}));
+ window.webContents.on("will-navigate",(event,url)=>{if(!allowed(url))event.preventDefault();});
+ window.webContents.on("will-frame-navigate",(event)=>{if(!allowed(event.url))event.preventDefault();});
+ window.webContents.on("will-attach-webview",event=>event.preventDefault());
+ window.webContents.on("devtools-opened",()=>window.webContents.closeDevTools());
+ window.webContents.session.setPermissionRequestHandler((_contents,_permission,callback)=>callback(false));
+ window.webContents.session.setPermissionCheckHandler(()=>false);
+ window.webContents.session.on("will-download",event=>event.preventDefault());
+}
+function preferences(partition,preload){return {nodeIntegration:false,nodeIntegrationInWorker:false,nodeIntegrationInSubFrames:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,webviewTag:false,devTools:false,partition,...(preload?{preload}:{})};}
+function setup(message){
+ if(setupWindow||pendingSetup)throw Error();pendingSetup=message;
+ setupWindow=new BrowserWindow({width:650,height:720,title:"Disposable TEST setup",webPreferences:preferences("setup-"+message.id,path.join(__dirname,"setup-preload.cjs"))});
+ const expected=pathToFileURL(path.join(__dirname,"setup.html")).href;harden(setupWindow,url=>url===expected);
+ setupWindow.on("closed",()=>{setupWindow=undefined;if(pendingSetup){child?.send({type:"reply",id:pendingSetup.id,value:"CANCELLED"});pendingSetup=undefined;setupValues=undefined;void close();}});
+ void setupWindow.loadFile(path.join(__dirname,"setup.html"));
+}
+async function validSetupPasswords(value){
+ if(value.ADMIN===value.SALESPERSON)return false;
+ try{const {assertOfflinePassword}=await import(pathToFileURL(path.join(payload,"server/auth/offline-password.js")).href);assertOfflinePassword(value.ADMIN);assertOfflinePassword(value.SALESPERSON);return true;}catch{return false;}
+}
+ipcMain.handle("shop-pos:trusted-test-setup",async(event,value)=>{
+ const expected=pathToFileURL(path.join(__dirname,"setup.html")).href;
+ if(!setupWindow||!pendingSetup||event.sender!==setupWindow.webContents||event.senderFrame!==event.sender.mainFrame||event.senderFrame.url!==expected||!value||Object.keys(value).sort().join(",")!=="ADMIN,SALESPERSON,confirmed"||value.confirmed!==true||["ADMIN","SALESPERSON"].some(k=>typeof value[k]!=="string"||value[k].length<8||value[k].length>128))return {ok:false};
+ // Preflight only: the unchanged sole account provisioner still performs every policy/KDF/ownership check.
+ const submittedWindow=setupWindow,submittedRequest=pendingSetup;
+ if(submittedRequest.value.action==="FIRST_ENROLLMENT"&&!await validSetupPasswords(value)){diagnostic("SETUP_POLICY_REJECTED");return {ok:false,code:"PASSWORD_POLICY"};}
+ // Revalidate the exact original window/request after asynchronous module loading; close/cancel wins.
+ if(!setupWindow||setupWindow!==submittedWindow||pendingSetup!==submittedRequest||event.sender!==setupWindow.webContents||event.senderFrame!==event.sender.mainFrame||event.senderFrame.url!==expected||shutdownStarted)return {ok:false};
+ const request=pendingSetup;pendingSetup=undefined;setupValues={ADMIN:value.ADMIN,SALESPERSON:value.SALESPERSON};
+ child.send({type:"reply",id:request.id,value:request.value.action==="FIRST_ENROLLMENT"?"CONFIRM_FIRST_ENROLLMENT":"CONFIRM_MATCHING_COMMITTED_ENROLLMENT"});
+ setupWindow.destroy();setupWindow=undefined;return {ok:true};
+});
+
+function ownerSender(event){const expected=pathToFileURL(path.join(__dirname,"recovery.html")).href;return !!ownerWindow&&!!ownerRequest&&event.sender===ownerWindow.webContents&&event.senderFrame===event.sender.mainFrame&&event.senderFrame.url===expected;}
+function ownerForm(request){
+ if(ownerWindow||ownerRequest||setupWindow||pendingSetup||shutdownStarted)throw Error();ownerRequest=request;
+ ownerWindow=new BrowserWindow({width:740,height:850,title:"Shop POS TEST owner recovery",webPreferences:preferences("owner-"+Date.now(),path.join(__dirname,"recovery-preload.cjs"))});const expected=pathToFileURL(path.join(__dirname,"recovery.html")).href;harden(ownerWindow,url=>url===expected);
+ ownerWindow.on("closed",()=>{ownerWindow=undefined;const r=ownerRequest;ownerRequest=undefined;if(r?.id)child?.send({type:"reply",id:r.id,value:"CANCELLED"});if(["RECOVERY","RECOVERY_REVIEW","QUARANTINE"].includes(r?.mode))recoveryBusy=false;});void ownerWindow.loadFile(path.join(__dirname,"recovery.html"));
+}
+ipcMain.handle("shop-pos:native-owner-context",async event=>ownerSender(event)?{mode:ownerRequest.mode,description:ownerRequest.description??(ownerRequest.mode==="RECOVERY"?"Archive: "+path.basename(ownerRequest.archive)+"; SHA256: "+ownerRequest.archiveSha256:"Native CURRENT generation "+ownerRequest.generation+". A fresh backup namespace will retain the original custody and all prior archives.")}:undefined);
+ipcMain.handle("shop-pos:native-owner-submit",async(event,value)=>{
+ if(!ownerSender(event)||!value||value.confirmed!==true)return {ok:false};const r=ownerRequest,keys=["RECOVERY","RECOVERY_REVIEW"].includes(r.mode)?["ADMIN","SALESPERSON","confirmed","sourceAdmin"]:r.mode==="QUARANTINE"?["sourceAdmin","confirmed"]:["ADMIN","confirmed"];
+ if(Object.keys(value).sort().join(",")!==keys.sort().join(",")||keys.filter(k=>k!=="confirmed").some(k=>typeof value[k]!=="string"||value[k].length<8||value[k].length>128))return {ok:false};
+ ownerRequest=undefined;ownerWindow.destroy();ownerWindow=undefined;
+ if(["RECOVERY_REVIEW","QUARANTINE"].includes(r.mode)){const reply={sourceAdmin:value.sourceAdmin,...(r.mode==="RECOVERY_REVIEW"?{ADMIN:value.ADMIN,SALESPERSON:value.SALESPERSON}:{})};child.send({type:"reply",id:r.id,value:reply});}
+ else if(r.mode==="BACKUP_HANDOFF")child.send({type:"reply",id:r.id,value:value.ADMIN});
+ else{for(const window of roleWindows.values())if(!window.isDestroyed())window.hide();child.send({type:"recover",value:{archive:r.archive,archiveSha256:r.archiveSha256,sourceAdmin:value.sourceAdmin,ADMIN:value.ADMIN,SALESPERSON:value.SALESPERSON}});}
+ return {ok:true};
+});
+async function chooseRecovery(){
+ if(!ready||recoveryBusy||sharedLoginBusy||shutdownStarted||ownerWindow)return;recoveryBusy=true;
+ try{const selected=await dialog.showOpenDialog({title:"Choose existing protected TEST archive",properties:["openFile"],filters:[{name:"Protected encrypted snapshot",extensions:["age"]}]});if(selected.canceled||selected.filePaths.length!==1){recoveryBusy=false;return;}const archive=selected.filePaths[0],stat=fs.lstatSync(archive);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.size<1||stat.size>2147483648)throw Error();const digest=createHash("sha256");for await(const bytes of fs.createReadStream(archive))digest.update(bytes);ownerForm({mode:"RECOVERY",archive,archiveSha256:digest.digest("hex")});}catch{recoveryBusy=false;unavailable();}
+}
+async function ownerConfirmation(message){
+ const r=message.value,selection=message.type==="confirm-writer-selection",quarantine=message.type==="confirm-quarantine",fields=selection?["action","operationId","destinationFileIdentity","targetStateDigest","targetVaultDigest","productionActivation"]:quarantine?["action","operationId","destinationFileIdentity","sourceStateDigest","intentDigest","sqlOutcome","productionActivation"]:["action","operationId","archiveSha256","sourceFileIdentity","productionActivation"];
+ const action=selection?"SELECT_KNOWN_COMPLETED_WRITER":quarantine?"QUARANTINE_NEVER_ADMITTED":"RESTORE_SEPARATE_PROTECTED41";
+ if(!recoveryBusy||!r||Object.keys(r).sort().join(",")!==fields.sort().join(",")||r.productionActivation!==false||r.action!==action||! /^[a-f0-9-]{36}$/.test(r.operationId)||quarantine&&r.sqlOutcome!=="UNKNOWN"||fields.filter(k=>!["action","operationId","productionActivation","sqlOutcome"].includes(k)).some(k=>!(quarantine&&k==="intentDigest"&&r[k]===null)&&! /^[a-f0-9]{64}$/.test(r[k])))throw Error();
+ const result=await dialog.showMessageBox({type:"warning",title:"Confirm exact TEST recovery operation",message:selection?"Select this exact known completed TEST database and retire the prior writer?":quarantine?"Permanently deny this never-admitted candidate? Its SQL outcome remains UNKNOWN. All original data will be retained.":"Create this separate TEST restore candidate?",detail:fields.filter(k=>k!=="action").map(k=>k+": "+r[k]).join("\n"),buttons:["Cancel","Confirm exact TEST operation"],defaultId:0,cancelId:0,noLink:true});
+ child?.send({type:"reply",id:message.id,value:result.response===1?(selection?"CONFIRM_TEST_WRITER_SELECTION":quarantine?"CONFIRM_PERMANENT_NO_ADMISSION":"CONFIRM_SEPARATE_TEST_RESTORE41"):"CANCELLED"});
+}
+
+function roleWindow(role,initialPath="/login"){
+ if(!ready||quitting)return;
+ const existing=roleWindows.get(role);if(existing&&!existing.isDestroyed()){existing.show();existing.focus();return existing;}
+ const origin=ready.origins[role],partition="role-"+role+"-"+Date.now(),ses=session.fromPartition(partition,{cache:false});
+ ses.setCertificateVerifyProc((request,callback)=>{
+  try{
+   if(!["localhost","127.0.0.1"].includes(request.hostname))return callback(-2);
+   const actual=new X509Certificate(request.certificate.data),expected=new X509Certificate(ready.certificate),ca=new X509Certificate(ready.trustAnchor),now=Date.now();
+   const valid=actual.fingerprint256===expected.fingerprint256&&actual.verify(ca.publicKey)&&actual.checkIssued(ca)&&!actual.ca&&ca.ca&&now>=Math.max(Date.parse(actual.validFrom),Date.parse(ca.validFrom))&&now<Math.min(Date.parse(actual.validTo),Date.parse(ca.validTo))&&(request.hostname==="localhost"?actual.checkHost("localhost",{subject:"never",wildcards:false}):actual.checkIP("127.0.0.1"));
+   callback(valid?0:-2);
+  }catch{callback(-2);}
+ });
+ ses.webRequest.onBeforeRequest((details,callback)=>{try{callback({cancel:new URL(details.url).origin!==origin});}catch{callback({cancel:true});}});
+ const window=new BrowserWindow({width:1280,height:900,title:"Shop POS TEST - "+role,webPreferences:preferences(partition,path.join(__dirname,"operation-key-preload.cjs"))});
+ const contentsId=window.webContents.id;roleWindows.set(role,window);roleOrigins.set(contentsId,origin);
+ harden(window,url=>{try{return new URL(url).origin===origin;}catch{return false;}});
+ window.webContents.on("preload-error",()=>diagnostic("OPERATION_KEYS_PRELOAD_ERROR"));
+ window.on("close",event=>{if(!quitting&&roleWindows.size===1){event.preventDefault();void close();}});
+ window.on("closed",()=>{roleOrigins.delete(contentsId);roleWindows.delete(role);void ses.clearStorageData();});
+ if(initialPath!==null)void window.loadURL(origin+initialPath);
+ return window;
+}
+
+function sharedLoginSender(event,source,role){
+ try{return !shutdownStarted&&!recoveryBusy&&!!ready&&!!source&&!source.isDestroyed()&&roleWindows.get(role)===source&&event.sender===source.webContents&&event.senderFrame===event.sender.mainFrame&&event.senderFrame.url===ready.origins[role]+"/login"&&event.sender.getURL()===event.senderFrame.url&&roleOrigins.get(event.sender.id)===ready.origins[role];}catch{return false;}
+}
+ipcMain.handle("shop-pos:shared-login",async(event,password)=>{
+ const sourceRole=[...roleWindows].find(([,w])=>!w.isDestroyed()&&w.webContents===event.sender)?.[0],source=roleWindows.get(sourceRole);
+ if(sharedLoginBusy||!child?.connected||!passwordInput(password)||!sharedLoginSender(event,source,sourceRole))return{ok:false};
+ sharedLoginBusy=true;let issued=false;
+ try{
+  const id=randomUUID(),value=await new Promise(resolve=>{
+   const finish=value=>{clearTimeout(timer);sharedLoginRequests.delete(id);resolve(value);};
+   const timer=setTimeout(()=>{finish({ok:false});void close();},45000);
+   sharedLoginRequests.set(id,{finish});child.send({type:"shared-login",id,value:{password}},error=>{if(error)finish({ok:false});});
+  });
+  password=undefined;
+  if(!value||value.ok!==true)return{ok:false};
+  issued=true;
+  if(Object.keys(value).sort().join(",")!=="cookies,ok,role"||!sharedLoginSender(event,source,sourceRole))throw Error();
+  const records=cookiesForRole(value.cookies,value.role,ready.origins[value.role]);
+  const target=roleWindow(value.role,null);if(!target||target.isDestroyed())throw Error();
+  for(const record of records){if(!sharedLoginSender(event,source,sourceRole)||target.isDestroyed())throw Error();await target.webContents.session.cookies.set(record);}
+  if(!sharedLoginSender(event,source,sourceRole)||target.isDestroyed())throw Error();
+  await target.loadURL(ready.origins[value.role]+(value.role==="ADMIN"?"/admin/dashboard":"/pos"));
+  if(shutdownStarted||target.isDestroyed()||(source!==target&&!sharedLoginSender(event,source,sourceRole)))throw Error();
+  if(source!==target&&!source.isDestroyed())source.destroy();
+  target.show();target.focus();return{ok:true};
+ }catch{if(issued)void close();return{ok:false};}
+ finally{password=undefined;sharedLoginBusy=false;}
+});
+
+const markerRequests=new Map(),markerBusy=new Map();let markerTotal=0;
+ipcMain.handle("shop-pos:operation-keys",async(event,command)=>{
+ const denied={ok:false};let role,markerStage="ADMISSION";
+ try{
+  if(!ready||shutdownStarted||recoveryBusy||!child?.connected||!command||typeof command!=="object"||Array.isArray(command)||JSON.stringify(command).length>1600||event.senderFrame!==event.sender.mainFrame){diagnostic("OPERATION_KEYS_DENIED_"+markerStage);return denied;}
+  markerStage="SENDER";role=[...roleWindows].find(([,w])=>!w.isDestroyed()&&w.webContents===event.sender)?.[0];
+  if(!role||event.senderFrame.url!==event.sender.getURL()||new URL(event.senderFrame.url).origin!==ready.origins[role]||roleOrigins.get(event.sender.id)!==ready.origins[role]){diagnostic("OPERATION_KEYS_DENIED_"+markerStage);return denied;}
+  if(markerTotal>=16||(markerBusy.get(event.sender.id)??0)>=8){diagnostic("OPERATION_KEYS_DENIED_BUSY");return denied;}
+  const contentsId=event.sender.id;markerBusy.set(contentsId,(markerBusy.get(contentsId)??0)+1);markerTotal++;let reserved=true,backendPending=false;
+  const release=()=>{if(!reserved)return;reserved=false;markerTotal--;const pending=(markerBusy.get(contentsId)??1)-1;if(pending)markerBusy.set(contentsId,pending);else markerBusy.delete(contentsId);};
+  try{
+   markerStage="COOKIES";const cookies=await event.sender.session.cookies.get({url:ready.origins[role]});
+   const selected=cookies.filter(c=>c.secure&&c.httpOnly&&c.path==="/"&&(!c.expirationDate||c.expirationDate>Date.now()/1000));
+   if(!selected.length||selected.length>8||new Set(selected.map(c=>c.name)).size!==selected.length){diagnostic("OPERATION_KEYS_DENIED_COOKIES");return denied;}
+   const cookie=selected.map(c=>c.name+"="+c.value).join("; ");if(cookie.length>4096||/[\r\n\x00]/.test(cookie)||shutdownStarted||recoveryBusy)return denied;
+   markerStage="BACKEND";const id=randomUUID();return await new Promise(resolve=>{
+    // An ACK timeout is uncertain: retain the reservation until the original backend reply.
+    const timer=setTimeout(()=>{diagnostic("OPERATION_KEYS_TIMEOUT");resolve(denied);},20000);
+    markerRequests.set(id,{finish:value=>{clearTimeout(timer);markerRequests.delete(id);release();if(value?.ok!==true)diagnostic("OPERATION_KEYS_DENIED_BACKEND");resolve(value?.ok===true?value:denied);}});
+    backendPending=true;try{child.send({type:"operation-keys",id,value:{role,cookie,command}},error=>{if(error)markerRequests.get(id)?.finish(denied);});}catch{markerRequests.get(id)?.finish(denied);}
+   });
+  }finally{if(!backendPending)release();}
+ }catch{diagnostic("OPERATION_KEYS_EXCEPTION_"+markerStage);return denied;}
+});
+function validReady(value){
+ if(!value||value.productionActivation!==false||!value.origins||Object.keys(value.origins).sort().join(",")!=="ADMIN,SALESPERSON"||typeof value.certificate!=="string"||typeof value.trustAnchor!=="string"||value.certificate.length>16384||value.trustAnchor.length>16384)return false;
+ try{const admin=new URL(value.origins.ADMIN),staff=new URL(value.origins.SALESPERSON);return admin.protocol==="https:"&&staff.protocol==="https:"&&admin.hostname==="localhost"&&staff.hostname==="127.0.0.1"&&admin.port!==""&&admin.port===staff.port&&admin.origin===value.origins.ADMIN&&staff.origin===value.origins.SALESPERSON&&new X509Certificate(value.certificate).verify(new X509Certificate(value.trustAnchor).publicKey);}catch{return false;}
+}
+const reportedFailures=new Set();
+function unavailable(){
+ setupValues=undefined;const kind=shutdownStarted?"SHUTDOWN":"STARTUP";if(reportedFailures.has(kind))return;reportedFailures.add(kind);
+ void dialog.showMessageBox({type:"error",title:"Shop POS TEST",message:shutdownStarted?"Safe shutdown could not be confirmed. Data and ownership are retained. Keep the application open for recovery review.":safeError}).then(()=>{if(kind==="STARTUP")return close();for(const window of roleWindows.values())if(!window.isDestroyed())window.show();});
+}
+async function close(){
+ diagnostic("CLOSE_REQUESTED");
+ if(shutdownStarted)return;shutdownStarted=true;setupValues=undefined;
+ for(const window of roleWindows.values())if(!window.isDestroyed())window.hide();
+ if(child?.connected){diagnostic("NODE_STOP_SENT");child.send({type:"stop"},error=>{if(error){quitting=true;app.quit();}});return;}
+ quitting=true;app.quit();
+}
+app.on("before-quit",event=>{if(!quitting){event.preventDefault();void close();}});
+app.on("window-all-closed",()=>{if(!initializing&&!setupWindow&&!pendingSetup&&!ownerWindow)void close();});
+app.on("second-instance",()=>{for(const window of roleWindows.values()){window.show();window.focus();break;}});
+app.on("web-contents-created",(_event,contents)=>{contents.on("will-attach-webview",event=>event.preventDefault());});
+function installerGuard(){return new Promise((resolve,reject)=>{
+ const guard=spawn(path.join(process.env.SystemRoot,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-File",path.join(__dirname,"lifecycle.ps1")],{windowsHide:true,stdio:["pipe","pipe","pipe"]});
+ let message="",ready=false;const timer=setTimeout(()=>{guard.kill();reject(Error());},15000);
+ guard.stdout.on("data",value=>{message+=value.toString();if(message==="READY\r\n"||message==="READY\n"){ready=true;clearTimeout(timer);resolve();}else if(message.length>32){guard.kill();reject(Error());}});
+ guard.stderr.on("data",()=>{if(!ready)reject(Error());else void close();});guard.once("error",reject);guard.once("exit",()=>{if(!ready)reject(Error());else if(!quitting)void close();});guard.stdin.end(JSON.stringify({parentId:process.pid}));
+});}
+async function boot(){
+ const allowedArguments=new Set(["--disposable-harness","--force-renderer-accessibility"]);
+ if(process.platform!=="win32"||process.arch!=="x64"||process.argv.slice(1).some(v=>!allowedArguments.has(v))||process.argv.includes("--force-renderer-accessibility")&&!process.argv.includes("--disposable-harness"))throw Error();
+ const harness=process.argv.includes("--disposable-harness"),override=harness?process.env.SHOP_POS_DESKTOP_TEST_DATA:undefined;
+ const dataRoot=override?path.resolve(override):path.join(process.env.LOCALAPPDATA,"ShopPOSTestData");
+ if(override&&!/^posdt-[a-f0-9-]{36}$/.test(path.basename(dataRoot)))throw Error();
+ protectData(dataRoot);if(harness)diagnosticPath=path.join(dataRoot,"desktop-harness-lifecycle.log");app.setPath("userData",path.join(dataRoot,"browser"));
+ if(!app.requestSingleInstanceLock()){quitting=true;app.quit();return;}
+ await installerGuard();
+ await verifyPayload(root);
+ await app.whenReady();
+ Menu.setApplicationMenu(Menu.buildFromTemplate([{label:"Shop POS TEST",submenu:[{label:"Salesperson",click:()=>roleWindow("SALESPERSON")},{label:"Admin",click:()=>roleWindow("ADMIN")},{label:"Recover disposable TEST archive...",click:()=>void chooseRecovery()},{type:"separator"},{label:"Exit",click:()=>void close()}]}]));
+ const environment={...process.env,NODE_ENV:"test",NEXT_TELEMETRY_DISABLED:"1"};for(const key of Object.keys(environment))if(/^(?:NODE_OPTIONS|NODE_PATH|NODE_EXTRA_CA_CERTS|NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|ELECTRON_EXTRA_LAUNCH_ARGS)$/i.test(key))delete environment[key];
+ environment.PATH=path.join(root,"runtime")+path.delimiter+(environment.PATH??"");
+ child=spawn(path.join(root,"runtime/node.exe"),[path.join(payload,"server/desktop/test-entry.js")],{env:environment,cwd:dataRoot,windowsHide:true,stdio:["ignore","ignore","ignore","ipc"]});
+ child.on("message",message=>{
+  if(!message||typeof message!=="object")return;
+  if(message.type==="confirm-enrollment"){try{setup(message);}catch{unavailable();}}
+  else if(message.type==="read-passwords"){const values=setupValues;setupValues=undefined;child.send({type:"reply",id:message.id,value:values});}
+  else if(message.type==="backup-handoff-password"){try{ownerForm({mode:"BACKUP_HANDOFF",id:message.id,generation:message.value?.generation});}catch{unavailable();}}
+  else if(message.type==="recovery-review"){try{const r=message.value;if(!r||r.productionActivation!==false||!["INTENT","COMMITTED"].includes(r.kind))throw Error();recoveryBusy=true;ownerForm({mode:r.kind==="COMMITTED"?"RECOVERY_REVIEW":"QUARANTINE",id:message.id,description:"Interrupted TEST operation "+r.operationId+"; state "+r.kind+"; target file identity "+r.destinationFileIdentity+"; source state "+r.sourceStateDigest+". No automatic replay or promotion."});}catch{unavailable();}}
+  else if(["confirm-protected-restore","confirm-writer-selection","confirm-quarantine"].includes(message.type))void ownerConfirmation(message).catch(unavailable);
+  else if(message.type==="recovery-completed"){if(message.value?.status==="TEST_RECOVERY_SELECTED_BACKUP_CONFIGURED"&&message.value.productionActivation===false&&!recoveryCompleted){recoveryCompleted=true;void dialog.showMessageBox({type:"info",title:"Shop POS TEST recovery",message:"Exact TEST writer selected and new backup namespace configured. Original data retained. Close this application, restart and log in with the inherited passwords. Production remains disabled."}).then(()=>close());}else unavailable();}
+  else if(message.type==="shared-login-result"&&typeof message.id==="string"){sharedLoginRequests.get(message.id)?.finish(message.value);}
+  else if(message.type==="operation-keys-result"&&typeof message.id==="string"){const pending=markerRequests.get(message.id);if(pending)pending.finish(message.value);else diagnostic("OPERATION_KEYS_RESULT_LATE");}
+  else if(message.type==="ready"){recoveryBusy=false;if(!validReady(message.value)){unavailable();return;}if(shutdownStarted)return;ready=message.value;initializing=false;roleWindow("SALESPERSON");}
+  else if(message.type==="lifecycle"&&["STOP_RECEIVED","STARTUP_DRAINED","RUNTIME_CLOSED","TRANSPORT","BACKUPS","AUTHORIZATION","FRAMEWORK","OWNERSHIP","DRAINED","HTTP_STOPPED","HTTP_AUTH_PENDING","HTTP_BUSINESS_PENDING","HTTP_PAGE_PENDING","HTTP_HEALTH_PENDING","HTTP_HANDLERS_DRAINED","HTTP_SOCKETS_CLOSED","HTTP_LISTENER_CLOSED"].includes(message.value)){diagnostic(message.value);}
+  else if(message.type==="stopped"){diagnostic("NODE_STOPPED");quitting=true;app.quit();}
+  else if(message.type==="fatal"){diagnostic("NODE_FATAL");unavailable();}
+ });
+ child.once("error",unavailable);
+ child.once("exit",()=>{for(const pending of sharedLoginRequests.values())pending.finish({ok:false});for(const pending of markerRequests.values())pending.finish({ok:false});diagnostic("NODE_EXIT");child=undefined;ready=undefined;if(!shutdownStarted)void dialog.showMessageBox({type:"error",title:"Shop POS TEST",message:safeError});for(const window of roleWindows.values())if(!window.isDestroyed())window.destroy();if(shutdownStarted){quitting=true;app.quit();}});
+ child.send({type:"start",dataRoot,applicationDirectory:path.join(payload,"app")});
+}
+void boot().catch(()=>{void dialog.showMessageBox({type:"error",title:"Shop POS TEST",message:safeError}).then(()=>{quitting=true;app.quit();});});

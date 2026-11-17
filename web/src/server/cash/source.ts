@@ -1,3 +1,7 @@
+import {resumeGuardInputs,retainGuardInputs,captureGuardInputs,guardInputsUnchanged} from "../auth/database";
+import {assertSaleCashBindings,assertSaleCashBindingsFull} from "./sale-bindings";
+import {assertSavedSaleCashBindings} from "./saved-sale-bindings";
+import {assertCashEvidenceCalendar} from "./evidence-calendar";
 import {cashSaleIntentHash} from "./sale-intent";
 import "server-only";
 import {randomUUID} from "node:crypto";
@@ -7,7 +11,7 @@ import {expenseBinding} from "../expenses/authority";
 import {expenseDay} from "../expenses/calendar";
 import {karachiStart,nextDay} from "../reports/period";
 import {verifiedJson} from "../db/verified-json";
-import {activeCount,appendClosingLinks,big,cutoffs,deny,type Row,type Tx,z} from "./model";
+import {activeCount,appendClosingLinks,big,cutoffs,deny,type Row,type Tx} from "./model";
 export type SourceKind="SALE"|"REFUND"|"EXPENSE"|"INVOICE_CORRECTION";
 const specs=[
  {kind:"REFUND",table:"return_requests",operations:"return_operations"},
@@ -64,40 +68,59 @@ export async function afterSource(tx:Tx,a:Actor,mark:Awaited<ReturnType<typeof b
  for(const f of await tx.all("SELECT rowid AS ordinal,* FROM financial_events WHERE rowid>? ORDER BY rowid",[mark.financial])){const dates=[String(f.effective_date)];let parent:Row|undefined;if(f.kind==="INVOICE_CORRECTION")parent=await tx.get("SELECT s.business_date FROM invoice_revision_lines l JOIN sales s ON s.id=l.invoice_id WHERE l.id=?",[f.correction_line_id]);else if(f.kind==="REFUND")parent=await tx.get("SELECT s.business_date FROM return_lines l JOIN sales s ON s.id=l.invoice_id WHERE l.id=?",[f.return_line_id]);if(parent)dates.push(String(parent.business_date));await appendClosingLinks(tx,"FINANCIAL",String(f.id),dates,{...f,economicPostingDate:String(f.effective_date),originalReferenceDate:parent?.business_date??null,historicalSnapshotUnchanged:true},b.now);}
  if(!recoveryOperationId)await assertCashLedgers(tx);
 }
-export async function assertCashLedgers(tx:Tx){
+export async function assertCashLedgers(tx:Tx){return scanCashLedgers(tx);}
+export async function assertCashLedgersFull(tx:Tx){return scanCashLedgers(tx,undefined,true);}
+export async function assertSavedCashLedgers(tx:Tx,invoiceIds:readonly string[]){return scanCashLedgers(tx,invoiceIds);}
+async function scanCashLedgers(tx:Tx,invoiceIds?:readonly string[],full=false){
+ await assertCashSourceRelations(tx,full);
  const bad=async(sql:string)=>{if(await tx.get(sql))return deny("UNAVAILABLE");};
  // A committed action must retain its source effect, including silent driver failures.
  await bad("SELECT o.id FROM cash_action_operations o JOIN cash_action_requests q ON q.id=o.request_id WHERE (q.action='START_COUNT' AND NOT EXISTS(SELECT 1 FROM cash_count_sessions s WHERE s.operation_id=o.id AND s.id=json_extract(o.result_json,'$.sessionId'))) OR (q.action IN('RECORD_COUNT','ABORT_COUNT') AND NOT EXISTS(SELECT 1 FROM cash_counts c WHERE c.operation_id=o.id AND c.id=json_extract(o.result_json,'$.countId'))) OR (q.action='OPEN_ANCHOR' AND NOT EXISTS(SELECT 1 FROM cash_anchors a WHERE a.operation_id=o.id)) OR (q.action='ACCEPT_VARIANCE' AND NOT EXISTS(SELECT 1 FROM cash_reconciliations r WHERE r.operation_id=o.id)) OR (q.action='CLOSE_DAY' AND NOT EXISTS(SELECT 1 FROM daily_closings c WHERE c.operation_id=o.id)) OR (q.action='RESOLVE_EVIDENCE' AND NOT EXISTS(SELECT 1 FROM cash_flow_evidence e WHERE e.id=json_extract(o.result_json,'$.evidenceId') AND e.movement_id=json_extract(q.payload_json,'$.movementId') AND e.evidence=json_extract(q.payload_json,'$.evidence'))) OR (q.action='RESOLVE_ADMISSION' AND json_extract(q.payload_json,'$.admissionId') IS NOT NULL AND NOT EXISTS(SELECT 1 FROM counter_cash_admission_resolutions r WHERE r.admission_id=json_extract(q.payload_json,'$.admissionId'))) OR (q.action='RESOLVE_ADMISSION' AND json_extract(q.payload_json,'$.admissionId') IS NULL AND NOT EXISTS(SELECT 1 FROM sale_cancellations c WHERE c.request_key=json_extract(q.payload_json,'$.sourceKey') AND c.context_fingerprint=json_extract(q.payload_json,'$.sourceContext'))) LIMIT 1");
  await bad("SELECT s.id FROM cash_count_sessions s JOIN cash_action_operations o ON o.id=s.operation_id JOIN cash_action_requests q ON q.id=o.request_id WHERE q.action<>'START_COUNT' OR s.target_date IS NOT json_extract(q.payload_json,'$.businessDate') OR s.id IS NOT json_extract(o.result_json,'$.sessionId') OR s.session_ref<>o.session_ref LIMIT 1");
- for(const [kind,ops,cancels]of [["SALE","sale_operations","sale_cancellations"],["REFUND","return_operations","return_cancellations"],["EXPENSE","expense_operations","expense_cancellations"],["INVOICE_CORRECTION","invoice_correction_operations","invoice_correction_cancellations"]] as const){
-  await bad("SELECT r.id FROM counter_cash_admission_resolutions r JOIN counter_cash_admissions a ON a.id=r.admission_id WHERE a.source_kind='"+kind+"' AND r.outcome='NO_EFFECT' AND NOT EXISTS(SELECT 1 FROM "+ops+" o WHERE o.request_key=a.source_key) AND NOT EXISTS(SELECT 1 FROM "+cancels+" c WHERE c.request_key=a.source_key) LIMIT 1");
- }
+
 
  await bad("SELECT c.id FROM cash_counts c JOIN cash_action_operations o ON o.id=c.operation_id JOIN cash_action_requests q ON q.id=o.request_id JOIN cash_count_sessions s ON s.id=c.session_id WHERE json_extract(o.result_json,'$.countId') IS NOT c.id OR json_extract(q.payload_json,'$.sessionId') IS NOT c.session_id OR c.session_ref<>o.session_ref OR c.recorded_at_ms>o.recorded_at_ms OR (c.outcome='RECORDED' AND (q.action<>'RECORD_COUNT' OR CAST(c.actual_m AS TEXT) IS NOT json_extract(q.payload_json,'$.actualPaisa') OR CAST(c.actual_m AS TEXT) IS NOT json_extract(c.snapshot_json,'$.actualPaisa') OR CAST(c.counted_at_ms AS TEXT) IS NOT json_extract(c.snapshot_json,'$.countTimeMs') OR s.target_date IS NOT json_extract(c.snapshot_json,'$.businessDate'))) OR (c.outcome<>'RECORDED' AND q.action<>'ABORT_COUNT') LIMIT 1");
  await bad("SELECT a.id FROM cash_anchors a JOIN cash_counts c ON c.id=a.count_id JOIN cash_count_sessions s ON s.id=c.session_id JOIN cash_action_operations o ON o.id=a.operation_id JOIN cash_action_requests q ON q.id=o.request_id WHERE q.action<>'OPEN_ANCHOR' OR json_extract(q.payload_json,'$.countId') IS NOT a.count_id OR json_extract(o.result_json,'$.anchorId') IS NOT a.id OR json_extract(a.basis_json,'$.actualPaisa') IS NOT CAST(c.actual_m AS TEXT) OR json_extract(a.basis_json,'$.sourceDigest') IS NOT s.source_digest OR json_extract(a.basis_json,'$.evidence') IS NOT json_extract(q.payload_json,'$.evidence') LIMIT 1");
  await bad("SELECT r.id FROM cash_reconciliations r JOIN cash_action_operations o ON o.id=r.operation_id JOIN cash_action_requests q ON q.id=o.request_id WHERE q.action<>'ACCEPT_VARIANCE' OR json_extract(q.payload_json,'$.countId') IS NOT r.count_id OR json_extract(o.result_json,'$.reconciliationId') IS NOT r.id OR r.evidence IS NOT json_extract(q.payload_json,'$.evidence') LIMIT 1");
  await bad("SELECT c.id FROM daily_closings c JOIN cash_action_operations o ON o.id=c.operation_id JOIN cash_action_requests q ON q.id=o.request_id WHERE q.action<>'CLOSE_DAY' OR json_extract(q.payload_json,'$.businessDate') IS NOT c.business_date OR json_extract(o.result_json,'$.closingId') IS NOT c.id OR json_extract(c.snapshot_json,'$.status') IS NOT c.status OR json_extract(q.payload_json,'$.countId') IS NOT c.count_id OR (c.status='UNRECONCILED' AND json_extract(q.payload_json,'$.allowUnreconciled') IS NOT 'YES') LIMIT 1");
- for(const [kind,column,table]of [["SALE","sale_operation_id","sale_operations"],["REFUND","return_operation_id","return_operations"],["EXPENSE","expense_operation_id","expense_operations"],["INVOICE_CORRECTION","invoice_operation_id","invoice_correction_operations"]] as const){
-  await bad("SELECT r.id FROM counter_cash_admission_resolutions r JOIN counter_cash_admissions a ON a.id=r.admission_id LEFT JOIN "+table+" o ON o.id=r."+column+" WHERE a.source_kind='"+kind+"' AND r.outcome='POSTED' AND (o.id IS NULL OR o.request_key<>a.source_key) LIMIT 1");
- }
- for(const r of await tx.all("SELECT a.payload_hash,o.payload_json FROM counter_cash_admission_resolutions r JOIN counter_cash_admissions a ON a.id=r.admission_id JOIN sale_operations o ON o.id=r.sale_operation_id WHERE r.outcome='POSTED'")){
-  if(cashSaleIntentHash(JSON.parse(String(r.payload_json)))!==r.payload_hash)return deny("UNAVAILABLE");
- }
 
- await bad("SELECT r.id FROM cash_reconciliations r LEFT JOIN cash_movements m ON m.reconciliation_id=r.id WHERE m.id IS NULL OR m.kind<>'COUNTER_RECONCILIATION' OR m.amount_m<>r.delta_m OR m.recorded_at_ms<>r.recorded_at_ms OR m.sale_payment_id IS NOT NULL OR m.refund_payment_id IS NOT NULL LIMIT 1");
- await bad("SELECT e.id FROM cash_flow_evidence e WHERE e.admission_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM counter_cash_admission_resolutions r WHERE r.admission_id=e.admission_id AND r.outcome=\'POSTED\') LIMIT 1");
- await bad("SELECT e.id FROM cash_flow_evidence e LEFT JOIN cash_flow_evidence p ON p.id=e.previous_id WHERE (e.previous_id IS NOT NULL AND (p.id IS NULL OR p.movement_id<>e.movement_id OR p.rowid>=e.rowid)) OR (e.previous_id IS NULL AND EXISTS(SELECT 1 FROM cash_flow_evidence x WHERE x.movement_id=e.movement_id AND x.previous_id IS NULL AND x.rowid<e.rowid)) LIMIT 1");
+ if(invoiceIds)await assertSavedSaleCashBindings(tx,invoiceIds);else if(full)await assertSaleCashBindingsFull(tx);else await assertSaleCashBindings(tx);
+
+
+
+
  await bad("SELECT o.id FROM cash_action_operations o JOIN cash_action_requests q ON q.id=o.request_id JOIN cash_action_authorizations a ON a.id=o.authorization_id WHERE o.request_key<>q.request_key OR o.session_ref<>a.session_ref OR o.recorded_at_ms<a.issued_at_ms OR o.recorded_at_ms>=a.expires_at_ms OR EXISTS(SELECT 1 FROM cash_action_cancellations c WHERE c.request_key=o.request_key) LIMIT 1");
  await bad("SELECT c.id FROM cash_counts c JOIN cash_count_sessions s ON s.id=c.session_id WHERE c.outcome='RECORDED' AND (c.counted_at_ms<s.started_at_ms OR c.counted_at_ms>=s.lease_until_ms OR c.counted_at_ms<>c.recorded_at_ms) LIMIT 1");
  await bad("SELECT a.id FROM cash_anchors a JOIN cash_counts c ON c.id=a.count_id JOIN cash_count_sessions s ON s.id=c.session_id WHERE c.outcome<>'RECORDED' OR a.activated_at_ms<>c.counted_at_ms OR a.cutoff<>s.cash_cutoff LIMIT 1");
  await bad("SELECT c.id FROM daily_closings c WHERE NOT EXISTS(SELECT 1 FROM closing_backup_jobs b WHERE b.closing_id=c.id) LIMIT 1");
- for(const a of await tx.all("SELECT * FROM counter_cash_admissions WHERE source_kind=\'SALE\'")){const saved=verifiedJson(a.payload_json,a.payload_digest,true) as {intent:Record<string,unknown>;shopName:string};if(typeof saved.shopName!=="string"||saved.shopName.length<1||saved.shopName.length>80||saved.intent.requestKey!==a.source_key||cashSaleIntentHash(saved.intent)!==a.payload_hash)return deny("UNAVAILABLE");}
- await bad("SELECT r.id FROM counter_cash_admission_resolutions r JOIN counter_cash_admissions a ON a.id=r.admission_id LEFT JOIN cash_action_operations o ON o.id=r.recovery_operation_id LEFT JOIN cash_action_requests q ON q.id=o.request_id LEFT JOIN sale_operations s ON s.id=r.sale_operation_id WHERE (a.source_kind=\'SALE\' AND r.actor_id=\'ADMIN\' AND r.outcome=\'POSTED\' AND r.recovery_operation_id IS NULL) OR (r.recovery_operation_id IS NOT NULL AND (a.source_kind<>\'SALE\' OR o.id IS NULL OR q.action<>\'RESOLVE_ADMISSION\' OR json_extract(q.payload_json,\'$.resolution\') IS NOT \'RECORD_PRIOR_SALE\' OR json_extract(q.payload_json,\'$.admissionId\') IS NOT a.id OR json_extract(o.result_json,\'$.invoiceId\') IS NOT s.invoice_id)) LIMIT 1");
+ await bad("SELECT r.id FROM (SELECT * FROM counter_cash_admission_resolutions WHERE actor_id='ADMIN' OR recovery_operation_id IS NOT NULL) r JOIN counter_cash_admissions a ON a.id=r.admission_id LEFT JOIN cash_action_operations o ON o.id=r.recovery_operation_id LEFT JOIN cash_action_requests q ON q.id=o.request_id LEFT JOIN sale_operations s ON s.id=r.sale_operation_id WHERE (a.source_kind='SALE' AND r.actor_id='ADMIN' AND r.outcome='POSTED' AND r.recovery_operation_id IS NULL) OR (r.recovery_operation_id IS NOT NULL AND (a.source_kind<>'SALE' OR o.id IS NULL OR q.action<>'RESOLVE_ADMISSION' OR json_extract(q.payload_json,'$.resolution') IS NOT 'RECORD_PRIOR_SALE' OR json_extract(q.payload_json,'$.admissionId') IS NOT a.id OR json_extract(o.result_json,'$.invoiceId') IS NOT s.invoice_id)) LIMIT 1");
  for(const [table,prefix]of [["cash_action_requests","payload"],["cash_action_operations","result"],["cash_counts","snapshot"],["daily_closings","snapshot"],["closing_adjustments","effect"]] as const){
-  let cursor=z;for(;;){const rows=await tx.all("SELECT rowid AS ordinal,"+prefix+"_json,"+prefix+"_hash FROM "+table+" WHERE rowid>? ORDER BY rowid LIMIT 100",[cursor]);if(!rows.length)break;for(const r of rows){const value=verifiedJson(r[prefix+"_json"],r[prefix+"_hash"],true);if(!value||typeof value!=="object"||Array.isArray(value))return deny("UNAVAILABLE");}cursor=big(rows.at(-1)!.ordinal);}
+  let cursor:bigint|null=null;for(;;){const rows=await tx.all("SELECT rowid AS ordinal,"+prefix+"_json,"+prefix+"_hash FROM "+table+(cursor===null?"":" WHERE rowid>?")+" ORDER BY rowid LIMIT 100",cursor===null?[]:[cursor]);if(!rows.length)break;for(const r of rows){const value=verifiedJson(r[prefix+"_json"],r[prefix+"_hash"],true);if(!value||typeof value!=="object"||Array.isArray(value))return deny("UNAVAILABLE");}cursor=big(rows.at(-1)!.ordinal);}
  }
  for(const r of await tx.all("SELECT r.*,m.cash_date,c.snapshot_json,c.snapshot_hash FROM cash_reconciliations r JOIN cash_movements m ON m.reconciliation_id=r.id JOIN cash_counts c ON c.id=r.count_id")){
   const s=verifiedJson(r.snapshot_json,r.snapshot_hash) as {variancePaisa:string|null;expectedAtCountPaisa:string|null};if(s.variancePaisa!==String(r.delta_m)||s.expectedAtCountPaisa!==String(r.expected_m)||r.cash_date!==expenseDay(Number(r.observed_at_ms)))return deny("UNAVAILABLE");
  }
- for(const e of await tx.all("SELECT actual_date,earliest_at_ms,latest_at_ms FROM cash_flow_evidence")){if(expenseDay(Number(e.earliest_at_ms))!==e.actual_date||expenseDay(Number(e.latest_at_ms))!==e.actual_date)return deny("UNAVAILABLE");}
+ await assertRecordedCashEvidence(tx);
+}
+
+const calendarContinuation=Object.freeze({});
+async function assertRecordedCashEvidence(tx:Tx){if(resumeGuardInputs(tx,"CASH_EVIDENCE",calendarContinuation))return;const point=captureGuardInputs(tx,"CASH_EVIDENCE");assertCashEvidenceCalendar(await tx.all("SELECT actual_date,earliest_at_ms,latest_at_ms FROM cash_flow_evidence"));if(point&&guardInputsUnchanged(tx,"CASH_EVIDENCE",point,true))retainGuardInputs(tx,"CASH_EVIDENCE",point,calendarContinuation);}
+
+// Original source-only predicates: no count/action/closing metadata is a dependency.
+// The private native journal checks every mutation; unknown effects disable reuse.
+const sourceRelationsOwner=Object.freeze({});
+async function assertCashSourceRelations(tx:Tx,full:boolean){
+ if(!full&&resumeGuardInputs(tx,"CASH_SOURCE_RELATIONS",sourceRelationsOwner))return;
+ const point=full?undefined:captureGuardInputs(tx,"CASH_SOURCE_RELATIONS");
+ const bad=async(sql:string)=>{if(await tx.get(sql))return deny("UNAVAILABLE");};
+ for(const [kind,ops,cancels]of [["SALE","sale_operations","sale_cancellations"],["REFUND","return_operations","return_cancellations"],["EXPENSE","expense_operations","expense_cancellations"],["INVOICE_CORRECTION","invoice_correction_operations","invoice_correction_cancellations"]] as const){
+  await bad("SELECT r.id FROM counter_cash_admission_resolutions r JOIN counter_cash_admissions a ON a.id=r.admission_id WHERE a.source_kind='"+kind+"' AND r.outcome='NO_EFFECT' AND NOT EXISTS(SELECT 1 FROM "+ops+" o WHERE o.request_key=a.source_key) AND NOT EXISTS(SELECT 1 FROM "+cancels+" c WHERE c.request_key=a.source_key) LIMIT 1");
+ }
+ for(const [kind,column,table]of [["SALE","sale_operation_id","sale_operations"],["REFUND","return_operation_id","return_operations"],["EXPENSE","expense_operation_id","expense_operations"],["INVOICE_CORRECTION","invoice_operation_id","invoice_correction_operations"]] as const){
+  if(kind!=="SALE")await bad("SELECT r.id FROM counter_cash_admission_resolutions r JOIN counter_cash_admissions a ON a.id=r.admission_id LEFT JOIN "+table+" o ON o.id=r."+column+" WHERE a.source_kind='"+kind+"' AND r.outcome='POSTED' AND (o.id IS NULL OR o.request_key<>a.source_key) LIMIT 1");
+ }
+ await bad("SELECT r.id FROM cash_reconciliations r LEFT JOIN cash_movements m ON m.reconciliation_id=r.id WHERE m.id IS NULL OR m.kind<>'COUNTER_RECONCILIATION' OR m.amount_m<>r.delta_m OR m.recorded_at_ms<>r.recorded_at_ms OR m.sale_payment_id IS NOT NULL OR m.refund_payment_id IS NOT NULL LIMIT 1");
+ await bad("SELECT e.id FROM cash_flow_evidence e WHERE e.admission_id IS NOT NULL AND e.admission_id NOT IN(SELECT admission_id FROM counter_cash_admission_resolutions WHERE outcome='POSTED' AND admission_id IS NOT NULL) LIMIT 1");
+ await bad("SELECT e.id FROM cash_flow_evidence e LEFT JOIN cash_flow_evidence p ON p.id=e.previous_id WHERE (e.previous_id IS NOT NULL AND (p.id IS NULL OR p.movement_id<>e.movement_id OR p.rowid>=e.rowid)) OR (e.previous_id IS NULL AND EXISTS(SELECT 1 FROM cash_flow_evidence x INDEXED BY cash_evidence_source WHERE x.movement_id=e.movement_id AND x.previous_id IS NULL AND x.rowid<e.rowid)) LIMIT 1");
+ if(point&&guardInputsUnchanged(tx,"CASH_SOURCE_RELATIONS",point,true))retainGuardInputs(tx,"CASH_SOURCE_RELATIONS",point,sourceRelationsOwner);
 }

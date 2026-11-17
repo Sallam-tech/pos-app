@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Shop POS disposable TEST setup</title><link rel="stylesheet" href="setup.css"></head>
+<body><main><h1>Create disposable TEST shop</h1><p>This separate test shop contains no real business data. Production remains disabled. Set both passwords; they are used only by the existing protected account provisioner.</p>
+<form id="setup"><label>Admin password<input id="admin" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label>
+<label>Salesperson password<input id="salesperson" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label>
+<label class="confirmation"><input id="confirm" type="checkbox" required>I confirm this exact disposable TEST setup. Existing data must be retained.</label>
+<button type="submit">Confirm disposable TEST setup</button><p id="error" role="alert"></p></form></main><script src="setup.js"></script></body></html>

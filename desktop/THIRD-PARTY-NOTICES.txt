@@ -1,0 +1,11 @@
+﻿Shop POS disposable TEST build. Production activation is disabled.
+Electron 45.3.3: MIT license and Chromium notices distributed as LICENSE and
+LICENSES.chromium.html. Node.js 24.22.3: complete notices in NODE-LICENSE.txt
+from the official Node.js v24.22.3 source tag.
+better-sqlite3 13.0.3 and all other runtime packages retain their own license
+and notice files in resources/payload/node_modules. The actual package/version
+inventory is runtime-package-inventory.json. Dependencies use the pinned
+package-lock.json, development/peer-only packages omitted, scripts disabled.
+The compiler and test browsers are build tools, not target-PC requirements.
+This TEST application/installer is unsigned. Windows security/trust-store
+settings are not changed. No production signing or client handover is claimed.

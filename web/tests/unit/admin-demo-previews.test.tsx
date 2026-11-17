@@ -1,11 +1,17 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminExpensesPreview as ExpensesPage } from "@/components/demo/admin-expenses-preview";
 import ReturnsPage from "@/app/pos/returns/page";
 import InvestmentPage from "@/app/admin/investment/page";
 import { mockSales } from "@/lib/admin/mock-sales";
 import { demoExpenseTotals, inspectDemoReturn, isDemoCalendarDate, type DemoExpense } from "@/lib/demo/admin-preview";
 
+// Pure demo projection only. Real auth/render fences are verified by the compiled HTTPS suites.
+vi.mock("next/server",()=>({connection:async()=>{}}));
+vi.mock("@/server/hosting/invoices-render",()=>({readTestInvoicesRender:()=>false}));
+vi.mock("@/server/hosting/sales-render",()=>({isTestSalesRender:()=>false}));
+vi.mock("@/server/hosting/returns-render",()=>({readTestReturnsRender:()=>false}));
+vi.mock("@/server/hosting/reports-render",()=>({readTestReportsRender:()=>false}));
 beforeEach(() => {
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value(this: HTMLDialogElement) { this.open = true; } });
   Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value(this: HTMLDialogElement) { this.open = false; } });
@@ -17,8 +23,8 @@ function enterExpense(amount: string, reason = "Cleaning") {
 }
 
 describe("role-placed temporary demo previews", () => {
-  it("projects only the permitted original-sale details into the Salesperson return preview", () => {
-    const page = ReturnsPage();
+  it("projects only the permitted original-sale details into the Salesperson return preview", async () => {
+    const page = await ReturnsPage();
     const preview = page.props.children;
     expect(preview.props.sales).toHaveLength(8);
     for (const sale of preview.props.sales) expect(Object.keys(sale)).toEqual(["id", "productName", "quantity", "unitPricePaise"]);
@@ -79,8 +85,8 @@ describe("role-placed temporary demo previews", () => {
     view.unmount(); render(<ExpensesPage businessDate={{ iso: "2026-11-02", label: "2 November 2026" }} />); fireEvent.click(screen.getByRole("button", { name: "View Expense Summary" }));
     expect(screen.getByText("No expenses recorded for this date.")).toBeVisible();
   });
-  it("shows incomplete purchase information without arbitrary owner investment entry", () => {
-    render(<InvestmentPage />);
+  it("shows incomplete purchase information without arbitrary owner investment entry", async () => {
+    render(await InvestmentPage());
     expect(screen.getByText("Not available — buying costs not recorded")).toBeVisible();
     fireEvent.click(screen.getByText("View Product Details"));
     expect(screen.queryByRole("form")).not.toBeInTheDocument();
@@ -98,8 +104,8 @@ describe("role-placed temporary demo previews", () => {
     expect(inspectDemoReturn({ ...mockSales[0], quantity: 1.5 }, "1").error).toMatch(/unsupported/);
     expect(JSON.stringify(mockSales)).toBe(original);
   });
-  it("shows an honest read-only cash-refund review and resets without changing original sales", () => {
-    render(<ReturnsPage />); const submit = screen.getByRole("button", { name: "Review Refund" });
+  it("shows an honest read-only cash-refund review and resets without changing original sales", async () => {
+    render(await ReturnsPage()); const submit = screen.getByRole("button", { name: "Review Refund" });
     fireEvent.click(submit); expect(screen.getByRole("alert")).toHaveTextContent("Choose an original sale"); expect(screen.getByLabelText("Find Original Sale")).toHaveFocus();
     fireEvent.change(screen.getByLabelText("Find Original Sale"), { target: { value: "demo-sale-1" } });
     fireEvent.click(screen.getByRole("button", { name: "Select demo-sale-1 — Diapers" }));

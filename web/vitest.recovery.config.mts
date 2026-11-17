@@ -1,0 +1,3 @@
+import {defineConfig} from "vitest/config";
+import {fileURLToPath} from "node:url";
+export default defineConfig({resolve:{alias:{"server-only":fileURLToPath(new URL("./node_modules/next/dist/compiled/server-only/empty.js",import.meta.url))}},test:{environment:"node",include:["tests/integration/phase2-recovery*.test.ts","tests/integration/login-attempt-protection.test.ts"],fileParallelism:false,testTimeout:180000,hookTimeout:180000}});

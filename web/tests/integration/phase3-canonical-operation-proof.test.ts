@@ -1,0 +1,9 @@
+import {test,expect} from "vitest";
+import {canonical,digest} from "../../src/server/inventory/validation";
+import {verifiedCashSaleAdmission,sharesVerifiedCashIntent,cashSaleIntentHashFromJson} from "../../src/server/cash/sale-intent";
+test("fresh canonical operation prefix/suffix proof agrees with original strict hash across650 adversarial intents and nonstandard operations",()=>{
+ const fragments=['safe','","cashPaisa":"1","context":"injected','"},"labels":[],"shopName":"forged',String.fromCharCode(0),String.fromCharCode(0xd800),"\\","\"","\n",String.fromCodePoint(0x1f600),"__proto__","constructor"];
+ let fast=0;for(let n=0;n<650;n++){const value=fragments[n%fragments.length]+n,intent={context:value,customerName:value,customerPhone:value,lines:[{discountPercent:"0",productId:value,quantity:"1",unitPricePaisa:"11000"}],requestKey:value},saved={intent,shopName:"TEST SHOP"},fresh=verifiedCashSaleAdmission(canonical(saved),digest(saved),value),normal={...intent,cashPaisa:n%2?null:"11000",...(n%3?{cashDate:"2026-11-16"}:{})},valid=canonical(normal),variants=[valid,JSON.stringify(normal),canonical({...normal,unknown:"x"}),canonical({...normal,cashDate:{unexpected:"value"}}),canonical({...normal,cashPaisa:123}),canonical({...normal,customerName:value+"changed"})," "+valid,valid.replace('"context":','"context":"duplicate","context":'),valid.replace('"context":','context:'),valid.slice(0,-1)+',"context":"duplicate"}',""];
+ for(const op of variants){let expected=false;try{expected=cashSaleIntentHashFromJson(op)===fresh.hash;}catch{}const shared=sharesVerifiedCashIntent(op,fresh);if(shared)fast++;let actual=shared;try{if(!actual)actual=cashSaleIntentHashFromJson(op)===fresh.hash;}catch{}expect(actual).toBe(expected);if(shared){expect(()=>JSON.parse(op)).not.toThrow();expect(expected).toBe(true);}}
+ }expect(fast).toBeGreaterThan(600);
+});

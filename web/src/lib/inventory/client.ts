@@ -40,7 +40,7 @@ export function useInventoryRecovery() {
  useEffect(() => {
   void refreshMarker();
   if (!channel && typeof BroadcastChannel !== "undefined") { channel = new BroadcastChannel("pos-test-inventory-recovery"); channel.onmessage = () => { void refreshMarker(); }; }
-  const focus = () => { void refreshMarker(); }, timer = setInterval(focus, 1500);
+  const focus = () => { void refreshMarker(); }, timer = setInterval(() => { if(document.visibilityState === "visible" && document.hasFocus())focus(); }, 1500);
   window.addEventListener("focus", focus);
   return () => { clearInterval(timer); window.removeEventListener("focus", focus); };
  }, []);

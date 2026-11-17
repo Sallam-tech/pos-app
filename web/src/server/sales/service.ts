@@ -1,14 +1,17 @@
+import {withDependencyRead} from "../auth/gateway";
+import {assertSavedReturnLedgers} from "../returns/saved-ledgers";
+import {recentSalesRange} from "../../lib/sales/history-range";
 import {currentSettings,frozenBranding,receiptBranding,type Branding} from "../settings/model";
 import {cashSaleIntentHash} from "../cash/sale-intent";
 import {expenseBinding as recoveryBinding} from "../expenses/authority";
 import {verifiedJson} from "../db/verified-json";
 import {calendar} from "../expenses/calendar";
-import {beforeSource,afterSource} from "../cash/source";
+import {beforeSource,afterSource,assertSavedCashLedgers} from "../cash/source";
 import "server-only";
 import {postSaleLedgers,assertReturnLedgers} from "../returns/ledgers";
 import {randomUUID} from "node:crypto";
 import type {Actor,AuthorizationGateway,AuthorizedTransaction} from "../auth/types";
-import {authorizedFileNamespace} from "../auth/database";
+import {authorizedFileNamespace,captureGuardInputs,guardInputsUnchanged,type GuardInputPoint} from "../auth/database";
 import {validateReviewedSchema} from "../db/validate-schema";
 import {int64} from "../db/integers";
 import {load} from "../inventory/model";
@@ -33,6 +36,19 @@ export async function salesContext(tx:AuthorizedTransaction){
 function commandHash(c:SaleCommand){return digest({kind:"SALE",policy:MONEY_POLICY,...c});}
 const big=(v:unknown)=>{if(typeof v!=="bigint")return deny("UNAVAILABLE");return int64(v);};
 const day=(t:bigint)=>new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Karachi",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(Number(t)));
+// Validate each current product once while reading receipts in the SAME genuine
+// reserved transaction. Store only validated IDs, never product/receipt results.
+// Strict no-write evidence covers ALL inputs; even known metadata writes revoke
+// this proof. Structural/old scopes and any mutation always use fresh load().
+const receiptStockChecks=new WeakMap<object,{point:GuardInputPoint;ids:Set<string>}>();
+async function assertReceiptStock(tx:AuthorizedTransaction,id:string){
+ let saved=receiptStockChecks.get(tx);
+ if(saved&&!guardInputsUnchanged(tx,"RETURN",saved.point,true)){receiptStockChecks.delete(tx);saved=undefined;}
+ if(saved?.ids.has(id))return;
+ const point=saved?.point??captureGuardInputs(tx,"RETURN");
+ await load(tx,id);
+ if(point&&guardInputsUnchanged(tx,"RETURN",point,true)){const ids=saved?.ids??new Set<string>();ids.add(id);receiptStockChecks.set(tx,{point,ids});}
+}
 export async function readReceipt(tx:AuthorizedTransaction,id:string):Promise<Receipt>{
  const s=await tx.get("SELECT * FROM sales WHERE id=?",[id]);if(!s)return deny("NOT_FOUND");
  const op=await tx.get("SELECT * FROM sale_operations WHERE id=? AND invoice_id=?",[s.operation_id,id]);
@@ -49,7 +65,7 @@ export async function readReceipt(tx:AuthorizedTransaction,id:string):Promise<Re
     amount.unitPayable!==r.unit_payable_m||amount.charged!==r.charged_m||amount.cogs!==r.cogs_m||amount.numerator!==r.exact_unit_numerator||r.exact_unit_denominator!==BigInt(100))return deny("UNAVAILABLE");
   const movement=await tx.all("SELECT * FROM stock_movements WHERE sale_line_id=? LIMIT 2",[r.id]);
   if(movement.length!==1||movement[0].kind!=="SALE"||movement[0].operation_id!==null||movement[0].product_id!==r.product_id||movement[0].delta_q!==-big(r.quantity_q)||movement[0].cost_snapshot_m!==r.cost_snapshot_m)return deny("UNAVAILABLE");
-  await load(tx,String(r.product_id));
+  await assertReceiptStock(tx,String(r.product_id));
   total=int64(total+amount.charged);cogs=int64(cogs+amount.cogs);
   lines.push({productId:uuid(r.product_id),code:text(r.code,32),name:text(r.name,120),sizeLabel:r.size_label===null?null:text(r.size_label,40),unit:text(r.unit,4),quantity:amount.count.toString(),unitPricePaisa:amount.unit.toString(),discountPercent:amount.percent.toString(),unitPayablePaisa:amount.unitPayable.toString(),totalPaisa:amount.charged.toString()});
  }
@@ -95,10 +111,19 @@ async function persistPreparedSale(tx:AuthorizedTransaction,actor:Actor,command:
 }
 export function createSalesService(gateway:AuthorizationGateway,shopName:string,schema:36|37|38|39|40|41=36){
  text(shopName,80);
- async function scope<T>(request:Request,admin:boolean,work:(tx:AuthorizedTransaction,actor:Actor)=>Promise<T>){
+ async function scope<T>(request:Request,admin:boolean,work:(tx:AuthorizedTransaction,actor:Actor)=>Promise<T>,read?:"DEPENDENCIES"|((value:T)=>readonly string[])){
   let failure:SaleError|undefined;
-  try{return await (admin?gateway.withAdminTransaction.bind(gateway):gateway.withSalespersonTransaction.bind(gateway))(request,async(tx,actor)=>{
-   try{if(actor.role!==(admin?"ADMIN":"SALESPERSON")||!(await validateReviewedSchema(tx,schema)).ok)return deny("UNAVAILABLE");if(schema>=37)await assertReturnLedgers(tx);const before=schema>=39?await tx.get("SELECT total_changes() AS n,schema_version AS s FROM pragma_schema_version"):undefined;const cashMark=await beforeSource(tx);const result=await work(tx,actor);await afterSource(tx,actor,cashMark);const after=schema>=39?await tx.get("SELECT total_changes() AS n,schema_version AS s FROM pragma_schema_version"):undefined;if(schema>=37&&(schema<39||!before||!after||typeof before.n!=="bigint"||before.n!==after.n||before.s!==after.s))await assertReturnLedgers(tx);return result;}
+  try{const run=read&&schema>=40?(r:Request,w:(tx:AuthorizedTransaction,a:Actor)=>Promise<T>)=>withDependencyRead(gateway,admin?"ADMIN":"SALESPERSON",r,w):admin?gateway.withAdminTransaction.bind(gateway):gateway.withSalespersonTransaction.bind(gateway);return await run(request,async(tx,actor)=>{
+   try{if(actor.role!==(admin?"ADMIN":"SALESPERSON")||!(await validateReviewedSchema(tx,schema)).ok)return deny("UNAVAILABLE");if(read&&schema>=40){
+    await recoveryBinding(tx,actor);
+    
+    const start=await tx.get("SELECT total_changes() AS n,schema_version AS s FROM pragma_schema_version"),value=await work(tx,actor);
+    if(read!=="DEPENDENCIES"){const ids=read(value);await assertSavedReturnLedgers(tx,ids);await assertSavedCashLedgers(tx,ids);}
+    const end=await tx.get("SELECT total_changes() AS n,schema_version AS s FROM pragma_schema_version");
+    if(!start||!end||typeof start.n!=="bigint"||start.n!==end.n||start.s!==end.s)return deny("UNAVAILABLE");
+    await recoveryBinding(tx,actor);return value;
+   }
+   if(schema>=37)await assertReturnLedgers(tx);const before=schema>=39?await tx.get("SELECT total_changes() AS n,schema_version AS s FROM pragma_schema_version"):undefined;const cashMark=await beforeSource(tx);const result=await work(tx,actor);await afterSource(tx,actor,cashMark);const after=schema>=39?await tx.get("SELECT total_changes() AS n,schema_version AS s FROM pragma_schema_version"):undefined;if(schema>=37&&(schema<39||!before||!after||typeof before.n!=="bigint"||before.n!==after.n||before.s!==after.s))await assertReturnLedgers(tx);return result;}
    catch(e){if(e instanceof SaleError)failure=e;else if(e instanceof InventoryError&&e.code==="INVALID_INPUT")failure=new SaleError();else failure=Object.assign(new SaleError("UNAVAILABLE"),{cause:e});throw e;}
   });}catch{throw failure??new SaleError("UNAVAILABLE");}
  }
@@ -111,16 +136,16 @@ export function createSalesService(gateway:AuthorizationGateway,shopName:string,
   return {state:"UNKNOWN" as const,requestKey:key,context};
  }
  return Object.freeze({
-  context:(r:Request)=>scope(r,false,async tx=>({context:await salesContext(tx)})),
+  context:(r:Request)=>scope(r,false,async tx=>({context:await salesContext(tx)}),"DEPENDENCIES"),
   catalog:(r:Request,query="")=>scope(r,false,async tx=>{
    text(query,120,true);const rows=await tx.all("SELECT p.id,p.code,p.name,p.size_label,p.unit,p.selling_price_m FROM products p WHERE p.selling_active=1 AND p.archived_at_ms IS NULL AND p.selling_price_m%100=0 AND (instr(p.name_key,?)>0 OR p.code=?) ORDER BY p.name_key,p.id LIMIT 100",[query.toLowerCase(),query.toUpperCase()]);
    const items=[];for(const row of rows){await load(tx,String(row.id));items.push({id:uuid(row.id),code:text(row.code,32),name:text(row.name,120),sizeLabel:row.size_label===null?null:text(row.size_label,40),unit:text(row.unit,4),sellingPricePaisa:money(String(row.selling_price_m)).toString()});}return {items};
-  }),
-  get:(r:Request,id:unknown)=>scope(r,false,tx=>readReceipt(tx,uuid(id))),
-  history:(r:Request,cursor?:string,query="")=>scope(r,false,async tx=>{
-   text(query,120,true);const anchor=cursor?await tx.get("SELECT business_date,recorded_at_ms FROM sales WHERE id=?",[uuid(cursor)]):undefined;if(cursor&&!anchor)return deny();const clauses=["(instr(invoice_number,?)>0 OR EXISTS(SELECT 1 FROM sale_lines l WHERE l.invoice_id=sales.id AND instr(lower(l.name||' '||l.code),?)>0))"],values:import("../db/connection").SqlValue[]=[query,query.toLowerCase()];if(anchor){clauses.push("(business_date,recorded_at_ms,id)<(?,?,?)");values.push(anchor.business_date,anchor.recorded_at_ms,cursor!);}const rows=await tx.all("SELECT id FROM sales WHERE "+clauses.join(" AND ")+" ORDER BY business_date DESC,recorded_at_ms DESC,id DESC LIMIT 51",values);
+  },"DEPENDENCIES"),
+  get:(r:Request,id:unknown)=>scope(r,false,tx=>readReceipt(tx,uuid(id)),value=>[value.id]),
+  history:(r:Request,cursor?:string,query="",range?:{from?:string;to?:string})=>scope(r,false,async tx=>{
+   text(query,120,true);const anchor=cursor?await tx.get("SELECT business_date,recorded_at_ms FROM sales WHERE id=?",[uuid(cursor)]):undefined;if(cursor&&!anchor)return deny();const clauses=["(instr(pos_lower(invoice_number),?)>0 OR EXISTS(SELECT 1 FROM sale_lines l WHERE l.invoice_id=sales.id AND instr(pos_lower(l.name||' '||l.code),?)>0))"],values:import("../db/connection").SqlValue[]=[query.toLowerCase(),query.toLowerCase()];const dates=range?{from:calendar(range.from),to:calendar(range.to)}:query.trim()?undefined:recentSalesRange();if(dates){if(dates.from>dates.to)return deny();clauses.push("business_date BETWEEN ? AND ?");values.push(dates.from,dates.to);}if(anchor){clauses.push("(business_date,recorded_at_ms,id)<(?,?,?)");values.push(anchor.business_date,anchor.recorded_at_ms,cursor!);}const rows=await tx.all("SELECT id FROM sales WHERE "+clauses.join(" AND ")+" ORDER BY business_date DESC,recorded_at_ms DESC,id DESC LIMIT 51",values);
    const items=[];for(const row of rows.slice(0,50)){const saved=await readReceipt(tx,String(row.id));items.push({id:saved.id,number:saved.number,recordedAtMs:saved.recordedAtMs,totalPaisa:schema>=39?String((await tx.get("SELECT charged_m FROM invoice_revisions WHERE invoice_id=? ORDER BY revision DESC LIMIT 1",[saved.id]))?.charged_m??saved.totalPaisa):saved.totalPaisa,customerName:saved.customerName});}return {items,nextCursor:rows.length>50?items.at(-1)!.id:null};
-  }),
+  },value=>value.items.map(item=>item.id)),
   operation:(r:Request,key:unknown,context:string)=>scope(r,false,tx=>terminal(tx,uuid(key),context)),
   recovery:(r:Request,key:unknown,context:string,confirm:boolean)=>scope(r,true,async(tx,actor)=>{
    const k=uuid(key),value=await terminal(tx,k,context);if(!confirm||value.state!=="UNKNOWN")return value;

@@ -1,0 +1,274 @@
+# FINAL MASTER EXECUTION CONTRACT — SHOP POS PHASE 2 COMPLETION + PHASE 3 A–Z AUDIT + PRODUCTION READINESS
+
+**Workspace:** `D:\pos`  
+**Current verified candidate:** `0.2.0-test.14`  
+**Execution mode:** Continuous, autonomous within approved scope, credit-efficient, evidence-driven.
+
+## OWNER'S EXPLICIT APPROVAL AND OBJECTIVE
+
+The owner approves this complete execution plan.
+
+Finish ALL achievable Shop POS software development, remaining Phase 2 work, strict Phase 3 A–Z audit, security and financial verification, performance remediation, Windows packaging and production-release preparation.
+
+**Do not stop after each feature or test.** Complete a stage, verify it, then immediately proceed to the next approved stage without waiting for another prompt.
+
+The owner has approximately 50% of the purchased Codex credits remaining and cannot purchase more. Treat unnecessary tool calls, repeated investigations, rebuilds, test suites, large reports and approval interruptions as avoidable costs.
+
+**Your goal is to finish the remaining achievable work within the available credits. This is a priority, not permission to skip required safety or verification.**
+
+## 0. RESUME SAFELY — NO RESTARTING COMPLETED WORK
+
+First inspect the real current state:
+
+- Git status/diff and relevant current files, read-only first.
+- Existing Phase 2/3 reports, requirements, decisions and `AGENTS.md`.
+- Actual TEST.14 source, installer, installed EXE and authoritative verification records.
+- Current processes, logs, interrupted commands and unresolved defects.
+- Existing protected owner data and backup boundaries without modifying them.
+
+Reuse previously verified evidence whenever the exact relevant source and environment remain unchanged.
+
+Do not restart Phase 1, rerun the entire A–Z suite unnecessarily or rebuild an unchanged frontend.
+
+Preserve all previous PASS and FAIL evidence. Never convert a historical failure into PASS without actual corrected verification.
+
+## 1. PRESERVE THE NOW-VERIFIED SHARED LOGIN
+
+**Owner has personally confirmed BOTH existing passwords work from the SAME login screen:**
+
+- Correct Admin password opens **Admin Dashboard**.
+- Correct Salesperson password opens **Salesperson POS**.
+- Back to Login permits safe role switching.
+- No new setup or password reset was needed.
+
+This behavior is APPROVED and must remain unchanged.
+
+Preserve genuine backend role discovery, isolated role sessions, durable failed-attempt charges, five failures/30-second cooldown, credential protection, native IPC fencing and one-use financial authorization proofs.
+
+The existing shared-login behavior must never regress while fixing performance or other modules.
+
+**Minor UX finding:** The shared screen may still display a Salesperson-specific role label before authentication. Verify whether this is misleading. Correct only the minimal functional wording if necessary and explicitly justified, without redesigning the approved frontend.
+
+## 2. FIRST PRIORITY — FIX PERFORMANCE AND DASHBOARD LOADING
+
+The owner personally observed significant delays:
+
+- Normal desktop startup: approximately **36–37 seconds**.
+- Sidebar/page navigation: approximately **4.6–5.7 seconds**.
+- Login and dashboard loading are noticeably slow.
+- Admin Dashboard initially displays **Loading / Unavailable**, but eventually loads correct figures.
+- An empty disposable owner shop eventually displayed zero products, zero stock, zero sales and zero profit.
+- Salesperson screen also initially displayed an unavailable total with an empty cart.
+
+**Important:** Do not misclassify the Dashboard as permanently broken. The owner confirms its figures eventually loaded. Investigate the actual delay and any incorrect empty-state behavior.
+
+Required work:
+
+1. Measure cold startup, warm startup, login, protected-key operations, frontend hydration, HTTPS API latency, dashboard rendering and sidebar transitions separately.
+2. Identify real bottlenecks using lightweight instrumentation and existing logs.
+3. Safely optimize repeated protected-file reads, native verification, backend initialization, network requests or rendering only where evidence supports the change.
+4. Never skip integrity checks, weaken DPAPI custody, cache stale financial authorization, extend five-second proofs or weaken authentication.
+5. Preserve correct loading, empty-state, timeout and failure behavior.
+6. Use reasonable responsiveness targets appropriate to the available Windows hardware; distinguish measured performance from contractual guarantees.
+7. Run focused before/after tests and actual installed-app measurements.
+
+If a performance issue cannot be safely fixed within reasonable effort, report its measured cause and limitation rather than endlessly experimenting.
+
+**After this stage, automatically continue to Stage 3.**
+
+## 3. COMPLETE ALL FUNCTIONAL A–Z WORKFLOWS
+
+Use fresh isolated disposable TEST roots for potentially destructive or financial testing. The owner's preserved root is NOT a disposable financial QA fixture.
+
+Verify every approved workflow, including:
+
+**Administration and products:** Product creation, editing, safe deletion/deactivation policy, variants, prices, stock quantity, inventory adjustments, low-stock thresholds, zero-stock behavior, below-cost permissions and financial audit history.
+
+**Salesperson:** Product lookup, quantities, whole-rupee calculations, discounts, cash/payment handling, invoices, sales history, returns, refunds and permitted expenses.
+
+**Admin reporting:** Dashboard cards and drilldowns, product-level revenue and profit, stock valuation, historical records, report filtering and reconciliation.
+
+**Cash and closing:** Counting, original-operation confirmation, daily closing, business-day crossing midnight, unresolved financial outcomes and correct restart recovery.
+
+**Authentication:** Shared login, role boundaries, logout, role switching, password change where supported and authorized, session expiry, wrong-password cooldown and no credential persistence.
+
+**Persistence and recovery:** SQLite, migrations, application restart, backup creation, encrypted archive verification, authenticated restore/recovery and original financial operation outcomes.
+
+For each workflow, confirm the real authoritative result. Tests must not rely only on UI appearance or mocked state.
+
+**Never implement an unapproved feature or invent missing business-policy decisions.** Identify genuinely unresolved requirements separately without blocking unrelated approved work.
+
+For product deletion, refunds, password changes, backup restoration and financial operations, preserve existing safety constraints and obtain any specifically required genuine confirmation.
+
+Move automatically to the next workflow after each verified result.
+
+## 4. STRICT FINAL PHASE 3 SECURITY, FINANCIAL AND DATA-INTEGRITY AUDIT
+
+Complete the previously approved independent A–Z audit using source-specific evidence.
+
+Required domains include:
+
+- Authentication, password hashing, failed attempts, cooldown and sessions.
+- Admin/Salesperson authorization and cross-role isolation.
+- HTTPS, CSRF, CORS, IPC trust boundaries and Electron window isolation.
+- Input validation, SQL parameterization and protected error handling.
+- Stock movement, oversell prevention, concurrency and immutable audit.
+- PKR rounding, discounts, revenue, COGS, losses and profit.
+- Sale, refund, expense, counting and closing uniqueness/idempotency.
+- Original operation keys, UNKNOWN outcomes and restart recovery.
+- SQLite integrity, migrations, WAL handling, writer fencing and CURRENT selection.
+- DPAPI, encrypted backups, recovery keys, credential custody and backup namespace.
+- Offline runtime closure, dependency security and supply-chain integrity.
+- Windows installation, restart, upgrade, uninstall/reinstall and data retention.
+- Real rendering, usability, accessibility and performance.
+- Printer integration and honest external acceptance limitations.
+
+Correct every reproducible critical/high-severity defect within approved scope. Use focused regression tests for changed paths. Reuse existing valid evidence for unchanged paths.
+
+Do not weaken security merely to produce a passing result.
+
+## 5. FROZEN FRONTEND — ABSOLUTE PRESERVATION CONTRACT
+
+**The previously approved Shop POS frontend must remain visually EXACTLY as approved.**
+
+Preserve:
+
+- Original layout and navigation.
+- Existing sidebar, login, POS and Admin Dashboard design.
+- Colors, typography, spacing and CSS.
+- Approved labels, forms and user workflows.
+- Zero-stock presentation and existing responsive behavior.
+- Developer-credit presentation.
+- Existing approved UI content and interactions.
+
+**NO redesign, visual refresh, unnecessary CSS/JSX edits or unsolicited appearance changes.**
+
+A compiler rebuild does not itself authorize source redesign.
+
+Compare all relevant frontend changes against the approved frozen Git/source baseline. If a genuine functional bug requires a minimal frontend change, restrict it to the approved workflow, prove that visual behavior remains consistent and document the exact difference.
+
+Do not discard, overwrite or re-create the frozen frontend.
+
+## 6. PROTECT ALL EXISTING DATA AND FINANCIAL EVIDENCE
+
+Preserve the owner's existing:
+
+- SQLite databases and records.
+- Admin and Salesperson credential hashes.
+- Protected DPAPI material and identities.
+- Encrypted backups and recovery keys.
+- Original financial operation keys and outcome records.
+- Existing source code and Git history.
+- Prior logs, failed tests and verification evidence.
+
+No reset, database deletion, key replacement, forced re-enrollment, financial replay, unsafe repair or manual CURRENT manipulation.
+
+Never test destructive workflows on the owner's protected original root.
+
+No unauthorized Git commit, push, repository cleanup or source overwrite.
+
+## 7. WINDOWS INSTALLER AND PRODUCTION DEPLOYMENT READINESS
+
+Prepare and verify the complete installed desktop experience for Windows 10/11 x64, with the existing approved Electron/local backend/SQLite architecture.
+
+Verify:
+
+- Real desktop EXE operation without Chrome, VS Code, Codex, global Node or internet.
+- Secure startup, login, navigation and shutdown.
+- Installer dependency closure and exact file verification.
+- Safe upgrades and uninstall/reinstall retention.
+- Offline operation and backend/SQLite persistence.
+- Correct protected-data locations and cross-drive paths.
+- Recovery and rollback procedures.
+- Credential and backup custody requirements.
+- Exact version, installer/EXE paths and SHA256 checksums.
+
+Produce one final verified release candidate after grouping related corrections, rather than generating unnecessary intermediate installers.
+
+**Do not convert unsigned disposable TEST mode into production simply by renaming the EXE or changing configuration flags.**
+
+Any genuine production-mode signing, custody, deployment or activation boundary must receive its separately required owner approval.
+
+## 8. PHYSICAL PRINTER — EXPLICITLY DEFERRED
+
+The owner has confirmed that the client may purchase the physical receipt printer later.
+
+Therefore:
+
+- Do NOT make purchasing a physical printer part of this development task.
+- Reuse existing verified virtual-PDF/80mm print-layout evidence.
+- Keep physical printer compatibility and actual paper-output acceptance explicitly **PENDING / UNVERIFIED**.
+- Preserve the existing printing integration and safe retry rules.
+- Never fabricate successful real printing.
+
+Evaluate whether operating temporarily without a physical receipt printer is technically and operationally acceptable, and identify any consequences for the deployment gate. Do not silently waive required legal, business or acceptance obligations.
+
+## 9. OWNER ACCEPTANCE AND CLIENT READINESS
+
+Prepare one concise, practical owner walkthrough covering:
+
+1. Correct Admin and Salesperson logins.
+2. Product, stock and inventory operations.
+3. Sales and saved invoice.
+4. Return/refund and expense.
+5. Dashboard, reports and daily closing.
+6. Password management if supported.
+7. Backup and authenticated recovery.
+8. App restart and persistence.
+9. Installed EXE, client setup and offline operation.
+
+Owner manual testing must be recorded as PASS only when actually performed and witnessed.
+
+Client-device, physical printer, off-device recovery, real backup media and replacement-device tests must remain UNVERIFIED until real evidence exists.
+
+## 10. CONTINUOUS EXECUTION AND CREDIT EFFICIENCY
+
+The owner explicitly authorizes continuous execution across all previously approved development, remediation, testing and audit stages.
+
+**When one task is verified, immediately move to the next.**
+
+Do not pause merely to provide intermediate summaries or seek repeated approval for already authorized work.
+
+Use this priority:
+
+1. Critical security/data-loss blockers.
+2. Proven startup/dashboard/navigation performance defects.
+3. Broken or incomplete approved functionality.
+4. Focused A–Z regression and financial integrity.
+5. Windows packaging and final software release candidate.
+6. Production readiness documentation and owner checklist.
+
+Conserve credits:
+
+- Avoid repeating existing PASS tests without a source/environment reason.
+- Avoid repeated full-suite runs.
+- Avoid unnecessary installer rebuilds.
+- Avoid large documentation rewrites.
+- Avoid unrelated research or speculative refactors.
+- Avoid recreating or duplicating evidence.
+- Keep progress reports concise.
+- Group corrections before rebuilding.
+- Use existing tools and local evidence efficiently.
+
+**Only stop for genuinely new architectural/security decisions, unknown essential business rules, destructive operations, production activation or client-handover authorization that cannot safely be inferred.**
+
+Never interpret continuous execution approval as permission to bypass a mandatory safety gate.
+
+## 11. FINAL OUTPUT — ONE CLEAR DELIVERY REPORT
+
+When finished, report:
+
+1. Exact Phase 2 status: COMPLETE or OPEN, with evidence.
+2. Phase 3 A–Z audit: PASS/FAIL/PENDING by category.
+3. All features verified and remaining defects.
+4. Performance before/after measurements.
+5. Genuine frozen frontend preservation proof.
+6. SQLite, credentials, security, backup and financial integrity results.
+7. Exact verified Windows installer/EXE paths and SHA256 values.
+8. Clean-device, physical printer and independent recovery limitations.
+9. Production readiness: evidence-backed **GO / NO-GO**.
+10. Exact remaining owner actions needed for lawful, safe client handover.
+
+**FINAL OBJECTIVE:** Complete all achievable Shop POS development and audit work without unnecessary stops, credit waste, frontend redesign, security weakening or data loss. Prepare the safest possible verified release candidate and straightforward final client-handover pathway.
+
+**Begin by inspecting the real current TEST.14 state. Continue through the approved stages without restarting completed work.**

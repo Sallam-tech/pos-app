@@ -1,3 +1,5 @@
+import {bindDependencyReads} from "../auth/gateway";
+import {channel} from "node:diagnostics_channel";
 import "server-only";
 import type {IncomingMessage,ServerResponse} from "node:http";
 import type {AuthorizationGateway} from "../auth/types";
@@ -18,10 +20,12 @@ export function createCashDispatcher(gateway:AuthorizationGateway,shopName?:stri
  const bad=inventoryRequestHeaders(req,c,post,false,role,8192);if(bad){send(bad,{error:"Counter cash unavailable."});return;}
  const request=inventorySessionRequest(req,c),live=()=>{if(!c.isLive()||req.aborted||res.destroyed)throw Error();};
  try{await(role==="ADMIN"?gateway.authorizeAdmin(request):gateway.authorizeSalesperson(request));}catch{send(403,{error:"Counter cash unavailable."});return;}
- const guarded:AuthorizationGateway={...gateway,withAdminTransaction:(r,w)=>gateway.withAdminTransaction(r,async(tx,a)=>{live();const v=await w(tx,a);live();return v;}),withSalespersonTransaction:(r,w)=>gateway.withSalespersonTransaction(r,async(tx,a)=>{live();const v=await w(tx,a);live();return v;}),withFreshAdminTransaction:(r,proof,w)=>gateway.withFreshAdminTransaction(r,proof,async(tx,a)=>{live();const v=await w(tx,a);live();return v;})};
+ const timing=channel("shop-pos.test.cash-proof-window"),emit=(stage:string)=>{if(timing.hasSubscribers)timing.publish({stage,tick:performance.now()});};
+ const guarded:AuthorizationGateway={...gateway,verifyAdminPassword:async password=>{const proof=await gateway.verifyAdminPassword(password);emit("VERIFIED");return proof;},withAdminTransaction:(r,w)=>gateway.withAdminTransaction(r,async(tx,a)=>{live();const v=await w(tx,a);live();return v;}),withSalespersonTransaction:(r,w)=>gateway.withSalespersonTransaction(r,async(tx,a)=>{live();const v=await w(tx,a);live();return v;}),withFreshAdminTransaction:async(r,proof,w)=>{try{return await gateway.withFreshAdminTransaction(r,proof,async(tx,a)=>{emit("WORK_ENTER");live();try{const v=await w(tx,a);live();emit("WORK_COMPLETE");return v;}catch(error){emit("WORK_REFUSED");throw error;}});}catch(error){emit("SCOPE_REFUSED");throw error;}}};
  try{
  const allowed=(p==="/api/admin/cash/summary"||p==="/api/admin/cash/overview")?["date","countId"]:p==="/api/admin/cash/history"?["from","to","cursor","kind","movementId"]:p==="/api/admin/closings"?["from","to","cursor"]:closing.test(p)?["before"]:admission.test(p)?["kind"]:[],seen=new Set<string>();
  for(const key of url.searchParams.keys()){if(!allowed.includes(key)||seen.has(key))throw new CashError();seen.add(key);}
+ bindDependencyReads(gateway,guarded,live);
  const api=createCashService(guarded,shopName,schema),param=(k:string)=>url.searchParams.get(k)??undefined,ctx=()=>{const v=req.headers["x-cash-context"];if(typeof v!=="string"||!/^[0-9a-f]{64}$/.test(v)||req.rawHeaders.filter((h,i)=>i%2===0&&h.toLowerCase()==="x-cash-context").length!==1)throw new CashError();return v;};
  let value:unknown;
  if(p==="/api/admin/cash/overview")value=await api.overview(request,param("date")??"",param("countId"));
@@ -34,7 +38,7 @@ export function createCashDispatcher(gateway:AuthorizationGateway,shopName?:stri
  else if(p==="/api/admin/closings")value=await api.closings(request,param("from")??"",param("to")??"",param("cursor"));
  else if(closing.test(p))value=await api.closing(request,closing.exec(p)![1],param("before"));
  else if(p==="/api/admin/cash-actions"){const b=object(await readSalesBody(req,8192),["key","context","action","input","password"]);value=await api.prepare(request,b.password,uuid(b.key),text(b.context,64),text(b.action,24) as CashAction,b.input);}
- else if(execute.test(p)){const b=object(await readSalesBody(req,8192),["context","confirmation"]);value=await api.execute(request,execute.exec(p)![1],text(b.context,64),text(b.confirmation,40));}
+ else if(execute.test(p)){const raw=await readSalesBody(req,8192),atomic=!!raw&&typeof raw==="object"&&Object.hasOwn(raw,"action"),b=object(raw,atomic?["context","confirmation","action","input","password"]:["context","confirmation"]);value=atomic?await api.commitCount(request,b.password,execute.exec(p)![1],text(b.context,64),text(b.action,24) as CashAction,b.input,text(b.confirmation,40)):await api.execute(request,execute.exec(p)![1],text(b.context,64),text(b.confirmation,40));}
  else if(operation.test(p))value=await api.operation(request,operation.exec(p)![1],ctx());
  else if(recovery.test(p)){const b=object(await readSalesBody(req,8192),["password","resolution","evidence"]);value=await api.recover(request,b.password,recovery.exec(p)![1],ctx(),text(b.resolution,32),text(b.evidence,160));}
  else throw new CashError();live();send((value as {state?:string})?.state==="UNKNOWN"?404:200,value);

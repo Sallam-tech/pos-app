@@ -1,0 +1,141 @@
+# URGENT FINAL CONTINUATION — COMPLETE ALL REMAINING SHOP POS SOFTWARE WORK
+
+**Workspace:** `D:\pos`  
+**Latest verified build:** `0.2.0-test.15`  
+**Existing master task:** Complete Shop POS Phase 2 + strict Phase 3 A–Z audit.
+
+## CRITICAL OWNER DIRECTIVE
+
+The previous task stopped after TEST.15 even though continuous completion of all approved software-side work was requested.
+
+**DO NOT STOP AT ANOTHER TEST MILESTONE. FINISH THE REMAINING WORK.**
+
+Only approximately **30 purchased Codex credits remain**, and the owner cannot buy more. Work efficiently. Do not restart Phase 1/2/3, repeat already verified work, generate long reports, perform speculative experiments or rebuild without a justified change.
+
+**Client laptop and physical printer are explicitly DEFERRED.** Do not spend credits investigating them, asking about them or allowing their absence to interrupt independent software work. Record them as external pending items only.
+
+## PRIORITY 1 — FIX ACTUAL PERFORMANCE, NOT JUST LOADING TEXT
+
+TEST.15 still has unacceptable delays:
+
+- Normal owner EXE-to-login: **50.58 seconds**.
+- Backend startup: approximately **26.45 seconds**.
+- Sidebar navigation: **6.02–6.39 seconds**.
+- Protected APIs: approximately **1–2.7 seconds**.
+- Login password verification: approximately **1.6–2.0 seconds**.
+- TLS requests themselves: approximately **12–20 milliseconds**.
+
+Previous work fixed empty-cart totals and loading-state presentation, **NOT the underlying responsiveness problem**.
+
+Immediately:
+
+1. Reuse existing TEST.15 profiles, timings and evidence. Do not repeat broad profiling unless needed.
+2. Identify the dominant startup and navigation critical paths and actual expensive operations.
+3. Remove proven redundant work, unnecessary serialization, duplicate protected reads or repeated rendering while keeping every security and financial check.
+4. Preserve full-file integrity validation, DPAPI protection, auth, role isolation, startup fencing, SQLite integrity and all approved security controls.
+5. Use bounded, safe optimization only. Never disable verification, trust stale credentials, weaken protected-state checks or change financial proof expiry.
+6. Run focused affected-path tests and genuine installed-app before/after measurements.
+7. Optimize startup, navigation, dashboard, login and save responsiveness as far as safely achievable without endless experimentation.
+8. If a bottleneck cannot be eliminated safely, document its precise measured cause and remaining latency. Do not invent PASS or claim an improvement based only on warm cache.
+
+**This is the highest-priority unfinished software defect. Do not simply restate the old timing report and stop.**
+
+## PRIORITY 2 — COMPLETE ALL REMAINING SOFTWARE-SIDE A–Z WORK
+
+After performance remediation, immediately continue with all outstanding actionable software work:
+
+- Product creation, editing, archiving, variants, stock adjustments and zero-stock safeguards.
+- Admin and Salesperson shared-password login, logout, role switching and password management.
+- Sales, cash payments, discounts, saved invoices, sales history and immutable transactions.
+- Returns, refunds, expenses, corrections and approval boundaries.
+- Dashboard, product-level revenue/profit, reports, historical filtering and accurate calculations.
+- Cash counting, daily closing and correct business-date handling.
+- SQLite migrations, concurrency, idempotency and original financial operation outcomes.
+- Encrypted backups, authenticated restore and crash/restart recovery.
+- Local offline Electron runtime, startup, navigation, installation, upgrade and data retention.
+- All relevant security, failure, integration and usability requirements.
+
+**Reuse valid source-identical TEST.15 and earlier evidence.** Fresh testing only where changes, unresolved defects or missing proof require it.
+
+For destructive financial, credential or recovery tests, use isolated disposable TEST data. Never use the owner's preserved root as a financial QA fixture.
+
+Investigate historical startup incidents using retained evidence. Fix any genuinely reproduced defect; if a historical trigger cannot be established safely, retain its uncertainty rather than endless speculation.
+
+After each completed area, proceed immediately to the next.
+
+## PRIORITY 3 — PRESERVE THE EXACT APPROVED FRONTEND
+
+The original approved frontend is FROZEN.
+
+Preserve its design, layout, sidebar, colors, CSS, typography, approved wording, navigation and workflows.
+
+TEST.15's narrowly authorized shared-login wording, loading-state and empty-cart corrections are accepted functional changes; do not redesign anything.
+
+Any further source edit must be strictly required for a proven bug and must receive focused preservation verification.
+
+**No unnecessary frontend rebuild, redesign or visual change.**
+
+## PRIORITY 4 — SECURITY, FINANCIAL INTEGRITY AND DATA PROTECTION
+
+Never weaken or bypass:
+
+- Genuine Admin/Salesperson authentication and protected role sessions.
+- Five failed attempts/30-second durable cooldown.
+- Five-second financial authorization proofs.
+- Original-key idempotency and UNKNOWN outcome protection.
+- SQLite integrity, writer fencing and guarded migrations.
+- Secure HTTPS, Electron isolation and IPC trust boundaries.
+- DPAPI custody and encrypted backup/recovery.
+- Financial audit history, stock, COGS, revenue and profit reconciliation.
+- Credential rotation, revocation and restart protection.
+
+Preserve the owner's existing credentials, SQLite data, recovery keys, encrypted backups, original operation keys, installed TEST versions and previous evidence.
+
+No deletion, reset, unsafe repair, unauthorized Git commit/push, signing or production activation.
+
+## PRIORITY 5 — FINAL WINDOWS SOFTWARE RELEASE CANDIDATE
+
+When all achievable software defects are corrected:
+
+1. Group fixes into **one necessary final build**, avoiding repeated TEST version churn.
+2. Verify exact packaged source, runtime dependencies and security audit.
+3. Test actual installed EXE, both-role login, real navigation, authoritative sale/invoice/report, restart and persistence.
+4. Retest changed financial/security paths and reuse valid unchanged evidence.
+5. Prepare a verified Windows offline release candidate with exact installer/EXE paths, versions and SHA256.
+6. Provide a short owner acceptance checklist for private passwords and business actions.
+7. Prepare production-readiness instructions and identify any mandatory authorization still required.
+
+The physical printer and client laptop are DEFERRED. They must not block independent software development, but must not be falsely marked tested.
+
+Do not enable production, release real credentials or hand over to the client without separately required safety verification and explicit owner FINAL GO.
+
+## CREDIT-SAVING EXECUTION RULES — ABSOLUTE PRIORITY
+
+Approximately **30 credits remain**.
+
+- One continuous execution; no repeated approval questions for already approved work.
+- No re-reading entire documents unless necessary.
+- No repeating full suites or 50k benchmarks without source-based justification.
+- No rebuilding per minor fix.
+- No repeated long documentation/report generation.
+- No scope expansion or speculative architectural redesign.
+- Focus on the biggest real performance bottlenecks and critical correctness issues first.
+- Preserve and reuse existing PASS evidence when genuinely applicable.
+- Stop for new mandatory security/destructive/production authorization only.
+- Never fake test outcomes or sacrifice financial security to save credits.
+
+If credits or execution limits prevent full completion, preserve all source and evidence, identify the exact unfinished work and give a concise resume checkpoint. Do not claim completion.
+
+## FINAL REQUIRED RESULT
+
+Report concisely:
+
+1. Actual startup/navigation/login performance **before and after**.
+2. Remaining software defects fixed, and any still unresolved.
+3. Phase 2 status and Phase 3 A–Z software-audit status.
+4. Genuine frontend-preservation verification.
+5. Security, financial, SQLite and recovery PASS/FAIL evidence.
+6. Exact final installer/EXE path and SHA256.
+7. Remaining owner-only actions and production authorization gate.
+
+**EXECUTE NOW. Fix performance first, then continuously complete every achievable remaining software-side task. Do not stop merely because client hardware or the printer is unavailable. Do not ask the owner to repeat existing approvals.**

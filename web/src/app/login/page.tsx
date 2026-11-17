@@ -33,9 +33,9 @@ export default async function LoginPage() {
             <span className="mx-auto mb-3 grid size-11 place-items-center rounded-lg bg-primary text-primary-foreground"><Icon name="store" className="size-6" /></span>
             <ShopName as="h1" className="page-title break-words [overflow-wrap:anywhere]" />
             <p className="mt-2 text-sm text-muted-foreground">Enter your password to open the shop.</p>
-            <div className="mt-3"><Badge>{role ? (role === "ADMIN" ? "Admin / Isolated TEST" : "Salesperson / Isolated TEST") : "UI Preview"}</Badge></div>
+            <div className="mt-3"><Badge>{role ? "Isolated TEST" : "UI Preview"}</Badge></div>
           </div>
-          <p id="login-preview-description" className="mt-3 text-sm leading-5 text-muted-foreground">{role ? "Enter your password for this role. Every visit requires fresh sign-in. Production remains disabled." : "Secure sign-in is not connected. Use made-up text to preview the form, or explore the demo below."}</p>
+          <p id="login-preview-description" className="mt-3 text-sm leading-5 text-muted-foreground">{role ? "Enter your existing password. Every visit requires fresh sign-in. Production remains disabled." : "Secure sign-in is not connected. Use made-up text to preview the form, or explore the demo below."}</p>
           <LoginForm testRole={role} testSales={isTestSalesRender()} />
           <div className="mt-4 border-t pt-3"><ConnectivityIndicator compact /></div>
         </Card>

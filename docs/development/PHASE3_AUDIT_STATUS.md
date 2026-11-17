@@ -1,0 +1,46 @@
+# Phase3 strict A-Z audit - current TEST15
+
+17 November2026. Separate owner-authorized audit continued with Phase2 remediation; software evidence is source-bound and reused where exact identity proves it remains applicable. This is not independent external custody/client certification or a claim of one clean full-suite run. Phase2 and full production acceptance remain OPEN.
+
+Current corrections: shared entry neutral wording/aria; empty cart0 with unchanged nonempty submission guard; honest Dashboard/report loading/error and coherent snapshot clearing. Current installed16 and owner-root18 checks PASS, readonly full integrity/FK/sole-effect proof PASS. No new critical/high reproducible software defect remains in those tested paths. Slow startup/navigation and historical incident-cause uncertainty remain disclosed.
+
+| ID | Area | Status | Evidence/qualification |
+| --- | --- | --- | --- |
+| A | Requirements | PASS source/amendment traceability | Original4 documents/41 migrations preserved; obsolete stack/D07 placeholders superseded only by explicit owner approvals. |
+| B | Frozen frontend | PASS qualified preservation | All9 source CSS/8 generated CSS exact14, classes/layout exact;4 explicit wording/empty/pending-state differences documented. No blanket login-JSX byte-exact claim. |
+| C | Actual installed UI | PASS16 current checks | Fresh protected setup, same screen both roles, real Dashboard/report values, navigation, product/sale/invoice, restart. |
+| D | Enrollment/data | PASS TEST scope | Current fresh fixture enrolled; existing owner committed enrollment and credential/identity bytes retained. No reset. |
+| E | Passwords/proofs | PASS source-bound security evidence | Genuine KDF/attempt/cooldown/concurrency/crash4 groups and5s one-use guards retained;74 corrected rotation/revocation cases referenced, optional latency SKIP retained. |
+| F | HTTPS/APIs/roles | PASS affected path + retained matrix | Genuine compiled signed sessions, role/Origin denial; current owner-root18 GET/render/asset/denial checks. Not all endpoint combinations freshly rerun. |
+| G | PKR/rounding/profit | PASS current + retained financial guards | One current150 revenue/100 historical cost/50 profit independently verified; immutable per-unit HALF_UP and financial invariants exact. |
+| H | Products/inventory | PASS current + retained module evidence | Product12 to11; edit/status/archive/reprice/adjust/variants and historical cost/privacy safeguards retain module evidence. |
+| I | Sales/idempotency | PASS | One original-key current sale, sole database effect and retained oversell/concurrency/lost-reply evidence. |
+| J | Invoices/corrections/history | PASS | Current saved receipt/history/restart reopen; retained immutable cost/correction/refund coupling and default90-day/older secure filters. No deletion. |
+| K | Returns/refunds | PASS retained source-bound scope | Returns37 genuine native/HTTPS/Chromium65 distinct checks; current financial/source equivalence/fault evidence. Physical cash truth remains human. |
+| L | Expenses | PASS retained source-bound scope | Expenses38 genuine45 checks, financial/fault/security and current audit21; original-key/no duplicate cash guards exact. |
+| M | Cash counting | PASS qualified50002 target | Count7.486s; atomic original-key/full guard/genuine fresh password/crash/restart evidence retained. |
+| N | Closing/calendar | PASS qualified target + retained scope | Closing5.994s, immutable close/count/midnight/next-day rules and full affected checks retained. |
+| O | Dashboard/reports | PASS current fixes + retained reconciliation | Actual empty response0, actual saved sale150/profit50 and report150; pending/error display tests, original authoritative report22/faults retained. |
+| P | SQLite/migrations | PASS | Current full readonly integrity_check ok, FK check empty, exact one effect;41 migrations exact. |
+| Q | Rollback/writer/tamper | PASS retained strict scope | Full validation/source dependency/equivalence/native fences and real failures/restart/concurrency evidence; bad negative row refused at admission, not silently accepted. |
+| R | Encrypted backup | PASS TEST software; external custody PENDING | Consistent encrypted snapshot/export/outbox/namespace handoff implementation exact; real independent media/custody not fabricated. |
+| S | Authenticated recovery | PASS7 compiled recovery +8 original-key/count-crash | Candidate-bound password/attempt/replay/expiry/current/writer/namespace checks source-equivalent; real replacement-device recovery UNVERIFIED. |
+| T | Offline/dependencies | PASS local TEST scope; client PENDING | Current installed sale/invoice/restart needs no physical printer/cloud; bundled runtime/dependency closure and restricted-PATH lifecycle evidence retained. Real target outage test pending. |
+| U | Electron/IPC/lifecycle | PASS | Current app shell exact14 exceptversion;6 actual handler sender/cancel/replay cases and current second-instance/normal drain/restart PASS. |
+| V | Installer/retention | PASS available laptop | Current14->15 code-only upgrade owner bytes exact; unchanged actual prior uninstall/reinstall retention and one fresh new version installation retained. |
+| W | Printing | PASS virtual software; physical UNVERIFIED | Unchanged native receipt integration, all emitted CSS exact; actual Windows PDF54560bytes and80mm/A4 evidence reused. Paper/printer deferred. |
+| X | Capacity/performance | PASS numeric retained targets; startup/nav limitation OPEN | 50002 retained legacy-migrated target count/close/4search pass; not50k independent HTTPS ingestion. Fixture restart25.76s/full normal owner startup50.58s, UIA navigation6.02-6.39s remain slow; no uncontrolled speedup claim. |
+| Y | Supply chain/build | PASS current identity | Next16.4.6 patched loader, bundled patched Node/Electron, sealed8708 files, exact audited production graph0 vulnerabilities, current type/lint/build0. |
+| Z | Release/owner/external | OPEN / production NO-GO | Owner14 both-role attestation; current15 automated fixture only. Full private business, clean client/Win11, real custody/media/replacement recovery and physical paper pending; signing/activation/handover unauthorized. |
+
+Evidence reuse chain: current15 every backend input/emitted/server/lib/runtime dependency byte equals14; shell differs onlypackage version.14 runtime/frontend/dependencies equals13;13 financial/recovery/opkey source identical to earlier accepted checks, while its four auth/runtime changes have genuine compiled real-password/SQLite/HTTPS tests and14 IPC cancellation fix6 checks. Current15 frontend differs in only4 authorized files; all CSS output byte exact.
+
+Earlier core227PASS/77FAIL was corrected by targeted3+74 passes, optional password latency SKIP retained. Later boundary150PASS/30FAIL was corrected by63 focused cases covering all180 actual assertions across retained runs; not one clean original suite. Four historical negative-row assertions used an unreachable pre-admission premise; the current two genuine strict-admission cases pass. Display QA initially expected decimal0.00 instead of approved whole-rupee Rs.0; corrected focused case passes, original failure retained. The intrusive filesystem/SQL attribution hook was rejected FRESH_SCHEMA and retired; builtin V8 profiling passed. No failure is silently relabeled green.
+
+Cash-command503 proof expiry was reproduced and affected command path fixed with full guards; genuine qualified50002 cold-process HTTPS checks pass. Original TEST8 operation-key/startup and one later HTTPS_RUNTIME exact triggers remain inconclusive despite current passing compiled/installed/owner-root boots. Do not reset data or fabricate root-cause resolution.
+
+Current16 native checks verify a fresh separate fixture, not private owner15 business acceptance. Owner expressly attests14 original both passwords/shared screen/Back to Login. Source/compiled identity and actual15 both-role automation support continuity; private full walkthrough remains pending.
+
+[Exact source/evidence register](../../web/test-results/phase2-integration-20261115/FINAL_TEST_DELIVERY.json). [Audit evidence index](../../web/test-results/phase2-integration-20261115/test15-audit-evidence-index.json). [Performance/results](PHASE2_TEST_DELIVERY_STATUS.md). [Owner walkthrough/recovery](PHASE2_OWNER_TEST_INSTALLATION.md).
+
+Current normal owner-root TEST15 full EXE-to-login50.58s is retained separately from backend-only26.45s and fixture restart25.76s. Login was genuinely observed; both passwords and business actions were not automated on the owner root.

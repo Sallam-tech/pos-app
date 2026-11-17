@@ -19,10 +19,16 @@ export function ReceiptPreview({ children, triggerLabel, triggerDescription, bac
   const [selectedLayout, setLayout] = useState<"ordinary" | "compact" | null>(null);
   const compact = (selectedLayout ?? initialLayout) === "compact";
   const layoutId = useId();
+  const [printError, setPrintError] = useState(false);
+  const printReceipt = () => {
+    setPrintError(false);
+    try { window.print(); } catch { setPrintError(true); }
+  };
   const actions = <div data-receipt-actions className="flex flex-wrap gap-3">
-    <Button className="min-w-28" disabled={printDisabled} onClick={() => window.print()}>Print</Button>
+    <Button className="min-w-28" disabled={printDisabled} onClick={printReceipt}>Print</Button>
     <Button className="min-w-28" variant="outline" title={backLabel} onClick={onDone ?? (() => setOpen(false))}>Done</Button>
     {extraActions}
+    {printError && <p role="alert" className="basis-full text-sm text-danger">The print dialog could not open. Try Print again.</p>}
   </div>;
   return <>
     {controlledOpen === undefined && <Button variant="outline" className={triggerClassName} aria-label={triggerDescription} onClick={() => setOpen(true)}>{triggerLabel}</Button>}
