@@ -201,6 +201,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
           // then the gateway rejects/drains its own work, clears RAM and closes SQLite.
           drainStage("TRANSPORT");await liveHost.close();
           drainStage("BACKUPS");await backupWorker?.stop();
+          try{operationKeys?.close();}catch{/* Helper shutdown never blocks drain. */}
           drainStage("AUTHORIZATION");await liveGateway.close();
           drainStage("FRAMEWORK");await closeApp();
           drainStage("OWNERSHIP");assertNoAuthorizationOwner(); await liveOwnership.close(); // Release cross-process guard LAST.

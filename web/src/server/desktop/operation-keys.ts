@@ -16,17 +16,56 @@ const modules=Object.keys(markerKinds) as MarkerModule[];
 const allowed=(role:Role,module:MarkerModule)=>role==="SALESPERSON"?["sales","returns","expenses"].includes(module):module!=="sales";
 const empty=()=>({ADMIN:Object.fromEntries(modules.filter(m=>allowed("ADMIN",m)).map(m=>[m,null])),SALESPERSON:Object.fromEntries(modules.filter(m=>allowed("SALESPERSON",m)).map(m=>[m,null]))});
 type RecordState={format:"SHOP_POS_OPERATION_KEYS_V2";root:string;binding:string;revision:string;retired:string[];slots:Record<Role,Partial<Record<MarkerModule,NativeMarker|null>>>};
+type NativeResult={value:string;digest:string};
+type HelperSession={call(body:Record<string,string>):Promise<NativeResult>;close():void};
+let helper:HelperSession|null=null;
+let helperReady:Promise<HelperSession>|null=null;
+function openHelper():Promise<HelperSession>{
+ if(helper)return Promise.resolve(helper);
+ if(helperReady)return helperReady;
+ helperReady=(async()=>{
+  const child=spawn(path.join(process.env.SystemRoot!,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-File",fileURLToPath(new URL("./operation-keys-session.ps1",import.meta.url))],{windowsHide:true,stdio:["pipe","pipe","pipe"]});
+  let buffer="",ready=false,failed=false,pending:((value:unknown)=>void)|null=null,timer:ReturnType<typeof setTimeout>|undefined;
+  const fail=()=>{failed=true;helper=null;helperReady=null;if(pending){const p=pending;pending=null;p(null);}try{child.kill();}catch{/* already gone */}};
+  const finishLine=(line:string)=>{
+   if(!pending)return;
+   const p=pending;pending=null;if(timer)clearTimeout(timer);
+   try{
+    const value=JSON.parse(line);
+    if(!ready){if(value?.ok===true&&value.ready===true){ready=true;p(true);return;}p(null);return;}
+    if(value?.ok===true&&exact(value,["digest","ok","value"])&&typeof value.value==="string"&&typeof value.digest==="string"&&/^[a-f0-9]{64}$/.test(value.digest))p({value:value.value,digest:value.digest});
+    else p(null);
+   }catch{p(null);}
+  };
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data",(chunk:string)=>{
+   buffer+=chunk;if(buffer.length>200000){fail();return;}
+   for(;;){const i=buffer.indexOf("\n");if(i<0)break;const line=buffer.slice(0,i).replace(/\r$/,"");buffer=buffer.slice(i+1);finishLine(line);}
+  });
+  child.stderr.on("data",()=>fail());
+  child.once("error",fail);child.once("close",fail);child.stdin.once("error",fail);
+  const boot=await new Promise<unknown>(resolve=>{pending=resolve;timer=setTimeout(()=>{fail();resolve(null);},15000);timer.unref();});
+  if(boot!==true){fail();throw Error("Original recovery key storage unavailable.");}
+  const session:HelperSession={
+   async call(body){
+    if(failed||!child.stdin.writable)throw Error("Original recovery key storage unavailable.");
+    const line=JSON.stringify(body);
+    if(line.length>180000||line.includes("\n"))throw Error("Original recovery key storage unavailable.");
+    const value=await new Promise<unknown>(resolve=>{
+     pending=resolve;timer=setTimeout(()=>{fail();resolve(null);},15000);timer.unref();
+     child.stdin.write(line+"\n",error=>{if(error){fail();resolve(null);}});
+    });
+    if(!value||typeof value!=="object"){fail();throw Error("Original recovery key storage unavailable.");}
+    return value as NativeResult;
+   },
+   close(){try{if(child.stdin.writable)child.stdin.write(JSON.stringify({operation:"exit"})+"\n");}catch{}fail();},
+  };
+  helper=session;return session;
+ })();
+ return helperReady;
+}
 async function native(directory:string,operation:"read"|"cas",fields:Record<string,string>={}){
- return await new Promise<{value:string;digest:string}>((resolve,reject)=>{
-  const child=spawn(path.join(process.env.SystemRoot!,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-File",fileURLToPath(new URL("./operation-keys.ps1",import.meta.url))],{windowsHide:true,stdio:["pipe","pipe","pipe"]});
-  const chunks:Buffer[]=[];let size=0,errors=0,done=false;
-  const finish=(bad:boolean)=>{if(done)return;done=true;clearTimeout(timer);try{if(bad)return reject(Error("Original recovery key storage unavailable."));const value=JSON.parse(Buffer.concat(chunks).toString("utf8"));if(!exact(value,["value","digest"])||typeof value.value!=="string"||typeof value.digest!=="string"||!/^[a-f0-9]{64}$/.test(value.digest))return reject(Error("Original recovery key storage unavailable."));resolve(value as {value:string;digest:string});}catch{reject(Error("Original recovery key storage unavailable."));}finally{chunks.forEach(c=>c.fill(0));}};
-  const timer=setTimeout(()=>{child.kill();finish(true);},15000);timer.unref();
-  child.stdout.on("data",(b:Buffer)=>{size+=b.length;if(size>180000){child.kill();finish(true);}else chunks.push(Buffer.from(b));});
-  child.stderr.on("data",(b:Buffer)=>{errors+=b.length;if(errors>4096){child.kill();finish(true);}});
-  child.once("error",()=>finish(true));child.once("close",code=>finish(code!==0||errors!==0));child.stdin.once("error",()=>finish(true));
-  const payload=Buffer.from(JSON.stringify({directory,operation,...fields}));child.stdin.end(payload,()=>payload.fill(0));
- });
+ return (await openHelper()).call({directory,operation,...fields});
 }
 // Called only after selected/root admission and while the single runtime lease
 // is held. Renderer input can never select the directory, identity or generation.
@@ -74,5 +113,5 @@ export async function openDesktopOperationKeys(root:LocalKeyConfiguration,active
  };
  return Object.assign(access,{async assertSettled(){
   live();await load();if(state.binding!==binding||Object.values(state.slots).some(s=>Object.values(s).some(m=>m!==null)))return markerFailure();
- }});
+ },close(){helper?.close();helper=null;}});
 }

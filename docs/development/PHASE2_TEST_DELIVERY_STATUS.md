@@ -32,6 +32,32 @@ Performance before/after (uncontrolled cache/load; no general speedup claim):
 
 Current fresh Dashboard authoritative zero reached after12.71s measured from shared Admin submission. It now shows Loading until a genuine response, Unavailable on failure, never invented zero. Baseline genuine password1.56-2.05s; most TLS12-20ms; protected APIs1.1-2.7s; warm helpers account for about20s. CPU samples identify required filesystem identity/schema/SQL work. Warm full8708-file verification previously improved6.20 to3.88s with all bytes checked. Further guard/key-lifetime changes were not introduced. Slow startup/navigation remains a limitation; no <=3s page-navigation claim.
 
+## Performance Proof Plan (18 Nov 2026) — source fixes + focused proof
+
+Authorized minimal-change performance work implemented in source (not yet a new disposable TEST installer on this host):
+
+| Phase | Change | Focused proof |
+| --- | --- | --- |
+| 0 Baseline | Locked TEST15 timings + Save Product reconstruction | `web/test-results/perf-proof-baseline-20261118/baseline.json` |
+| 2 Schema admission | Same-process fail-closed admission after one full validate41 | PASS — full53ms / cheap5ms / drift refused (`schema-admission.json`) |
+| 3 Save Product | Happy-path POST returns MutationResult + `X-Inventory-Operation`; recovery GET only for UNKNOWN/crash | PASS — create458ms, CREATE header, client uses POST body (`inventory-post-happy-path.json`) |
+| 4 DPAPI helper | Long-lived PowerShell session; fail closed on helper death | PASS — avg claim+confirm+clear225ms; phase2-operation-keys4/4 PASS (`operation-keys-helper.json`) |
+| 1 Payload reuse | Fail-closed inventory fingerprint cache; tamper/mtime/delete → full hash | PASS — reuse hashMs0; payload-integrity4/4 + reuse test PASS |
+
+Installed-like measurement on sealed fused TEST bundle `desktop/test-results/perf-bundle-f80d12ef411b` (18 Nov 2026):
+
+| Surface | Before (TEST15) | After (measured) |
+| --- | ---: | ---: |
+| Payload verify warm | 3.88–6.20s | **0.98s** reuse (hashMs=0); cold 9.68s |
+| Protected products API | 1.1–2.7s | **0.30 / 0.28s** |
+| Page Products/Reports/Closing | 6.39 / 6.02 / 6.33s sidebar | **0.41 / 0.18 / 0.20s** first HTTPS page GET |
+| Save Product | ~7s | **0.59s** API (context+POST); ~0.82s with DPAPI helper estimate |
+| Login KDF | 1.56–2.05s | 1.05–1.36s (floor unchanged) |
+| Restart backend ready | 26.45s | **20.00s** |
+| Full EXE → login window | 50.58s | UI open stopwatch incomplete this run |
+
+Evidence: `web/test-results/perf-proof-baseline-20261118/before-after-measured.json`, `backend-timings/`, payload measure JSONs. Backend-smoke PASS on same bundle. Residuals: first-run enrollment still ~89s backend; full Electron shell open-to-login UI not stopwatched; OS cache uncontrolled.
+
 Owner expressly confirms TEST14 both existing passwords/shared entry/Back to Login. Current15 automated checks use a separate fixture; full private owner business walkthrough is pending. Physical printer is deferred/UNVERIFIED; clean Windows11/client hardware, independent custody/replacement recovery and real backup media/RPO/RTO remain UNVERIFIED.
 
 Printer-independent TEST use is technically verified: the saved sale/invoice/restart completes without printing. Virtual PDF/80mm evidence remains valid; this does not waive receipt/business/legal or deployment gates.

@@ -103,8 +103,13 @@ export function useInventoryMutation(onSaved: (result: MutationResult) => void) 
    const response = await fetch(path, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error",
     headers: { "Content-Type": "application/json", "X-Inventory-Context": marker.context }, body: JSON.stringify({ ...proposal, requestKey: marker.key }), signal: AbortSignal.timeout(15000) });
    if (!response.ok) throw new InventoryClientError();
-   const outcome = await authoritativeOutcome(marker); if (outcome.outcome !== "COMMITTED") throw new InventoryClientError();
-   const result = outcome.result, confirmed = await confirmMarker(marker);
+   // Happy path uses the committed POST body. Recovery GET stays for UNKNOWN/crash only.
+   if (response.headers.get("X-Inventory-Context") !== marker.context ||
+       response.headers.get("X-Inventory-Operation") !== kind) throw new InventoryClientError();
+   const posted = await response.json() as MutationResult;
+   if (!posted || typeof posted.operationId !== "string" || !posted.product || typeof posted.product.id !== "string" ||
+       typeof posted.product.name !== "string") throw new InventoryClientError();
+   const result = posted, confirmed = await confirmMarker(marker);
    publish({ ready: true, marker: confirmed, fault: false, busy: false, result, outcome: "COMMITTED" }); changed(); ownedKey.current = null; onSaved(result);
   } catch {
    await refreshMarker(); publish({ ...view, busy: false, result: undefined, outcome: undefined });

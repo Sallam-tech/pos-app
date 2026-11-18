@@ -20,7 +20,7 @@ import { createVolatileStorage } from "./storage";
 import { assertPasswordNotReused, passwordCallbacks, passwordPolicy } from "./password";
 import { createLoginAttemptProtection } from "./login-attempts";
 import { assertOfflinePassword } from "./offline-password";
-import { validateReviewedSchema } from "../db/validate-schema";
+import { clearReviewedSchemaAdmission, validateReviewedSchema } from "../db/validate-schema";
 import { int64 } from "../db/integers";
 import { AuthorizationDenied, type Actor, type AuthorizationConfiguration, type AuthorizationGateway, type AuthorizedTransaction, type Role, type VerifiedCredential } from "./types";
 
@@ -699,7 +699,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
           await Promise.allSettled(active);
           let rejected = false;
           try { await beforeClose?.(); } catch { rejected = true; }
-          closed = true; invalidateReceipt();
+          closed = true; invalidateReceipt(); clearReviewedSchemaAdmission();
           for (const role of roles) try { stores[role].clear(); } catch { /* Always close SQLite. */ }
           try { await owned.close(); } catch { owned.quarantine(); return deny(); }
           delete processState[ownerKey];
@@ -800,7 +800,7 @@ export async function openAuthorizationGateway(config?: AuthorizationConfigurati
     maintenanceGateways.set(gateway, maintenance);
     return gateway;
   } catch {
-    invalidateReceipt(); stores.ADMIN.clear(); stores.SALESPERSON.clear();
+    invalidateReceipt(); clearReviewedSchemaAdmission(); stores.ADMIN.clear(); stores.SALESPERSON.clear();
     try { if (owner) await owner.close(); } catch { owner?.quarantine(); return deny(); }
     delete processState[ownerKey];
     return deny();

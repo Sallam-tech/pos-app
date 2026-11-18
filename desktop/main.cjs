@@ -16,7 +16,7 @@ const safeError="Shop POS TEST unavailable. Existing data has been retained. No 
 function protectData(directory){
  // These tiny native helpers are pinned before first execution. The complete
  // inventory is still verified before any backend/database/account startup.
- const helpers={"private-data.ps1":"ad53c8fcce4e7c5cfb9178385e648d2ddd5bbe4c46b52cd19597cbaa4b64f3e3","lifecycle.ps1":"39f98e78923ce65c8cc665289bf4b12381f67c70c0739239a80ec27416b7a7b9"};
+ const helpers={"private-data.ps1":"fc2461b7037fb7cc42a0950eacf96a83d87855f37d374aab2b5fc2e1d423d83b","lifecycle.ps1":"39f98e78923ce65c8cc665289bf4b12381f67c70c0739239a80ec27416b7a7b9"};
  for(const [name,expected]of Object.entries(helpers)){const file=path.join(__dirname,name),stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||createHash("sha256").update(fs.readFileSync(file)).digest("hex")!==expected)throw Error();}
  const result=spawnSync(path.join(process.env.SystemRoot,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-File",path.join(__dirname,"private-data.ps1")],{windowsHide:true,input:JSON.stringify({directory}),encoding:"utf8",maxBuffer:8192,timeout:15000});
  if(result.error||result.status!==0||result.stderr||result.stdout!=="true")throw Error();
@@ -220,4 +220,8 @@ async function boot(){
  child.once("exit",()=>{for(const pending of sharedLoginRequests.values())pending.finish({ok:false});for(const pending of markerRequests.values())pending.finish({ok:false});diagnostic("NODE_EXIT");child=undefined;ready=undefined;if(!shutdownStarted)void dialog.showMessageBox({type:"error",title:"Shop POS TEST",message:safeError});for(const window of roleWindows.values())if(!window.isDestroyed())window.destroy();if(shutdownStarted){quitting=true;app.quit();}});
  child.send({type:"start",dataRoot,applicationDirectory:path.join(payload,"app")});
 }
-void boot().catch(()=>{void dialog.showMessageBox({type:"error",title:"Shop POS TEST",message:safeError}).then(()=>{quitting=true;app.quit();});});
+void boot().catch(async()=>{
+ try{await app.whenReady();await dialog.showMessageBox({type:"error",title:"Shop POS TEST",message:safeError});}
+ catch{/* App never became ready; fail closed without a second crash. */}
+ quitting=true;app.quit();
+});

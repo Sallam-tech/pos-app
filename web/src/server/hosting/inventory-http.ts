@@ -94,7 +94,8 @@ export function inventorySessionRequest(request: IncomingMessage, context: Local
   } });
 }
 // INTERNAL construction by the existing TEST-confined runtime only. Every call
-// re-enters the sole gateway transaction; schema validity is not cached authority.
+// re-enters the sole gateway transaction. Full schema validation runs at least
+// once per process/file; later same-process admission is identity-bound only.
 export function createInventoryDispatcher(gateway: AuthorizationGateway, schema:35|36|37|38|39|40|41=35) {
   return async (request: IncomingMessage, response: ServerResponse, context: LocalRequestContext) => {
     const error = (status: number, code = "UNAVAILABLE", allow?: string) => send(response, status, { error: "Inventory operation unavailable.", code }, allow);
@@ -148,6 +149,10 @@ export function createInventoryDispatcher(gateway: AuthorizationGateway, schema:
       live();
       if (!recoveryContext) throw failed();
       response.setHeader("X-Inventory-Context", recoveryContext);
+      if (!operationKind && mutation && !recovery) {
+        const kinds: Record<string, string> = { receive: "RECEIVE", edit: "EDIT", "selling-price": "SELLING_PRICE", status: "STATUS", archive: "ARCHIVE", reprice: "REPRICE", adjust: "ADJUST" };
+        operationKind = url.pathname === "/api/admin/products" ? "CREATE" : action && kinds[action] ? kinds[action] : undefined;
+      }
       if (operationKind) response.setHeader("X-Inventory-Operation", operationKind);
       send(response, 200, result); // Service has confirmed COMMIT.
     } catch (failure) {

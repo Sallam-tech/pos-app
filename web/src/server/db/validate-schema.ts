@@ -4,10 +4,14 @@ import {CASH_AUTO,CASH_INDEXES,CASH_TABLES} from "./cash-manifest";
 import {cashObjects} from "./cash-program";
 import {INVOICE_AUTO,INVOICE_INDEXES,INVOICE_TABLES,invoicesObjects} from "./invoices-program";
 import "server-only";
+import { randomUUID } from "node:crypto";
 import {EXPENSE_AUTO,EXPENSE_INDEXES,EXPENSE_TABLES,expensesObjects} from "./expenses-program";
 import { RETURN_AUTO,RETURN_INDEXES,RETURN_TABLES,returnsObjects } from "./returns-program";
 import {salesObjects,SALES_AUTO,SALES_INDEXES,SALES_TABLES} from "./sales-program";
+import { createHash } from "node:crypto";
+import { lstatSync } from "node:fs";
 import type { AuthorizedTransaction } from "../auth/types";
+import { authorizedFileNamespace } from "../auth/database";
 import { AUTO_INDEXES, EXPLICIT_INDEXES, HISTORY_DEFINITION, reviewedMigrations, STATISTICS_DEFINITIONS } from "./reviewed-schema";
 import { immutableInventoryTables, storedTriggerSql } from "./inventory-trigger-policy";
 import { schemaTokens } from "./schema-sql";
@@ -28,15 +32,72 @@ const reject = (code: SchemaFailure): never => { throw new Mismatch(code); };
 interface ObjectDefinition { type: "table" | "index" | "trigger"; table: string; sql: string | null }
 interface IndexDefinition { table: string; origin: string; unique: bigint; partial: bigint; columns: readonly string[] }
 
+// Process-local admission after ONE full validate. Never stores SQL text, financial
+// verdicts, or auth. Bound to pid/boot/file namespace/user_version/schema_version only.
+const processBootId = randomUUID();
+type SchemaAdmission = Readonly<{
+  pid: number; bootId: string; version: ReviewedSchemaVersion;
+  fileNamespace: string; userVersion: string; schemaGeneration: string;
+}>;
+let schemaAdmission: SchemaAdmission | null = null;
+export function clearReviewedSchemaAdmission(): void { schemaAdmission = null; }
+async function fileNamespaceOf(reader: ReadScope): Promise<string | null> {
+  // Prefer the WeakMap-bound live AuthorizedTransaction namespace when present.
+  try { return authorizedFileNamespace(reader as AuthorizedTransaction); } catch { /* fall through */ }
+  try {
+    // Gateway/page paths pass plain {get,all} adapters; derive the same file
+    // identity from the live main DB path so admission still binds fail-closed.
+    const row = await reader.get("SELECT file FROM pragma_database_list WHERE name = 'main'");
+    if (typeof row?.file !== "string" || row.file.length < 2) return null;
+    const st = lstatSync(row.file, { bigint: true });
+    if (!st.isFile() || st.isSymbolicLink() || st.nlink !== BigInt(1)) return null;
+    return createHash("sha256").update(JSON.stringify([
+      "pos-test-inventory-file-v1", row.file.toLowerCase(), st.dev.toString(), st.ino.toString(),
+    ])).digest("hex");
+  } catch { return null; }
+}
+async function cheapAdmission(reader: ReadScope, version: ReviewedSchemaVersion): Promise<SchemaValidation | null> {
+  const token = schemaAdmission;
+  if (!token || token.pid !== process.pid || token.bootId !== processBootId || token.version !== version) {
+    schemaAdmission = null; return null;
+  }
+  const fileNamespace = await fileNamespaceOf(reader);
+  if (fileNamespace === null || fileNamespace !== token.fileNamespace) { schemaAdmission = null; return null; }
+  const generation = (await reader.get("SELECT schema_version FROM pragma_schema_version"))?.schema_version;
+  const userVersion = (await reader.get("SELECT user_version FROM pragma_user_version"))?.user_version;
+  if (typeof generation !== "bigint" || generation < BigInt(0) || typeof userVersion !== "bigint" ||
+      userVersion !== BigInt(version) || generation.toString() !== token.schemaGeneration ||
+      userVersion.toString() !== token.userVersion) { schemaAdmission = null; return null; }
+  const databases = await reader.all("SELECT name FROM pragma_database_list LIMIT 4");
+  if (databases.length > 2 || databases.filter(r => r.name === "main").length !== 1 ||
+      databases.some(r => r.name !== "main" && r.name !== "temp")) { schemaAdmission = null; reject("AMBIGUOUS_SNAPSHOT"); }
+  if (databases.some(r => r.name === "temp") &&
+      (await reader.all("SELECT type FROM temp.sqlite_schema LIMIT 1")).length) {
+    schemaAdmission = null; reject("UNEXPECTED_OBJECT");
+  }
+  if ((await reader.get("SELECT schema_version FROM pragma_schema_version"))?.schema_version !== generation ||
+      (await reader.get("SELECT user_version FROM pragma_user_version"))?.user_version !== userVersion) {
+    schemaAdmission = null; reject("AMBIGUOUS_SNAPSHOT");
+  }
+  return Object.freeze({ ok: true, version, scope: "SCHEMA_AND_HISTORY_ONLY" });
+}
+
 // Cache only compiled EXPECTED source definitions, never database text, metadata,
 // authorization or validation results. Every actual object is still read/parsed.
 const expectedSignatures=new Map<string,string>();
 function expectedSignature(sql:string,trigger:boolean){const key=(trigger?"trigger:":"schema:")+sql;let value=expectedSignatures.get(key);if(value===undefined){value=trigger?storedTriggerSql(sql):schemaTokens(sql);if(expectedSignatures.size>=2048)expectedSignatures.clear();expectedSignatures.set(key,value);}return value;}
 export async function validateReviewedSchema(reader: ReadScope, version: ReviewedSchemaVersion): Promise<SchemaValidation> {
   if (version !== 8 && version !== 18 && version !== 35 && version !== 36 && version !== 37 && version !== 38 && version !== 39 && version !== 40 && version !== 41) return Object.freeze({ ok: false, code: "UNSUPPORTED_VERSION" });
+  try {
+    const admitted = await cheapAdmission(reader, version);
+    if (admitted) return admitted;
+  } catch (error) {
+    schemaAdmission = null;
+    if (error instanceof Mismatch) return Object.freeze({ ok: false, code: error.code });
+  }
   let reviewed;
   try { reviewed = reviewedMigrations().slice(0, version); }
-  catch { return Object.freeze({ ok: false, code: "MANIFEST_UNAVAILABLE" }); }
+  catch { schemaAdmission = null; return Object.freeze({ ok: false, code: "MANIFEST_UNAVAILABLE" }); }
   try {
     const generation = (await reader.get("SELECT schema_version FROM pragma_schema_version"))?.schema_version;
     if (typeof generation !== "bigint" || generation < BigInt(0)) reject("AMBIGUOUS_SNAPSHOT");
@@ -140,8 +201,14 @@ export async function validateReviewedSchema(reader: ReadScope, version: Reviewe
     }
     if ((await reader.get("SELECT schema_version FROM pragma_schema_version"))?.schema_version !== generation ||
         (await reader.get("SELECT user_version FROM pragma_user_version"))?.user_version !== BigInt(version)) reject("AMBIGUOUS_SNAPSHOT");
+    const fileNamespace = await fileNamespaceOf(reader);
+    schemaAdmission = fileNamespace === null ? null : Object.freeze({
+      pid: process.pid, bootId: processBootId, version, fileNamespace,
+      userVersion: BigInt(version).toString(), schemaGeneration: (generation as bigint).toString(),
+    });
     return Object.freeze({ ok: true, version, scope: "SCHEMA_AND_HISTORY_ONLY" });
   } catch (error) {
+    schemaAdmission = null;
     return Object.freeze({ ok: false, code: error instanceof Mismatch ? error.code : "READ_FAILED" });
   }
 }
