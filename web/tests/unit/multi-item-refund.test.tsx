@@ -8,7 +8,7 @@ beforeEach(() => {
   Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value(this: HTMLDialogElement) { this.open = false; } });
 });
 function openInvoice() {
-  fireEvent.change(screen.getByLabelText("Find Original Sale"), { target: { value: "Diapers" } });
+  fireEvent.change(screen.getByLabelText("Find the Bill"), { target: { value: "Diapers" } });
   fireEvent.click(screen.getByRole("button", { name: /^Select TEST-INVOICE/ }));
 }
 it("groups by original invoice identity and returns all its lines when one product matches", () => {

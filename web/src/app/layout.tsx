@@ -15,7 +15,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <script id="pos-theme-init" dangerouslySetInnerHTML={{ __html: themeInitializationScript }} />
       </head>
-      <body className="min-h-full flex flex-col">
+      {/* Browser extensions (e.g. ColorZilla's cz-shortcut-listen) add attributes to <body>; ignore only those attribute mismatches. */}
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

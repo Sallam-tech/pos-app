@@ -15,7 +15,7 @@ export function TestInventoryRecovery() {
    "UNKNOWN: a previous operation is unresolved. New saves are blocked. Sign in as Admin and resolve it; a missing result does not mean it failed."}</p>
   {recovery.result && <p className="mt-2">Saved <strong>{recovery.result.product.name}</strong>. No repeat mutation was sent during recovery.</p>}
   {recovery.marker && !recovery.fault && <div className="mt-3 flex flex-wrap gap-3">
-   <Button type="button" variant="outline" disabled={recovery.busy} onClick={() => { setConfirmation(null); void recovery.resolve(); }}>Resolve Previous Operation</Button>
+   <Button type="button" variant="outline" disabled={recovery.busy} onClick={() => { setConfirmation(null); void recovery.resolve(); }}>Finish the previous step</Button>
    {!recovery.outcome && !confirm && <Button type="button" variant="outline" disabled={recovery.busy} onClick={() => { setConfirmation(recovery.marker); }}>Review Cancellation</Button>}
    {!recovery.outcome && confirm && <>
     <p>Admin confirmation: if this operation was saved, its result will be returned. Otherwise permanently block this request key. Nothing is automatically re-entered.</p>

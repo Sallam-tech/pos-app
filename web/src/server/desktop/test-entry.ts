@@ -35,7 +35,8 @@ async function directory(parent:string,name:string){const target=path.join(paren
 let runtime:LocalRuntime|undefined,startup:Promise<void>|undefined,starting=false,closing=false;
 let sharedLoginRunning=false;
 let stage="ENTRY";
-function setStage(value:string){stage=value;process.send?.({type:"startup-stage",value});}
+const bootStartedAt=Date.now();
+function setStage(value:string){stage=value;process.send?.({type:"startup-stage",value,elapsedMs:Date.now()-bootStartedAt});}
 let recovery:Promise<void>|undefined,context:{root:LocalKeyConfiguration;active:LocalKeyConfiguration;base:string;origins:Readonly<Record<"ADMIN"|"SALESPERSON",string>>}|undefined;
 function cancelPending(){for(const p of pending.values()){clearTimeout(p.timer);p.reject(Error("Desktop closed."));}pending.clear();}
 async function start(message:Message){

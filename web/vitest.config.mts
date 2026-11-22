@@ -5,7 +5,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // Same stub every other vitest.*.config.mts uses; Next provides it at build time.
+      "server-only": fileURLToPath(new URL("./node_modules/next/dist/compiled/server-only/empty.js", import.meta.url)),
+    },
   },
   test: {
     environment: "jsdom",

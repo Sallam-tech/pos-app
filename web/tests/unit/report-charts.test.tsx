@@ -3,6 +3,8 @@ import { isValidElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ReportChartsPreview } from "@/components/admin/report-charts-preview";
 import { TestSavedFinancialReport } from "@/components/admin/test-saved-financial-report";
+import { TestExpenseFinancials } from "@/components/admin/test-expense-financials";
+import { LiveDataRequired } from "@/components/shell/live-data-required";
 import { SimpleBarChart } from "@/components/admin/simple-bar-chart";
 import { getFictionalProfitSales } from "@/lib/admin/mock-historical-costs";
 import { mockSales } from "@/lib/admin/mock-sales";
@@ -40,19 +42,33 @@ describe("unified Sales and Profit Reports", () => {
     expect(result.type).toBe(TestSavedFinancialReport);
   });
 
-  it("reuses exactly the canonical reports at both legacy URLs, with report titles and same-page Details controls", async () => {
+  it.each([
+    ["sales", SalesReportPage],
+    ["profit", ProfitReportPage],
+  ] as const)("uses the existing %s fallback only in its matching TEST runtime", async (kind, route) => {
+    if (kind === "sales") renderFlags.invoices = true;
+    else renderFlags.expenses = true;
+    const result = await route();
+    expect(isValidElement(result)).toBe(true);
+    expect(result.type).toBe(TestExpenseFinancials);
+    expect(result.props).toMatchObject({ mode: kind, authoritativeReports: false });
+  });
+
+  it.each([
+    ["sales", SalesReportPage, "/admin/reports/sales", "Sales Report"],
+    ["profit", ProfitReportPage, "/admin/reports/profit", "Profit Report"],
+  ] as const)("shows a disconnected state, not demo financial data, for %s", async (_kind, route, path, title) => {
+    const result = await route();
+    expect(isValidElement(result)).toBe(true);
+    expect(result.type).toBe(LiveDataRequired);
+    expect(result.props).toMatchObject({ route: path, title });
+  });
+
+  it("reuses the canonical reports at both legacy URLs with their original titles", () => {
     expect(LegacySalesPage).toBe(SalesReportPage);
     expect(LegacyProfitPage).toBe(ProfitReportPage);
     expect(salesMetadata.title).toBe("Sales Report | Shop POS");
     expect(profitMetadata.title).toBe("Profit Report | Shop POS");
-    const { unmount } = render(await SalesReportPage());
-    expect(value("sales", "Total Sales")).toHaveTextContent("Rs. 25,690.00");
-    expect(screen.getByRole("button", { name: "View Sales Details" })).toHaveAttribute("aria-controls", "sales-details");
-    expect(screen.queryByRole("link", { name: /View Detailed/ })).not.toBeInTheDocument();
-    unmount();
-    render(await ProfitReportPage());
-    expect(value("profit", "Gross Profit")).toHaveTextContent("Rs. 5,140.00");
-    expect(screen.getByRole("button", { name: "View Profit Details" })).toHaveAttribute("aria-controls", "profit-details");
   });
 
   it.each(["sales", "profit"] as const)("shows three %s summary cards, six vertical comparisons and all details in one page", (kind) => {

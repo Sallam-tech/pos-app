@@ -37,3 +37,18 @@ test("both password controls use atomic version audit, target revocation and fre
  const rows=await g.withAdminTransaction(admin,tx=>tx.all("SELECT * FROM shop_password_operations"));expect(rows).toHaveLength(2);expect(Object.keys(rows[0]).some(k=>/hash|password|token/.test(k))).toBe(false);
  }finally{await g.close();}
 },180000);
+
+
+test("shop-detail writes require a current Admin password as well as the signed Admin session",async()=>{
+ const f=await gateway();try{
+  const api=createSettingsService(f.g,"TEST SHOP"),current=await api.current(f.admin,"ADMIN");if(!current.context)throw Error();
+  const key=randomUUID(),input={expectedRevision:"0",settings:settings(),reason:"TEST verified password-protected settings"};
+  for(const password of [undefined,passwords.ADMIN+"-wrong"]){
+   await expect(api.save(f.admin,password,key,current.context,input)).rejects.toThrow();
+   expect((await api.operation(f.admin,key,current.context,"SETTINGS")).state).toBe("UNKNOWN");
+   expect((await api.history(f.admin)).items).toHaveLength(0);
+  }
+  expect((await api.save(f.admin,passwords.ADMIN,key,current.context,input)).state).toBe("COMMITTED");
+  expect((await api.history(f.admin)).items).toHaveLength(1);
+ }finally{await f.g.close();}
+},180000);

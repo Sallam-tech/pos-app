@@ -50,8 +50,11 @@ export function fingerprint(db: ProofDatabase) {
   const contents = tables.map(row=>fingerprintTable(db,String(row.name)));
   return { schemaDigest, userVersion: String(db.prepare("PRAGMA user_version").get()?.user_version), tables: contents };
 }
-export async function verifySchema41(db: ProofDatabase) {
-  if (JSON.stringify(db.prepare("PRAGMA integrity_check").all()) !== '[{"integrity_check":"ok"}]') throw Error("Snapshot integrity rejected.");
+// `quick` is ONLY for cheap periodic liveness polling of the live database. Every backup source,
+// snapshot, copy and restore path keeps the default full integrity_check.
+export async function verifySchema41(db: ProofDatabase, quick = false) {
+  if (quick ? JSON.stringify(db.prepare("PRAGMA quick_check").all()) !== '[{"quick_check":"ok"}]'
+    : JSON.stringify(db.prepare("PRAGMA integrity_check").all()) !== '[{"integrity_check":"ok"}]') throw Error("Snapshot integrity rejected.");
   if (db.prepare("PRAGMA foreign_key_check").all().length) throw Error("Snapshot foreign keys rejected.");
   const schema = await validateReviewedSchema({
     get: async (sql, values) => db.prepare(sql).get(...(values ?? [])),
