@@ -1,19 +1,28 @@
 "use client";
 import type {Receipt} from "@/server/sales/service";
-import {InvoicePaperHeader,InvoiceItemsTable} from "./invoice-presentation";
 import {ReceiptPreview} from "@/components/demo/receipt-preview";
-import {decimalMoney,displayMoney} from "@/lib/sales/client";
+import {displayMoney} from "@/lib/sales/client";
+// Saved-sale receipt laid out for an 80 mm thermal printer (about 72 mm printable width).
 export function TestSaleReceipt({receipt,onDone}:{receipt:Receipt;onDone:()=>void}){
- return <ReceiptPreview backLabel="Acknowledge saved invoice" open onOpenChange={()=>{}} title="Saved TEST Invoice" description="Read-only saved invoice. Done acknowledges this saved result; it does not create another sale." onDone={onDone} actionsAbove developerCredit initialLayout={receipt.branding?.receiptLayout??"ordinary"}>
-  <article className="grid gap-4 bg-white text-black">
-   <InvoicePaperHeader shopName={receipt.shopName} address={receipt.branding?.address} phone={receipt.branding?.phone} notice="SAVED / ISOLATED TEST - NOT A TAX INVOICE"/>
-   <p className="break-all text-xs">Invoice: {receipt.number}<br/>Date: {receipt.businessDate} / {new Date(Number(receipt.recordedAtMs)).toLocaleTimeString("en-PK",{timeZone:"Asia/Karachi"})}</p>
-   {receipt.customerName&&<p>Customer: {receipt.customerName} {receipt.customerPhone}</p>}
-   <InvoiceItemsTable caption="Saved invoice items" items={receipt.lines.map(l=>({product:{name:[l.name,l.sizeLabel,l.code].filter(Boolean).join(" / ")},quantity:l.quantity,unitPrice:decimalMoney(l.unitPricePaisa),total:decimalMoney(l.totalPaisa),discountPercent:l.discountPercent,discountAmount:decimalMoney((BigInt(l.unitPricePaisa)*BigInt(l.quantity)-BigInt(l.totalPaisa)).toString())}))}/>
-   <dl className="invoice-summary"><div className="invoice-total"><dt>Total</dt><dd data-testid="saved-sale-total">{displayMoney(receipt.totalPaisa)}</dd></div>
-    {receipt.payment?<><div><dt>Cash received</dt><dd>{displayMoney(receipt.payment.tenderedPaisa)}</dd></div><div><dt>Change</dt><dd>{displayMoney(receipt.payment.changePaisa)}</dd></div></>:<div><dt>Cash payment</dt><dd>UNRECORDED</dd></div>}
-   </dl>
-   {receipt.branding?.footer&&<p className="text-center">{receipt.branding.footer}</p>}
+ const time=new Date(Number(receipt.recordedAtMs)).toLocaleTimeString("en-PK",{timeZone:"Asia/Karachi",hour:"2-digit",minute:"2-digit"});
+ return <ReceiptPreview backLabel="Finish this sale" open onOpenChange={()=>{}} title="Invoice Saved" description="Print the receipt, then press Done for the next sale." onDone={onDone} actionsAbove developerCredit thermalOnly>
+  <article className="thermal-receipt">
+   <header className="thermal-center"><strong className="thermal-shop">{receipt.shopName}</strong>{receipt.branding?.address&&<div>{receipt.branding.address}</div>}{receipt.branding?.phone&&<div>Ph: {receipt.branding.phone}</div>}<div className="thermal-small">TEST - NOT A TAX INVOICE</div></header>
+   <div className="thermal-rule"/>
+   <div className="thermal-row"><span>Inv: {receipt.number}</span></div>
+   <div className="thermal-row"><span>{receipt.businessDate}</span><span>{time}</span></div>
+   {receipt.customerName&&<div className="thermal-row"><span>{receipt.customerName} {receipt.customerPhone}</span></div>}
+   <div className="thermal-rule"/>
+   {receipt.lines.map((l,n)=>{const gross=BigInt(l.unitPricePaisa)*BigInt(l.quantity),off=gross-BigInt(l.totalPaisa);return <div key={n} className="thermal-item">
+    <div className="thermal-name">{l.name}{l.sizeLabel?" "+l.sizeLabel:""} <span className="thermal-small">{l.code}</span></div>
+    <div className="thermal-row"><span>{l.quantity} x {displayMoney(l.unitPricePaisa)}</span><span>{displayMoney(l.totalPaisa)}</span></div>
+    {off>BigInt(0)&&<div className="thermal-row thermal-small"><span>Discount {l.discountPercent}%</span><span>-{displayMoney(off.toString())}</span></div>}
+   </div>;})}
+   <div className="thermal-rule"/>
+   <div className="thermal-row thermal-total"><span>TOTAL</span><span data-testid="saved-sale-total">{displayMoney(receipt.totalPaisa)}</span></div>
+   {receipt.payment?<><div className="thermal-row"><span>Cash</span><span>{displayMoney(receipt.payment.tenderedPaisa)}</span></div><div className="thermal-row"><span>Change</span><span>{displayMoney(receipt.payment.changePaisa)}</span></div></>:<div className="thermal-row thermal-small"><span>Cash payment</span><span>Not recorded</span></div>}
+   <div className="thermal-rule"/>
+   {receipt.branding?.footer&&<p className="thermal-center">{receipt.branding.footer}</p>}
   </article>
  </ReceiptPreview>;
 }

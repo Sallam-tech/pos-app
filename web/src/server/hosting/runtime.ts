@@ -102,6 +102,8 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
   let app: ReturnType<typeof next> | undefined;
   let host: ReturnType<typeof createLocalHttpsHost> | undefined;
   let ownedErrorListeners: NodeJS.UncaughtExceptionListener[] = [];
+  let beforeListeners: Set<NodeJS.UncaughtExceptionListener> | undefined;
+  let preparing: Promise<void> | undefined; // Next prepare(), started early and always awaited before listen().
   const closeApp = async () => {
     await app?.close();
     for (const listener of ownedErrorListeners) process.removeListener("uncaughtException", listener);
@@ -161,6 +163,16 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
       liveGuard.assertHeld();
       await pages(request, response, context);
     } : undefined,stage=>{try{input.onDrainStage?.(stage);}catch{/* Observation only. */}});
+    // Next preparation does not depend on the gateway, operation keys or backup worker. Start it now so it
+    // overlaps their startup checks; nothing is served until host.listen() after every check succeeded.
+    app = next({ dir: input.applicationDirectory, dev: false, quiet: true,
+      hostname: "localhost", port, httpServer: host.server, conf });
+    // Next16 custom-server prepare installs a process error listener which its
+    // close does not remove. This runtime owns the process; retain/remove only
+    // the exact listeners installed during OUR serialized preparation.
+    beforeListeners = new Set(process.listeners("uncaughtException"));
+    preparing = app.prepare();
+    preparing.catch(() => {}); // The rejection is surfaced where it is awaited, or by partial-startup cleanup.
     gateway = await openAuthorizationGateway(config, testAuthentication ? schema : undefined); // SAME existing single native owner.
     const operationKeys=input.testDesktopOperationKeys?await openDesktopOperationKeys(input.protectedIdentity!.root,input.protectedIdentity!.selected??input.protectedIdentity!.root,()=>liveGuard.assertHeld()):undefined;
     const backupConfiguration=input.testBackups&&config.protectedAdmission?rebindProtectedBackupAdmission(input.testBackups,config.protectedAdmission,config.protectedHistory):input.testBackups;
@@ -175,14 +187,8 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     const invoices=input.testInvoiceCorrections?createInvoicesDispatcher(gateway,schema===41?41:schema===40?40:39):undefined;
     const cash=input.testCash?createCashDispatcher(gateway,salesShop,schema===41?41:40):undefined;
     const reports=input.testReports?createReportsDispatcher(gateway,schema===41?41:schema===40?40:39):undefined;
-    app = next({ dir: input.applicationDirectory, dev: false, quiet: true,
-      hostname: "localhost", port, httpServer: host.server, conf });
-    // Next16 custom-server prepare installs a process error listener which its
-    // close does not remove. This runtime owns the process; retain/remove only
-    // the exact listeners installed during OUR serialized preparation.
-    const beforeListeners = new Set(process.listeners("uncaughtException"));
-    try { await app.prepare(); } finally {
-      ownedErrorListeners = process.listeners("uncaughtException").filter(listener => !beforeListeners.has(listener));
+    try { await preparing; } finally {
+      ownedErrorListeners = process.listeners("uncaughtException").filter(listener => !beforeListeners!.has(listener));
     }
     const handler = app.getRequestHandler();
     const pages = createInventoryPageDispatcher(gateway, async (request, response) => { await handler(request, response); },schema,!!salesShop,!!input.testReturns,!!input.testExpenses,!!input.testInvoiceCorrections,!!input.testReports,!!input.testCash);
@@ -242,6 +248,7 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
       await host?.close();
       await backupWorker?.stop();
       await gateway?.close();
+      if (preparing) { await preparing.catch(() => {}); ownedErrorListeners = process.listeners("uncaughtException").filter(listener => !beforeListeners!.has(listener)); } // Let an in-flight prepare settle first.
       await closeApp();
       if(ownership)assertNoAuthorizationOwner(); await ownership?.close();
     } catch { return reject(); } // Never release an uncertain owner's fence early.

@@ -53,7 +53,7 @@ export function TestBackupCard(){
  <Button variant="outline" disabled={!ready||!last||busy||!!marker||!password} onClick={()=>last&&void execute("export",last.id)}>Export Encrypted Backup</Button>
  <Button variant="outline" disabled={!ready||!last||busy||!!marker||!password||!confirmRestore} onClick={()=>last&&void execute("restore",last.id)}>Restore Backup</Button></div>
  <p className="mt-3 text-xs text-muted-foreground">Restore creates a separate TEST copy. Login drill and independent replacement-PC recovery require separate verification. Production is disabled.</p>
- {marker&&<div className="mt-3 grid gap-2 text-sm"><p className="break-all">Original {marker.kind} key: {marker.key}</p><Button variant="outline" disabled={busy} onClick={()=>void resolve()}>Check Original Backup</Button>{terminal&&<Button disabled={busy} onClick={()=>void acknowledge()}>Acknowledge Backup Outcome</Button>}</div>}
+ {marker&&<div className="mt-3 grid gap-2 text-sm"><p className="break-all">Original {marker.kind} key: {marker.key}</p><Button variant="outline" disabled={busy} onClick={()=>void resolve()}>Check Original Backup</Button>{terminal&&<Button disabled={busy} onClick={()=>void acknowledge()}>OK, I have seen the result</Button>}</div>}
  {message&&<p role="status" className="mt-2 text-sm">{message}</p>}
  <Button className="mt-3" variant="outline" disabled={busy} onClick={()=>void refresh().catch(()=>setMessage("Backup status unavailable."))}>Refresh Backup Status</Button>
  </Card>;

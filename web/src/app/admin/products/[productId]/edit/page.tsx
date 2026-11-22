@@ -2,29 +2,14 @@ import {isTestProductControlsRender} from "@/server/hosting/product-controls-ren
 import {TestProductEditor} from "@/components/admin/test-product-editor";
 import { PageHeading } from "@/components/shell/page-heading";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { AddProductPreview } from "@/components/admin/add-product-preview";
-import { ProductOperationsPreview } from "@/components/admin/product-operations-preview";
 import { Badge } from "@/components/ui/badge";
-import { mockInventory } from "@/lib/admin/mock-inventory";
+import { LiveDataRequired } from "@/components/shell/live-data-required";
 
 export const dynamic="force-dynamic";
 export const metadata: Metadata = { title: "Edit Product | Shop POS" };
 
-export function generateStaticParams() {
-  return mockInventory.map((product) => ({ productId: product.id }));
-}
-
 export default async function EditProductPage({ params }: { params: Promise<{ productId: string }> }) {
   const { productId } = await params;
-  if(isTestProductControlsRender())return <div className="mx-auto w-full max-w-3xl"><div className="mb-4 flex flex-wrap items-center gap-3"><PageHeading route={"/admin/products/"+productId+"/edit"}>Edit Product</PageHeading><Badge>Isolated TEST</Badge></div><TestProductEditor id={productId}/></div>;
-  const product = mockInventory.find((item) => item.id === productId);
-  if (!product) notFound();
-  return <div className="mx-auto w-full max-w-3xl">
-    <div className="mb-4">
-      <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/products/" + product.id + "/edit"}>Edit Product</PageHeading><Badge>Demo Data</Badge></div>
-    </div>
-    <AddProductPreview key={product.id} product={product} />
-    <ProductOperationsPreview key={"operations-" + product.id} product={product} />
-  </div>;
+  if(!isTestProductControlsRender())return <LiveDataRequired route={"/admin/products/"+productId+"/edit"} title="Edit Product"/>;
+  return <div className="mx-auto w-full max-w-3xl"><div className="mb-4 flex flex-wrap items-center gap-3"><PageHeading route={"/admin/products/"+productId+"/edit"}>Edit Product</PageHeading><Badge>Test mode</Badge></div><TestProductEditor id={productId}/></div>;
 }

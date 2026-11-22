@@ -159,7 +159,7 @@ export async function startTestBackupWorker(configuration:TestBackupConfiguratio
  async function drain(){for(const j of [...jobs.values()])if(j.state==="QUEUED"||j.state==="RUNNING")await perform(j);}
  async function pulse(){
   const db=openProofDatabase(source(c!.database));let closings:Record<string,unknown>[];
-  try{await verifySchema41(db);closings=db.prepare("SELECT id FROM closing_backup_jobs ORDER BY id LIMIT 10001").all();}finally{db.close();}
+  try{await verifySchema41(db,true);closings=db.prepare("SELECT id FROM closing_backup_jobs ORDER BY id LIMIT 10001").all();}finally{db.close();}
   if(closings.length>10000)return fail();
   const bucket=Math.floor(Date.now()/PERIOD),id=deterministicId(c!.setup.id+":automatic:"+bucket);
   await admit(id,"AUTOMATIC","interval:"+bucket);
@@ -167,7 +167,9 @@ export async function startTestBackupWorker(configuration:TestBackupConfiguratio
   await drain();
  }
  // Recover uncertain original IDs before discovering new current-time work.
- await enqueue(async()=>{await drain();await pulse();});
+ // Do not hold the window/app start for a possibly multi-second backup. The serialized queue still
+ // drains interrupted jobs BEFORE discovering new work; any failure marks the worker broken (status() fails).
+ void enqueue(async()=>{await drain();await pulse();}).catch(()=>{if(!stopping)broken=true;});
  const timer=setInterval(()=>{if(!stopping)void enqueue(pulse).catch(()=>{if(!stopping)broken=true;});},30000);timer.unref();
  const worker=Object.freeze({
   manual(key:string){return enqueue(async()=>{const result=await admit(uuid(key),"MANUAL","manual");if(!stopping)void enqueue(drain).catch(()=>{if(!stopping)broken=true;});return result;});},

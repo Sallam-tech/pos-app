@@ -21,5 +21,5 @@ export function DemoAccess({ enabled = demoNavigationEnabled }: { enabled?: bool
 
 export function DemoExitLink({ enabled = demoNavigationEnabled }: { enabled?: boolean }) {
   if (!enabled) return null;
-  return <Button asChild variant="ghost" size="sm" className="justify-start px-0"><SafeNavigationLink href="/login" prefetch={false}>Exit Demo</SafeNavigationLink></Button>;
+  return <Button asChild variant="ghost" size="sm" className="justify-start px-0"><SafeNavigationLink href="/login" prefetch={false}>Back to Login</SafeNavigationLink></Button>;
 }

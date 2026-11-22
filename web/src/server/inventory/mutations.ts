@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { Actor, AuthorizedTransaction } from "../auth/types";
 import type { AdminProduct, Kind, MutationResult } from "./contracts";
 import { load, savedResult } from "./model";
+import { nextProductCode, productCodePrefix } from "./product-code";
 import { canonical, checked, digest, now, parseCommand, quantity, reject, SCALE, stockValue } from "./validation";
 type Command=ReturnType<typeof parseCommand>;
 const s=(c:Command,k:string)=>c[k] as string;
@@ -39,7 +40,7 @@ export async function mutate(tx:AuthorizedTransaction,actor:Actor,kind:Kind,inpu
  if(salesProfile)for(const field of ["buyingPricePaisa","sellingPricePaisa","unitBuyingPricePaisa"])if(typeof c[field]==="string"&&BigInt(c[field] as string)%BigInt(100))return reject();
  const t=now(), operationId=randomUUID();
  if(kind==="CREATE") {
-  const id=randomUUID(), productCode=c.code as string|undefined??randomUUID().replaceAll("-", "").toUpperCase(),
+  const prefix=productCodePrefix(s(c,"name")), id=randomUUID(), productCode=c.code as string|undefined??nextProductCode(prefix,(await tx.all("SELECT code FROM products WHERE code LIKE ?",[prefix+"-%"])).map(r=>String(r.code))),
     cost=BigInt(s(c,"buyingPricePaisa")), selling=c.sellingPricePaisa===null?null:BigInt(s(c,"sellingPricePaisa")), q=quantity(c.openingQuantity);
   if((selling!==null && selling<cost) || (c.sellingActive && selling===null)) return reject();
   if(await tx.get("SELECT id FROM products WHERE code=?",[productCode])) return reject("CONFLICT");

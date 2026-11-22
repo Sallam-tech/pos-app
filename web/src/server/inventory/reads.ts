@@ -10,13 +10,18 @@ function totals(row:SqlRow|undefined):InventoryTotals {
  const read=(k:string)=>{ if(typeof row[k]!=="bigint" || row[k]<BigInt(0)) return reject("UNAVAILABLE"); return int64(row[k]).toString(); };
  return {products:read("products"),quantity:read("quantity"),lowStock:read("lowStock"),outOfStock:read("outOfStock"),stockValuePaisa:read("stockValuePaisa")};
 }
-const summary=`SELECT count(*) AS products,coalesce(sum(b.sellable_q/1000000),0) AS quantity,
+const invalidDeep=`coalesce(sum(CASE WHEN b.product_id IS NULL OR b.cost_m<>p.current_cost_m OR ${brokenChain} OR
+ b.sellable_q<>(SELECT coalesce(sum(m.delta_q),0) FROM stock_movements m WHERE m.product_id=p.id) OR
+ NOT EXISTS(SELECT 1 FROM inventory_operations o WHERE o.id=b.opening_operation_id AND o.product_id=p.id AND o.kind='CREATE') THEN 1 ELSE 0 END),0)`;
+const summarySql=(deep:boolean)=>`SELECT count(*) AS products,coalesce(sum(b.sellable_q/1000000),0) AS quantity,
  coalesce(sum(CASE WHEN b.sellable_q<=p.low_stock_q THEN 1 ELSE 0 END),0) AS lowStock,
  coalesce(sum(CASE WHEN b.sellable_q=0 THEN 1 ELSE 0 END),0) AS outOfStock,coalesce(sum(b.stock_value_m),0) AS stockValuePaisa,
- coalesce(sum(CASE WHEN b.product_id IS NULL OR b.cost_m<>p.current_cost_m OR ${brokenChain} OR
- b.sellable_q<>(SELECT coalesce(sum(m.delta_q),0) FROM stock_movements m WHERE m.product_id=p.id) OR
- NOT EXISTS(SELECT 1 FROM inventory_operations o WHERE o.id=b.opening_operation_id AND o.product_id=p.id AND o.kind='CREATE') THEN 1 ELSE 0 END),0) AS invalid
+ ${deep?invalidDeep:"0"} AS invalid
  FROM products p LEFT JOIN stock_balances b ON b.product_id=p.id LEFT JOIN product_identifiers i ON i.product_id=p.id`;
+// The full ledger cross-check (every balance vs sum of its movements, cost, chain, opening) runs for the OVERALL
+// summary. A filtered summary covers a subset of the same rows under the same predicate, and totals() rejects the
+// whole request if the overall check fails, so repeating the O(movements) scan for it only doubles the cost.
+const summary=summarySql(true),summaryFiltered=summarySql(false);
 export async function list(tx:AuthorizedTransaction,input:unknown) {
  const q=parseQuery(input),where:string[]=[],values:SqlValue[]=[];
  if(q.query) { where.push("(instr(p.name_key,?)>0 OR p.code=? OR i.value=?)");values.push(q.query,q.rawQuery.toUpperCase(),q.rawQuery); }
@@ -27,7 +32,7 @@ export async function list(tx:AuthorizedTransaction,input:unknown) {
  if(q.stock==="LOW") where.push("b.sellable_q<=p.low_stock_q");
  if(q.stock==="OUT") where.push("b.sellable_q=0");
  const filter=where.length?" WHERE "+where.join(" AND "):"";
- const overall=totals(await tx.get(summary)),filtered=totals(await tx.get(summary+filter,values));
+ const overall=totals(await tx.get(summary)),filtered=totals(await tx.get(summaryFiltered+filter,values));
  const pageFilter=filter+(q.cursor?(filter?" AND ":" WHERE ")+"p.id>?":"");
  const rows=await tx.all(selectProduct+pageFilter+" ORDER BY p.id LIMIT ?",[...values,...(q.cursor?[q.cursor]:[]),BigInt(q.limit+1)]);
  const items=rows.slice(0,q.limit).map(r=>state(r).dto);

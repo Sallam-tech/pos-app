@@ -70,7 +70,7 @@ export function SettingsPreview() {
     </div>
     <div className="grid gap-3">
       <Card className="p-4 sm:p-5">
-        <h2 className="text-base font-semibold">Shop &amp; Receipt Details</h2>
+        <h2 className="text-base font-semibold">Shop and Receipt Details</h2>
         <ShopDetailsForm key={JSON.stringify(settings)} saved={settings} onEdit={() => setMessage("")}
           onSaved={(success) => { setFailed(!success); setMessage(success ? "Settings saved on this browser only." : "Settings could not be saved. Browser storage is unavailable."); }} />
         {message && <p role={failed ? "alert" : "status"} className={"mt-2 text-sm " + (failed ? "text-danger" : "text-success")}>{message}</p>}

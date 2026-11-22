@@ -90,7 +90,8 @@ export function useInventoryMutation(onSaved: (result: MutationResult) => void) 
   if (recovery.result && recovery.marker?.key === ownedKey.current) { ownedKey.current = null; setError(null); onSaved(recovery.result); }
  }, [recovery.result, recovery.marker?.key, onSaved]);
  async function submit(path: string, proposal: Record<string, unknown>) {
-  if (admitted.current || hasPendingInventoryMutation()) return;
+  if (admitted.current) return;
+  if (hasPendingInventoryMutation()) { setError("Finish or resolve the previous save first."); return; }
   admitted.current = true; setBusy(true); setError(null); publish({ ...view, busy: true });
   try {
    const context = await authenticatedContext();
@@ -110,7 +111,13 @@ export function useInventoryMutation(onSaved: (result: MutationResult) => void) 
    if (!posted || typeof posted.operationId !== "string" || !posted.product || typeof posted.product.id !== "string" ||
        typeof posted.product.name !== "string") throw new InventoryClientError();
    const result = posted, confirmed = await confirmMarker(marker);
-   publish({ ready: true, marker: confirmed, fault: false, busy: false, result, outcome: "COMMITTED" }); changed(); ownedKey.current = null; onSaved(result);
+   // The committed POST body and headers were validated above (same proof the banner re-fetches),
+   // so release the marker now. If that release fails, keep the CONFIRMED marker for manual acknowledgement.
+   let released = false;
+   try { await acknowledgeMarker(confirmed); released = true; } catch { /* fall back to the explicit banner */ }
+   publish(released ? { ready: true, marker: null, fault: false, busy: false }
+    : { ready: true, marker: confirmed, fault: false, busy: false, result, outcome: "COMMITTED" });
+   changed(); ownedKey.current = null; onSaved(result);
   } catch {
    await refreshMarker(); publish({ ...view, busy: false, result: undefined, outcome: undefined });
    setError("Save unconfirmed or blocked. Use operation recovery; do not enter a replacement operation.");

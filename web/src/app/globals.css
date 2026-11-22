@@ -125,3 +125,16 @@
 .page-back-link:hover { background: #d8ede1; }
 .dark .page-back-link { background: #203e36; border-color: #4d816a; color: #86e9b8; }
 .dark .page-back-link:hover { background: #2a4b40; }
+
+/* 80 mm thermal receipt (about 72 mm printable). Used on screen as a paper preview and in print. */
+.thermal-paper { width: 76mm; max-width: 100%; padding: 3mm 2mm; background: #fff; color: #111; }
+.thermal-receipt { font: 12px/1.35 ui-monospace, Consolas, "Courier New", monospace; color: #111; }
+.thermal-center { text-align: center; }
+.thermal-shop { display: block; font-size: 1.25em; font-weight: 700; }
+.thermal-small { font-size: 0.85em; }
+.thermal-rule { border-top: 1px dashed #111; margin: 4px 0; }
+.thermal-row { display: flex; justify-content: space-between; gap: 8px; }
+.thermal-row > span:last-child { white-space: nowrap; }
+.thermal-item { margin: 3px 0; }
+.thermal-name { font-weight: 600; overflow-wrap: anywhere; }
+.thermal-total { font-size: 1.2em; font-weight: 700; }

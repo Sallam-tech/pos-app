@@ -67,7 +67,7 @@ export function AdminReturnPreview({ sales, businessDateLabel }: { sales: readon
   return <div className="mx-auto max-w-4xl">
     <Card>
       <form data-unsaved-changes={Boolean(selected || lookup)} noValidate aria-label="Demo return review" onSubmit={submit} className="space-y-5">
-        <div><CardTitle><label htmlFor="return-lookup">Find Original Sale</label></CardTitle>
+        <div><CardTitle><label htmlFor="return-lookup">Find the Bill</label></CardTitle>
           <Input ref={searchRef} id="return-lookup" type="search" className="mt-3" placeholder="Search invoice number or product name..." autoComplete="off" maxLength={120}
             value={lookup} aria-controls="return-matches" aria-invalid={Boolean(error && !invoice) || undefined} aria-describedby={error && !invoice ? "return-error" : "return-sample-date"}
             onChange={(event) => { setLookup(event.target.value); setSelected(""); changeSelection({}); }} />
@@ -131,7 +131,7 @@ export function AdminReturnPreview({ sales, businessDateLabel }: { sales: readon
         <p className="text-xs text-muted-foreground">Demo only — no refund or stock change saved.</p>
       </form>
     </Card>
-    {review && invoice && <Dialog open onOpenChange={(open) => { if (!open) closeReview(); }} title="Refund Review — Demo Only"
+    {review && invoice && <Dialog open onOpenChange={(open) => { if (!open) closeReview(); }} title="Check Refund — Demo Only"
       description="Preview only. No cash refund, inventory change or return record is saved.">
       <p className="mb-3 break-words text-sm font-semibold">Invoice: {invoice.receiptNumber || invoice.id}</p>
       <ul aria-label="Refund Summary" className="divide-y rounded-md border px-3">

@@ -65,8 +65,9 @@ export const claimMarker = (marker: RecoveryMarker) => access(true, current => {
 export const confirmMarker = (expected: RecoveryMarker) => access(true, current => {
  if (!sameMarker(current, expected)) throw fail(); const next = { ...expected, state: "CONFIRMED" as const }; return { value: next, next };
 });
-// Caller must first obtain a FRESH authenticated authoritative terminal outcome, and may
-// call this only in response to the explicit acknowledgement button.
+// Caller must first hold authoritative terminal proof: either a FRESH authenticated recovery
+// outcome (explicit acknowledgement button) or the validated committed POST response of the
+// operation that owns this exact marker (automatic release after a confirmed save).
 export const acknowledgeMarker = (expected: RecoveryMarker) => access(true, current => {
  if (expected.state !== "CONFIRMED" || !sameMarker(current, expected)) throw fail(); return { value: undefined, next: null };
 });

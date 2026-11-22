@@ -98,6 +98,12 @@ async function marker(page: Page): Promise<RecoveryMarker | null> {
 const panel = (page: Page) => page.getByRole("region", { name: "Operation recovery", exact: true });
 async function acknowledge(page: Page) { await page.getByRole("button", { name: "Acknowledge Saved Operation", exact: true }).click(); await poll(() => marker(page)).toBe(null); }
 async function resolve(page: Page) { await page.getByRole("button", { name: "Resolve Previous Operation", exact: true }).click(); await poll(() => panel(page).getByText("Saved operation confirmed from SQLite.", { exact: false }).isVisible()).toBe(true); }
+// A normal confirmed save now releases its marker automatically. A CONFIRMED marker still arises after a LOST
+// response: the save is committed, the browser never sees it, and an authoritative Resolve confirms it.
+async function saveConfirmed(page: Page) {
+ const loss = await lostResponse(page); await page.getByRole("button", { name: "Save Product", exact: true }).click(); await loss.done; await loss.cdp.detach();
+ await page.reload(); await resolve(page);
+}
 async function lostResponse(page: Page, pattern = "*/api/admin/products") {
  const cdp = await page.context().newCDPSession(page); await cdp.send("Fetch.enable", { patterns: [{ urlPattern: pattern, requestStage: "Response" }] });
  let finish!: () => void; const done = new Promise<void>(r => { finish = r; });
@@ -106,18 +112,18 @@ async function lostResponse(page: Page, pattern = "*/api/admin/products") {
 }
 
 describe("approved retained-profile real browser recovery", () => {
- it("normal CREATE then RECEIVE keeps confirmed markers until explicit authenticated acknowledgement", async () => {
+ it("normal CREATE then RECEIVE release their markers automatically after a confirmed save and reset the form", async () => {
   const f = await started(), c = await browser(), page = await c.newPage(); await browserLogin(page, f); await form(page, f); const name = await fill(page);
   let posts = 0; page.on("request", q => { if (q.method() === "POST" && /\/api\/admin\/products/.test(q.url())) posts++; });
-  await page.getByRole("button", { name: "Save Product", exact: true }).click(); await poll(async () => (await marker(page))?.state).toBe("CONFIRMED");
-  const first = await marker(page); expect(first?.kind).toBe("CREATE"); expect(Object.keys(first!).sort()).toEqual(["context", "key", "kind", "state", "v"]); expect(Buffer.byteLength(JSON.stringify(first))).toBeLessThanOrEqual(512);
-  await page.reload(); expect((await marker(page))?.key).toBe(first?.key); await resolve(page); expect(posts).toBe(1); expect(await page.getByRole("button", { name: "Save Product", exact: true }).isDisabled()).toBe(true); await acknowledge(page);
+  await page.getByRole("button", { name: "Save Product", exact: true }).click(); await poll(() => marker(page)).toBe(null); expect(posts).toBe(1);
+  // A normal confirmed save releases its marker automatically, resets the form and allows the next product at once.
+  expect(await page.getByLabel("Product Name", { exact: false }).inputValue()).toBe(""); expect(await page.getByRole("button", { name: "Save Product", exact: true }).isEnabled()).toBe(true);
   await page.goto(f.config.authorization.origins.ADMIN + "/admin/products"); const article = page.getByRole("article", { name, exact: true }); await article.getByRole("button", { name: "Add stock for " + name }).click();
   await page.getByLabel("Quantity Bought", { exact: false }).fill("2"); await page.getByLabel("Reason", { exact: true }).fill("TEST received shipment"); await page.getByRole("button", { name: "Add Stock", exact: true }).click();
-  await poll(async () => (await marker(page))?.state).toBe("CONFIRMED"); expect((await marker(page))?.kind).toBe("RECEIVE"); await acknowledge(page); expect(posts).toBe(2);
+  await poll(() => page.getByRole("dialog").count()).toBe(0); await poll(() => marker(page)).toBe(null); expect(posts).toBe(2);
   f.inspect(db => { expect(db.get("SELECT sellable_q FROM stock_balances")?.sellable_q).toBe(BigInt(7000000)); expect(db.get("SELECT count(*) n FROM stock_movements")?.n).toBe(BigInt(2)); });
   const storage = await page.evaluate(() => ({ local: JSON.stringify(localStorage), session: JSON.stringify(sessionStorage), cookie: document.cookie, url: location.href }));
-  for (const v of [...sensitive, ...credentialHashes, name]) expect(stable({ marker: first, storage }).includes(v)).toBe(false);
+  for (const v of [...sensitive, ...credentialHashes, name]) expect(stable({ storage }).includes(v)).toBe(false);
   const cookies = (await c.cookies()).filter(x => x.name.includes("pos-admin")); expect(cookies.length).toBeGreaterThan(0);
   expect(cookies.every(x => x.httpOnly && x.secure && x.sameSite === "Strict" && x.domain === "localhost")).toBe(true);
  });
@@ -138,17 +144,18 @@ describe("approved retained-profile real browser recovery", () => {
  });
  it("graceful browser closure and real server restart retain binding, deny old cookies and preserve saved data", async () => {
   const f = await started(), profile = mkdtempSync(path.join(run, "close-profile-")), c = await browser(profile), page = await c.newPage(); await browserLogin(page, f); await form(page, f); await fill(page);
-  await page.getByRole("button", { name: "Save Product", exact: true }).click(); await poll(async () => (await marker(page))?.state).toBe("CONFIRMED"); const saved = await marker(page), before = f.snapshot(); await c.close(); await f.runtime.close(); const restarted = await f.start(); runtimes.push(restarted);
+  await saveConfirmed(page); const saved = await marker(page), before = f.snapshot(); expect(Object.keys(saved!).sort()).toEqual(["context", "key", "kind", "state", "v"]); expect(Buffer.byteLength(JSON.stringify(saved))).toBeLessThanOrEqual(512); await c.close(); await f.runtime.close(); const restarted = await f.start(); runtimes.push(restarted);
   expect((await wire(f.config, contextPath, "ADMIN", f.cookies)).status).toBe(403); const reopened = await browser(profile), next = await reopened.newPage(); await reopened.clearCookies(); await browserLogin(next, f); await next.goto(f.config.authorization.origins.ADMIN + "/admin/products/new");
   expect(await marker(next)).toEqual(saved); await resolve(next); expect(f.snapshot()).toBe(before); await acknowledge(next);
  });
- it("two tabs atomically admit only one operation, never replace its key and share explicit acknowledgement", async () => {
+ it("two tabs atomically admit only one operation, never replace its key and share its automatic release", async () => {
   const f = await started(), c = await browser(), a = await c.newPage(), b = await c.newPage(); await browserLogin(a, f); await Promise.all([form(a, f), form(b, f)]); await fill(a); await fill(b);
   let posts = 0; c.on("request", q => { if (q.method() === "POST" && q.url().endsWith("/api/admin/products")) posts++; });
   await Promise.all([a.getByRole("button", { name: "Save Product", exact: true }).click(), b.getByRole("button", { name: "Save Product", exact: true }).click()]);
-  await poll(async () => (await marker(a))?.state).toBe("CONFIRMED"); const saved = await marker(a); expect(await marker(b)).toEqual(saved); expect(posts).toBe(1);
-  await poll(() => b.getByRole("button", { name: "Save Product", exact: true }).isDisabled()).toBe(true); await resolve(b); await acknowledge(b); await poll(() => marker(a)).toBe(null);
-  f.inspect(db => { expect(db.get("SELECT count(*) n FROM products")?.n).toBe(BigInt(1)); expect(db.get("SELECT count(*) n FROM inventory_operations")?.n).toBe(BigInt(1)); });
+  // The shared durable marker admits one claim at a time and the confirmed save releases it for BOTH tabs. If the loser clicks
+  // after the release it is a legitimate second operation, so the invariant is: every POST is exactly one product and one operation.
+  await poll(() => marker(a)).toBe(null); await poll(() => marker(b)).toBe(null); expect(posts).toBeGreaterThanOrEqual(1); expect(posts).toBeLessThanOrEqual(2);
+  f.inspect(db => { expect(db.get("SELECT count(*) n FROM products")?.n).toBe(BigInt(posts)); expect(db.get("SELECT count(*) n FROM inventory_operations")?.n).toBe(BigInt(posts)); });
  });
  it("request interrupted before arrival remains UNKNOWN after reload and 404; no expiry or replacement", async () => {
   const f = await started(), c = await browser(), page = await c.newPage(); await browserLogin(page, f); await form(page, f); await fill(page);
@@ -165,7 +172,7 @@ describe("approved retained-profile real browser recovery", () => {
   f.inspect(db => expect(db.get("SELECT count(*) n FROM products")?.n).toBe(BigInt(0)));
  });
  it("SQL session expiry denies reconciliation/acknowledgement and retains the confirmed marker", async () => {
-  const f = await started(), c = await browser(), page = await c.newPage(); await browserLogin(page, f); await form(page, f); await fill(page); await page.getByRole("button", { name: "Save Product", exact: true }).click(); await poll(async () => (await marker(page))?.state).toBe("CONFIRMED"); const saved = await marker(page), before = f.snapshot();
+  const f = await started(), c = await browser(), page = await c.newPage(); await browserLogin(page, f); await form(page, f); await fill(page); await saveConfirmed(page); const saved = await marker(page), before = f.snapshot();
   f.inspect(db => db.transaction(tx => { tx.run("UPDATE auth_session_authorizations SET expires_at_ms=created_at_ms+1"); })); await page.getByRole("button", { name: "Acknowledge Saved Operation", exact: true }).click(); await poll(() => panel(page).getByText("UNKNOWN:", { exact: false }).isVisible()).toBe(true); expect(await marker(page)).toEqual(saved); expect(f.snapshot()).toBe(before);
   await browserLogin(page, f); await page.goto(f.config.authorization.origins.ADMIN + "/admin/products/new"); await resolve(page); await acknowledge(page);
  });
@@ -179,13 +186,13 @@ describe("recovery fail-closed corruption and binding regressions", () => {
   await page.getByRole("button", { name: "Save Product", exact: true }).click(); await poll(() => page.getByRole("alert").filter({ hasText: "Save unconfirmed or blocked" }).isVisible()).toBe(true); expect(posts).toBe(0); expect(await marker(page)).toBe(null); f.inspect(db => expect(db.get("SELECT count(*) n FROM products")?.n).toBe(BigInt(0)));
  });
  it("misleading operation kind and corrupt marker fail closed without deletion or exposing a result", async () => {
-  const f = await started(), c = await browser(), page = await c.newPage(); await browserLogin(page, f); await form(page, f); const name = await fill(page); await page.getByRole("button", { name: "Save Product", exact: true }).click(); await poll(async () => (await marker(page))?.state).toBe("CONFIRMED");
+  const f = await started(), c = await browser(), page = await c.newPage(); await browserLogin(page, f); await form(page, f); const name = await fill(page); await saveConfirmed(page);
   await page.evaluate(() => new Promise<void>((resolve, reject) => { const r = indexedDB.open("pos-test-inventory-recovery-v1", 1); r.onsuccess = () => { const db = r.result, tx = db.transaction("marker", "readwrite"), store = tx.objectStore("marker"), q = store.get("active"); q.onsuccess = () => store.put({ ...q.result, kind: "RECEIVE" }, "active"); tx.oncomplete = () => { db.close(); resolve(); }; tx.onabort = () => reject(Error("TEST corrupt")); }; }));
   await page.reload(); await page.getByRole("button", { name: "Resolve Previous Operation", exact: true }).click(); await poll(() => panel(page).getByText("UNKNOWN:", { exact: false }).isVisible()).toBe(true); expect(await panel(page).getByText(name, { exact: true }).count()).toBe(0); expect((await marker(page))?.kind).toBe("RECEIVE");
   await page.evaluate(() => new Promise<void>(resolve => { const r = indexedDB.open("pos-test-inventory-recovery-v1", 1); r.onsuccess = () => { const db = r.result, tx = db.transaction("marker", "readwrite"); tx.objectStore("marker").put({ v: 99 }, "active"); tx.oncomplete = () => { db.close(); resolve(); }; }; })); await page.reload(); await poll(() => panel(page).getByText("Recovery storage unavailable.", { exact: false }).isVisible()).toBe(true); expect(await marker(page)).toEqual({ v: 99 }); expect(await page.getByRole("button", { name: "Save Product", exact: true }).isDisabled()).toBe(true);
  });
  it("replacing the TEST database at the same origin cannot adopt a marker or show an unrelated same-key result", async () => {
-  const f = await started(), c = await browser(), page = await c.newPage(); await browserLogin(page, f); await form(page, f); await fill(page); await page.getByRole("button", { name: "Save Product", exact: true }).click(); await poll(async () => (await marker(page))?.state).toBe("CONFIRMED"); const saved = await marker(page); await f.runtime.close();
+  const f = await started(), c = await browser(), page = await c.newPage(); await browserLogin(page, f); await form(page, f); await fill(page); await saveConfirmed(page); const saved = await marker(page); await f.runtime.close();
   const other = await fixture(), config = { ...other.config, port: f.config.port, authorization: { ...other.config.authorization, origins: f.config.authorization.origins } }; const runtime = await startLocalRuntime(config); runtimes.push(runtime); const cookies = await login(config);
   const alien = { ...create(), requestKey: saved!.key }; const context = await binding({ ...other, config }, cookies); const response = await wire(config, "/api/admin/products", "ADMIN", cookies, alien, { headers: { origin: config.authorization.origins.ADMIN, cookie: cookies.map(v => v.split(";")[0]).join("; "), "content-type": "application/json", "x-inventory-context": context } }); expect(response.status).toBe(200);
   await c.clearCookies(); await browserLogin(page, { ...other, config }); await page.goto(config.authorization.origins.ADMIN + "/admin/products/new"); await page.getByRole("button", { name: "Resolve Previous Operation", exact: true }).click(); await poll(() => panel(page).getByText("UNKNOWN:", { exact: false }).isVisible()).toBe(true); expect(await marker(page)).toEqual(saved); expect(await panel(page).getByText(alien.name, { exact: true }).count()).toBe(0); expect(await page.getByRole("button", { name: "Save Product", exact: true }).isDisabled()).toBe(true);
@@ -200,13 +207,13 @@ describe("recovery fail-closed corruption and binding regressions", () => {
  });
 
  it("a delayed old acknowledgement cannot delete a newer marker claimed in another tab", async () => {
-  const f = await started(), c = await browser(), a = await c.newPage(), b = await c.newPage(); await browserLogin(a, f); await form(a, f); await fill(a); await a.getByRole("button", { name: "Save Product", exact: true }).click(); await poll(async () => (await marker(a))?.state).toBe("CONFIRMED"); const old = await marker(a);
+  const f = await started(), c = await browser(), a = await c.newPage(), b = await c.newPage(); await browserLogin(a, f); await form(a, f); await fill(a); await saveConfirmed(a); const old = await marker(a);
   await b.goto(f.config.authorization.origins.ADMIN + "/admin/products/new"); await resolve(b);
   const cdp = await c.newCDPSession(a); let release!: () => Promise<void>, paused!: () => void; const held = new Promise<void>(r => { paused = r; });
   await cdp.send("Fetch.enable", { patterns: [{ urlPattern: "*/api/admin/inventory/operations/*", requestStage: "Response" }] });
   cdp.on("Fetch.requestPaused", event => { release = async () => { await cdp.send("Fetch.continueResponse", { requestId: event.requestId }); }; paused(); });
   await a.getByRole("button", { name: "Acknowledge Saved Operation", exact: true }).click(); await held;
-  await acknowledge(b); await poll(() => b.getByRole("button", { name: "Save Product", exact: true }).isEnabled()).toBe(true); await fill(b); await b.getByRole("button", { name: "Save Product", exact: true }).click(); await poll(async () => (await marker(b))?.state).toBe("CONFIRMED"); const next = await marker(b); expect(next?.key).not.toBe(old?.key);
+  await acknowledge(b); await poll(() => b.getByRole("button", { name: "Save Product", exact: true }).isEnabled()).toBe(true); await fill(b); await saveConfirmed(b); const next = await marker(b); expect(next?.key).not.toBe(old?.key);
   await release(); await cdp.detach(); await poll(() => a.getByRole("button", { name: "Resolve Previous Operation", exact: true }).isEnabled()).toBe(true); expect(await marker(a)).toEqual(next);
   f.inspect(db => expect(db.get("SELECT count(*) n FROM inventory_operations")?.n).toBe(BigInt(2)));
  });

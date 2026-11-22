@@ -194,9 +194,8 @@ async function boot(){
  if(override&&!/^posdt-[a-f0-9-]{36}$/.test(path.basename(dataRoot)))throw Error();
  protectData(dataRoot);if(harness)diagnosticPath=path.join(dataRoot,"desktop-harness-lifecycle.log");app.setPath("userData",path.join(dataRoot,"browser"));
  if(!app.requestSingleInstanceLock()){quitting=true;app.quit();return;}
- await installerGuard();
- await verifyPayload(root);
- await app.whenReady();
+ await installerGuard(); // Must hold the installer mutex BEFORE any payload verification (no replace-after-verify window).
+ await Promise.all([verifyPayload(root),app.whenReady()]); // Independent; both must succeed before the backend starts.
  Menu.setApplicationMenu(Menu.buildFromTemplate([{label:"Shop POS TEST",submenu:[{label:"Salesperson",click:()=>roleWindow("SALESPERSON")},{label:"Admin",click:()=>roleWindow("ADMIN")},{label:"Recover disposable TEST archive...",click:()=>void chooseRecovery()},{type:"separator"},{label:"Exit",click:()=>void close()}]}]));
  const environment={...process.env,NODE_ENV:"test",NEXT_TELEMETRY_DISABLED:"1"};for(const key of Object.keys(environment))if(/^(?:NODE_OPTIONS|NODE_PATH|NODE_EXTRA_CA_CERTS|NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|ELECTRON_EXTRA_LAUNCH_ARGS)$/i.test(key))delete environment[key];
  environment.PATH=path.join(root,"runtime")+path.delimiter+(environment.PATH??"");
@@ -213,6 +212,7 @@ async function boot(){
   else if(message.type==="operation-keys-result"&&typeof message.id==="string"){const pending=markerRequests.get(message.id);if(pending)pending.finish(message.value);else diagnostic("OPERATION_KEYS_RESULT_LATE");}
   else if(message.type==="ready"){recoveryBusy=false;if(!validReady(message.value)){unavailable();return;}if(shutdownStarted)return;ready=message.value;initializing=false;roleWindow("SALESPERSON");}
   else if(message.type==="lifecycle"&&["STOP_RECEIVED","STARTUP_DRAINED","RUNTIME_CLOSED","TRANSPORT","BACKUPS","AUTHORIZATION","FRAMEWORK","OWNERSHIP","DRAINED","HTTP_STOPPED","HTTP_AUTH_PENDING","HTTP_BUSINESS_PENDING","HTTP_PAGE_PENDING","HTTP_HEALTH_PENDING","HTTP_HANDLERS_DRAINED","HTTP_SOCKETS_CLOSED","HTTP_LISTENER_CLOSED"].includes(message.value)){diagnostic(message.value);}
+  else if(message.type==="startup-stage"&&typeof message.value==="string"&&Number.isSafeInteger(message.elapsedMs)){diagnostic("STARTUP_STAGE "+message.value.slice(0,40)+" +"+message.elapsedMs+"ms");}
   else if(message.type==="stopped"){diagnostic("NODE_STOPPED");quitting=true;app.quit();}
   else if(message.type==="fatal"){diagnostic("NODE_FATAL");unavailable();}
  });

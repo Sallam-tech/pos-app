@@ -56,7 +56,7 @@ export function AdminShell({ children, testInventory = false, testInvoices=false
     <a href="#main-content" className="skip-link">Skip to content</a>
     <aside aria-label="Admin sidebar" className="app-sidebar sticky top-0 hidden h-svh w-[var(--sidebar-width)] shrink-0 flex-col overflow-y-auto border-r p-4 lg:flex">
       <Brand /><Navigation key={pathname} invoices={testInvoices} privatePages={testInventory} />
-      <div className="mt-auto border-t pt-4"><Badge>{testInventory ? "Isolated TEST" : "Demo Mode"}</Badge><p className="mt-2 text-xs leading-5 text-muted-foreground">{testInventory ? "Authenticated TEST workspace." : "Preview access. No sign-in."}</p>{testInventory ? <TestInventoryExit label="Exit TEST" /> : <DemoExitLink />}<DeveloperCredit variant="sidebar" /></div>
+      <div className="mt-auto border-t pt-4"><Badge>{testInventory ? "Test mode" : "Not connected"}</Badge><p className="mt-2 text-xs leading-5 text-muted-foreground">{testInventory ? "Test mode. Practice data only." : "Shop database not connected."}</p>{testInventory ? <TestInventoryExit label="Exit TEST" /> : <DemoExitLink />}<DeveloperCredit variant="sidebar" /></div>
     </aside>
     <div className="min-w-0 flex-1">
       <header className={"workspace-header flex flex-wrap items-center justify-between sm:px-6 lg:px-8 " + (compactAdminPreview ? "gap-x-4 gap-y-2 px-4 py-3" : "gap-4 p-4")}>
@@ -69,7 +69,7 @@ export function AdminShell({ children, testInventory = false, testInvoices=false
       <main id="main-content" tabIndex={-1} className={"content-container outline-none" + (compactAdminPreview ? " pt-5" : "")}>{testInventory && <TestInventoryRecovery />}{children}</main>
     </div>
     <Dialog open={open} onOpenChange={setOpen} title="Admin navigation" description="Choose an Admin page." variant="drawer">
-      <Brand /><Navigation key={pathname} invoices={testInvoices} privatePages={testInventory} mobile onNavigate={() => setOpen(false)} /><div className="mt-5 border-t pt-3"><p className="text-xs text-muted-foreground">{testInventory ? "Authenticated TEST workspace." : "Preview only. No sign-in."}</p>{testInventory ? <TestInventoryExit label="Exit TEST" /> : <DemoExitLink />}<DeveloperCredit variant="sidebar" /></div>
+      <Brand /><Navigation key={pathname} invoices={testInvoices} privatePages={testInventory} mobile onNavigate={() => setOpen(false)} /><div className="mt-5 border-t pt-3"><p className="text-xs text-muted-foreground">{testInventory ? "Test mode. Practice data only." : "Shop database not connected."}</p>{testInventory ? <TestInventoryExit label="Exit TEST" /> : <DemoExitLink />}<DeveloperCredit variant="sidebar" /></div>
     </Dialog>
   </div>;
 }
