@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { isValidElement } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ReportChartsPreview } from "@/components/admin/report-charts-preview";
+import { TestSavedFinancialReport } from "@/components/admin/test-saved-financial-report";
 import { SimpleBarChart } from "@/components/admin/simple-bar-chart";
 import { getFictionalProfitSales } from "@/lib/admin/mock-historical-costs";
 import { mockSales } from "@/lib/admin/mock-sales";
@@ -10,23 +12,45 @@ import ProfitReportPage, { metadata as profitMetadata } from "@/app/admin/report
 import LegacySalesPage from "@/app/admin/sales/today/page";
 import LegacyProfitPage from "@/app/admin/profit/today/page";
 
+const renderFlags = vi.hoisted(() => ({ reports: false, expenses: false, invoices: false }));
+vi.mock("@/server/hosting/reports-render", () => ({ readTestReportsRender: () => renderFlags.reports }));
+vi.mock("@/server/hosting/expenses-render", () => ({ readTestExpensesRender: () => renderFlags.expenses }));
+vi.mock("@/server/hosting/invoices-render", () => ({ readTestInvoicesRender: () => renderFlags.invoices }));
+vi.mock("next/server", () => ({ connection: async () => {} }));
+
 const sales = getFictionalProfitSales();
 const chart = (kind: ChartKind) => screen.getByRole("region", { name: kind === "sales" ? "Sales by Product" : "Profit by Product" });
 const summary = (kind: ChartKind) => screen.getByLabelText(kind === "sales" ? "Revenue totals" : "Gross profit totals");
 const value = (kind: ChartKind, label: string) => within(summary(kind)).getByText(label, { exact: true }).parentElement!.querySelector("dd")!;
 
 describe("unified Sales and Profit Reports", () => {
-  it("reuses exactly the canonical reports at both legacy URLs, with report titles and same-page Details controls", () => {
+  afterEach(() => {
+    renderFlags.reports = false;
+    renderFlags.expenses = false;
+    renderFlags.invoices = false;
+  });
+
+  it.each([
+    ["sales", SalesReportPage],
+    ["profit", ProfitReportPage],
+  ] as const)("uses saved authorized reports for authenticated %s rendering", async (_kind, route) => {
+    renderFlags.reports = true;
+    const result = await route();
+    expect(isValidElement(result)).toBe(true);
+    expect(result.type).toBe(TestSavedFinancialReport);
+  });
+
+  it("reuses exactly the canonical reports at both legacy URLs, with report titles and same-page Details controls", async () => {
     expect(LegacySalesPage).toBe(SalesReportPage);
     expect(LegacyProfitPage).toBe(ProfitReportPage);
     expect(salesMetadata.title).toBe("Sales Report | Shop POS");
     expect(profitMetadata.title).toBe("Profit Report | Shop POS");
-    const { unmount } = render(<SalesReportPage />);
+    const { unmount } = render(await SalesReportPage());
     expect(value("sales", "Total Sales")).toHaveTextContent("Rs. 25,690.00");
     expect(screen.getByRole("button", { name: "View Sales Details" })).toHaveAttribute("aria-controls", "sales-details");
     expect(screen.queryByRole("link", { name: /View Detailed/ })).not.toBeInTheDocument();
     unmount();
-    render(<ProfitReportPage />);
+    render(await ProfitReportPage());
     expect(value("profit", "Gross Profit")).toHaveTextContent("Rs. 5,140.00");
     expect(screen.getByRole("button", { name: "View Profit Details" })).toHaveAttribute("aria-controls", "profit-details");
   });

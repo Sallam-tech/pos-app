@@ -6,7 +6,7 @@
  [Parameter(Mandatory=$true)][string]$InnoCompiler,
  [Parameter(Mandatory=$true)][string]$OutputDirectory,
  [string]$VerifiedDependencySource,
- [string]$Release='0.2.0-test.1',
+ [string]$Release='0.2.0-test.19',
  [switch]$OfflineDependencies
 )
 Set-StrictMode -Version Latest
@@ -14,13 +14,33 @@ $ErrorActionPreference='Stop'
 $projectRoot=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $OutputDirectory=[IO.Path]::GetFullPath($OutputDirectory)
 if(-not $OutputDirectory.StartsWith($projectRoot+'\',[StringComparison]::OrdinalIgnoreCase) -or (Test-Path -LiteralPath $OutputDirectory)){throw 'A new workspace artifact directory is required; previous attempts remain retained.'}
-if($Release -notmatch '^0\.2\.0-test\.[1-9][0-9]*$'){throw 'Only disposable unsigned TEST releases are accepted.'}
+if($Release -ne '0.2.0-test.19'){throw 'This normal-launch installer identity is reserved for TEST.19.'}
 function RequireHash([string]$File,[string]$Expected){if((Get-FileHash -LiteralPath $File -Algorithm SHA256).Hash -ne $Expected){throw ('Reviewed tool/notice hash mismatch: '+[IO.Path]::GetFileName($File))}}
 RequireHash $NodeExecutable '86fc4785327db5f5c7558dc6156c543b433c313e813a222e088086222ab4afa6'
 RequireHash (Join-Path $ElectronDirectory 'electron.exe') 'cf7ff337d82f32a437d315721ef361f53a8473905a655a0c650967a66ccd0724'
 RequireHash $InnoCompiler 'e0f9f1dc32032650c6629f6dee41eb6d20ba140e4e3c07c25d8a24f9ba781644'
 RequireHash $NodeLicense '5888dbb9a1d2b18f2c3e6c5f6af1b39de658372b402a0577b002777f14c62ace'
 if(-not(Test-Path -LiteralPath (Join-Path $VerifiedNextApp '.next/BUILD_ID'))){throw 'An existing verified production-mode Next build is required.'}
+$installerScript=Join-Path $PSScriptRoot 'installer.iss'
+$installerSource=Get-Content -LiteralPath $installerScript -Raw
+$appIdMatch=[regex]::Match($installerSource,'(?m)^AppId=\{\{(?<id>[0-9a-fA-F-]{36})\}\r?$')
+if(-not $appIdMatch.Success){throw 'Unique isolated TEST AppId required.'}
+$installerAppId=[Guid]::Parse($appIdMatch.Groups['id'].Value)
+if($installerAppId -eq [Guid]::Empty -or $installerAppId.ToString('D') -ine '2a059cbc-70e5-4bd8-a850-9a8633ddf1c7' -or $installerAppId.ToString('D') -ieq 'd2f97747-843b-4fb6-8e58-61b1bdf80f9e' -or $installerAppId.ToString('D') -ieq '5d4f24fc-f90d-4b04-b16a-a1533756dcc3'){throw 'TEST.19 requires its reviewed AppId, distinct from TEST.17 and TEST.18.'}
+$uninstallKey='HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{'+$installerAppId.ToString('D').ToUpperInvariant()+'}_is1'
+if(Test-Path -LiteralPath $uninstallKey){throw 'The isolated TEST uninstall identity already exists.'}
+$localAppData=[Environment]::GetFolderPath('LocalApplicationData')
+$installRoot=Join-Path $localAppData ('Programs\SalamTech\ShopPOSTest\'+$Release)
+$dataRoot=Join-Path $localAppData ('Programs\SalamTech\ShopPOSTestData\'+$Release+'\ShopPOSTestData')
+if(Test-Path -LiteralPath $installRoot){throw 'The isolated TEST installation directory already exists; existing files are retained.'}
+if(Test-Path -LiteralPath $dataRoot){throw 'The TEST.19 persistent data root already exists; existing data is retained.'}
+if(Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Shop POS TEST 0.2.0-test.19.lnk')){throw 'The TEST.19 desktop shortcut already exists; existing shortcuts are retained.'}
+$dataParent=Join-Path $localAppData 'Programs\SalamTech';$parentInfo=Get-Item -LiteralPath $dataParent;if(-not $parentInfo.PSIsContainer -or ($parentInfo.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'The existing per-user TEST parent is unavailable or redirected.'}
+if($installerSource -match '(?im)^\[Run\]' -or $installerSource -match '(?im)^\[(?:InstallDelete|UninstallDelete)\]'){throw 'Isolated TEST installer must not auto-run or delete files.'}
+if($installerSource -notmatch '(?im)^DefaultDirName=\{localappdata\}\\Programs\\SalamTech\\ShopPOSTest\\\{#AppRelease\}\r?$' -or $installerSource -notmatch '(?im)^UninstallDisplayName=Shop POS TEST \{#AppRelease\}.*\r?$') {throw 'Version-specific TEST destination and uninstaller identity required.'}
+$installerLines=$installerSource -split '\r?\n';$iconStart=[Array]::IndexOf($installerLines,'[Icons]');if($iconStart -lt 0){throw 'The isolated TEST.19 desktop shortcut is required.'}
+$iconLines=@();for($index=$iconStart+1;$index -lt $installerLines.Length -and $installerLines[$index] -notmatch '^\s*\[';$index++){if(-not [string]::IsNullOrWhiteSpace($installerLines[$index]) -and $installerLines[$index] -notmatch '^\s*;'){$iconLines+=([string]$installerLines[$index]).Trim()}}
+if($iconLines.Count -ne 1 -or $iconLines[0] -cne 'Name: "{autodesktop}\Shop POS TEST 0.2.0-test.19"; Filename: "{app}\Shop POS TEST.exe"; WorkingDir: "{app}"'){throw 'Only the reviewed direct TEST.19 desktop shortcut is allowed.'}
 $artifactParent=[IO.Path]::GetDirectoryName($OutputDirectory);[void][IO.Directory]::CreateDirectory($artifactParent)
 $evidence=Join-Path $artifactParent ('build-evidence-'+[guid]::NewGuid());[void][IO.Directory]::CreateDirectory($evidence)
 function InvokeReviewed([string]$Executable,[string[]]$Arguments,[string]$Log){
@@ -32,6 +52,13 @@ function InvokeReviewed([string]$Executable,[string[]]$Arguments,[string]$Log){
 Push-Location $projectRoot
 try{
  InvokeReviewed $NodeExecutable @((Join-Path $PSScriptRoot 'build-payload.mjs'),$VerifiedNextApp,$ElectronDirectory,$NodeExecutable,$OutputDirectory) (Join-Path $evidence 'assemble.log')
+ $desktopPackageFile=Join-Path $OutputDirectory 'resources/app/package.json'
+ $desktopPackage=Get-Content -LiteralPath $desktopPackageFile -Raw | ConvertFrom-Json
+ if($desktopPackage.name -ne 'shop-pos-desktop-test' -or $desktopPackage.version -notmatch '^0\.2\.0-test\.[1-9][0-9]*$'){throw 'Verified TEST Electron package metadata required.'}
+ $desktopPackage.version=$Release
+ $desktopPackageJson=($desktopPackage | ConvertTo-Json -Compress)+[Environment]::NewLine
+ [IO.File]::WriteAllText($desktopPackageFile,$desktopPackageJson,[Text.UTF8Encoding]::new($false))
+ if((Get-Content -LiteralPath $desktopPackageFile -Raw | ConvertFrom-Json).version -ne $Release){throw 'Embedded TEST release version did not match installer release.'}
  $payload=Join-Path $OutputDirectory 'resources/payload'
  if($VerifiedDependencySource){$dependencySource=[IO.Path]::GetFullPath($VerifiedDependencySource)}else{
   $dependencySource=Join-Path $evidence 'locked-source';[void][IO.Directory]::CreateDirectory($dependencySource)
@@ -55,7 +82,7 @@ try{
  InvokeReviewed $NodeExecutable @((Join-Path $PSScriptRoot 'seal-payload.mjs'),$OutputDirectory) (Join-Path $evidence 'seal.log')
  InvokeReviewed $NodeExecutable @('-e','require(process.argv[1]).verifyPayload(process.argv[2]).then(v=>console.log(JSON.stringify(v))).catch(()=>{process.exitCode=1})',(Join-Path $PSScriptRoot 'payload-integrity.cjs'),(Join-Path $OutputDirectory 'resources')) (Join-Path $evidence 'verify-payload.log')
  $installers=Join-Path $artifactParent ('installers-'+[guid]::NewGuid());[void][IO.Directory]::CreateDirectory($installers)
- InvokeReviewed $InnoCompiler @('/Qp',('/DPayload='+$OutputDirectory),('/DOutput='+$installers),('/DAppRelease='+$Release),(Join-Path $PSScriptRoot 'installer.iss')) (Join-Path $evidence 'installer.log')
- @{format='SHOP_POS_UNSIGNED_TEST_BUILD_V1';release=$Release;bundle=$OutputDirectory;installers=$installers;evidence=$evidence;productionActivation=$false} | ConvertTo-Json | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $evidence 'build-result.json')
+ InvokeReviewed $InnoCompiler @('/Qp',('/DPayload='+$OutputDirectory),('/DOutput='+$installers),('/DAppRelease='+$Release),$installerScript) (Join-Path $evidence 'installer.log')
+ @{format='SHOP_POS_UNSIGNED_TEST_BUILD_V1';release=$Release;appId=$installerAppId.ToString('B').ToUpperInvariant();installRoot=$installRoot;dataRoot=$dataRoot;shortcutPolicy='VERSIONED_DESKTOP_SHORTCUT';dataRootPolicy='LOCALAPPDATA_PROGRAMS_SALAMTECH_VERSIONED_TEST19';bundle=$OutputDirectory;installers=$installers;evidence=$evidence;productionActivation=$false} | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $evidence 'build-result.json')
  Get-Content -LiteralPath (Join-Path $evidence 'build-result.json')
 }finally{Pop-Location}

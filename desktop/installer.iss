@@ -5,15 +5,14 @@
   #error Output must name the artifact output directory
 #endif
 #ifndef AppRelease
-  #define AppRelease "0.2.0-test.1"
+  #define AppRelease "0.2.0-test.19"
 #endif
 [Setup]
-AppId={{D2F97747-843B-4FB6-8E58-61B1BDF80F9E}
-AppName=Shop POS TEST
+AppId={{2a059cbc-70e5-4bd8-a850-9a8633ddf1c7}
+AppName=Shop POS TEST {#AppRelease}
 AppVersion={#AppRelease}
 AppPublisher=SalamTech
-DefaultDirName={localappdata}\Programs\SalamTech\ShopPOSTest
-DefaultGroupName=Shop POS TEST
+DefaultDirName={localappdata}\Programs\SalamTech\ShopPOSTest\{#AppRelease}
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible and not arm64
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -29,14 +28,14 @@ RestartApplications=no
 DisableProgramGroupPage=yes
 SetupMutex=Local\ShopPOS-Disposable-Installer-v1
 AppMutex=Local\ShopPOS-Disposable-Desktop-v1
-UninstallDisplayName=Shop POS TEST (business/recovery data retained)
-UninstallDisplayIcon={app}\versions\{#AppRelease}\Shop POS TEST.exe
+UninstallDisplayName=Shop POS TEST {#AppRelease} (isolated TEST data retained)
+UninstallDisplayIcon={app}\Shop POS TEST.exe
 InfoBeforeFile={#Payload}\TEST-README.txt
 WizardStyle=modern
 [Files]
-Source: "{#Payload}\*"; DestDir: "{app}\versions\{#AppRelease}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#Payload}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Icons]
-Name: "{group}\Shop POS TEST"; Filename: "{app}\versions\{#AppRelease}\Shop POS TEST.exe"
+Name: "{autodesktop}\Shop POS TEST 0.2.0-test.19"; Filename: "{app}\Shop POS TEST.exe"; WorkingDir: "{app}"
 [Code]
 function InitializeUninstall(): Boolean;
 begin
@@ -46,9 +45,9 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var Target: String;
 begin
-  Target := ExpandConstant('{app}\versions\{#AppRelease}');
+  Target := ExpandConstant('{app}');
   if DirExists(Target) then
-    Result := 'This TEST version directory already exists. Existing files are retained. Close the application and review the prior or interrupted installation; do not overwrite or delete business data.'
+    Result := 'This isolated TEST installation directory already exists. Existing files are retained. Close the application and review the prior or interrupted installation; do not overwrite or delete business data.'
   else
     Result := '';
 end;

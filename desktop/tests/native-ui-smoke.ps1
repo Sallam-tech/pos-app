@@ -12,6 +12,7 @@
  [switch]$OwnerWorkflowsCheck,
  [switch]$SharedLoginCheck,
  [switch]$SidebarNavigationCheck,
+ [switch]$ReportsPresentationCheck,
  [switch]$DisplayStateCheck,
  [string]$FreshDataRoot
 )
@@ -75,10 +76,34 @@ function FindControl($windows,[string]$name,[Windows.Automation.ControlType]$typ
  foreach($window in $windows){$found=$window.FindFirst([Windows.Automation.TreeScope]::Descendants,$condition);if($null -ne $found){return $found}}
  return $null
 }
+function FindNamedControl($windows,[string]$name){
+ $condition=[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty,$name)
+ foreach($window in $windows){$found=$window.FindFirst([Windows.Automation.TreeScope]::Descendants,$condition);if($null -ne $found){return $found}}
+ return $null
+}
 function WaitControl([string]$name,[Windows.Automation.ControlType]$type,[int]$seconds=180){
  $until=[DateTime]::UtcNow.AddSeconds($seconds)
  while([DateTime]::UtcNow -lt $until){if($process.HasExited){throw 'Owned TEST executable exited before expected control'};$found=FindControl (OwnedWindows) $name $type;if($null -ne $found){return $found};Start-Sleep -Milliseconds 300}
  throw ('Owned TEST control unavailable: '+$name)
+}
+function WaitNamedControl([string]$name,[int]$seconds=60){
+ $until=[DateTime]::UtcNow.AddSeconds($seconds)
+ while([DateTime]::UtcNow -lt $until){if($process.HasExited){throw 'Owned TEST executable exited before expected report control'};$found=FindNamedControl (OwnedWindows) $name;if($null -ne $found){return $found};Start-Sleep -Milliseconds 200}
+ throw ('Owned TEST report control unavailable: '+$name)
+}
+function SaveReportScreenshot([string]$name,[string]$expectedTitle){
+ Add-Type -AssemblyName System.Drawing
+ $target=$null;$titles=@()
+ foreach($window in (OwnedWindows)){
+  $titles+=([string]$window.Current.Name)
+  if([string]$window.Current.Name -like ('*'+$expectedTitle+'*')){$target=$window;break}
+ }
+ if($null -eq $target){throw ('Owned report window title unavailable: '+$expectedTitle+'; windows: '+($titles -join ' | '))}
+ $rectangle=$target.Current.BoundingRectangle;$path=Join-Path $Evidence $name
+ $picture=New-Object Drawing.Bitmap ([int]$rectangle.Width),([int]$rectangle.Height);$graphics=[Drawing.Graphics]::FromImage($picture)
+ try{$graphics.CopyFromScreen([int]$rectangle.X,[int]$rectangle.Y,0,0,$picture.Size);$picture.Save($path,[Drawing.Imaging.ImageFormat]::Png)}finally{$graphics.Dispose();$picture.Dispose()}
+ if(-not $record.Contains('screenshots')){$record.screenshots=@{}}
+ $record.screenshots[$name]=$path;SaveProgress
 }
 function WaitStaffControl([string]$name,[Windows.Automation.ControlType]$type,[int]$seconds=180){
  $until=[DateTime]::UtcNow.AddSeconds($seconds)
@@ -301,6 +326,42 @@ try{
    $record.checks+='actual installed Dashboard reports sole sale revenue150/profit50 after role switch; saved figures are not demo zeros';SaveProgress
    InvokeEnabled (WaitControl 'Reports' ([Windows.Automation.ControlType]::Hyperlink));InvokeEnabled (WaitControl 'View Sales Report' ([Windows.Automation.ControlType]::Hyperlink));[void](WaitControl 'Rs. 150' ([Windows.Automation.ControlType]::Text))
    $record.checks+='actual installed sales report resolves current saved revenue150 after pending state';SaveProgress
+  }
+  if($ReportsPresentationCheck){
+   if(-not $OwnerWorkflowsCheck -or -not $SharedLoginCheck){throw 'Actual report presentation check requires the isolated saved-sale workflow and shared role login'}
+   SaveReportScreenshot 'reports-sales-chart.png' 'Sales Report'
+   [void](WaitNamedControl 'Sales by Product')
+   [void](WaitNamedControl 'Total Sales')
+   [void](WaitNamedControl 'Items Sold')
+   [void](WaitNamedControl 'Products Sold')
+   [void](WaitNamedControl 'Sales Details')
+   if($null -ne (FindNamedControl (OwnedWindows) 'Daily Sales Revenue')){throw 'Replacement sales time-series panel is present'}
+   InvokeEnabled (WaitNamedControl 'View Sales Details')
+   SaveReportScreenshot 'reports-sales-details.png' 'Sales Report'
+   InvokeEnabled (WaitNamedControl ('View sales for '+$productName))
+   [void](WaitNamedControl ('Individual sales for '+$productName))
+   [void](WaitNamedControl 'Sale')
+   $record.checks+='actual packaged Sales Report renders the saved SQLite sale, approved product chart/table, and View sales details';SaveProgress
+
+   InvokeEnabled (WaitControl 'Reports' ([Windows.Automation.ControlType]::Hyperlink))
+   InvokeEnabled (WaitControl 'View Profit Report' ([Windows.Automation.ControlType]::Hyperlink))
+   SaveReportScreenshot 'reports-profit-chart.png' 'Profit Report'
+   [void](WaitNamedControl 'Profit by Product')
+   [void](WaitNamedControl 'Gross Profit')
+   [void](WaitNamedControl 'Cost of Sold Items')
+   [void](WaitNamedControl 'Highest Profit Product')
+   [void](WaitNamedControl 'Profit Details')
+   if($null -ne (FindNamedControl (OwnedWindows) 'Gross profit comparison') -or $null -ne (FindNamedControl (OwnedWindows) 'Daily Gross Profit')){throw 'Replacement profit report panels are present'}
+   InvokeEnabled (WaitNamedControl 'View Profit Details')
+   SaveReportScreenshot 'reports-profit-details.png' 'Profit Report'
+   [void](WaitNamedControl $productName)
+   $search=WaitControl 'Search by product name' ([Windows.Automation.ControlType]::Edit)
+   SetEnabledValue $search '__no_matching_report_product__'
+   [void](WaitNamedControl 'No products match your search in this period.' 30)
+   InvokeEnabled (WaitNamedControl 'Clear search')
+   [void](WaitNamedControl $productName 30)
+   if($null -ne (FindNamedControl (OwnedWindows) 'Show Top 5')){$record.checks+='actual packaged Profit chart exposes Show Top 5 for its current product count'}else{$record.checks+='actual packaged one-product fixture has no Show Top 5 control; six-product interaction covered by focused UI tests'}
+   $record.checks+='actual packaged Profit Report renders the saved SQLite sale, approved product chart/table, search and Clear Search';SaveProgress
   }
  }
  $second=[Diagnostics.Process]::Start($info);$secondExit=$second.WaitForExit(60000)
