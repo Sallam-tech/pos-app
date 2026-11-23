@@ -1,10 +1,8 @@
-﻿"use strict";
+"use strict";
 const fs=require("node:fs"),path=require("node:path"),{createHash}=require("node:crypto");
-function inventoryFingerprint(entries){
- const rows=entries.map(e=>[e.key,e.size,e.mtimeMs,e.ctimeMs,String(e.dev),String(e.ino)]).sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
- return createHash("sha256").update(JSON.stringify(rows)).digest("hex");
-}
-async function verifyPayload(root){
+async function verifyPayload(root, reviewedElectron="45.4.1"){
+ // Normal boot uses the current pin. Exact-hash upgrade tooling can also inspect the prior runtime.
+ if(!["45.3.3","45.4.1"].includes(reviewedElectron))throw Error("Unreviewed runtime version.");
  const started=performance.now();
  root=path.resolve(root);
  for(let current=root;;current=path.dirname(current)){const s=fs.lstatSync(current);if(!s.isDirectory()||s.isSymbolicLink())throw Error("Redirected payload rejected.");if(path.dirname(current)===current)break;}
@@ -13,7 +11,7 @@ async function verifyPayload(root){
  const manifestBytes=fs.readFileSync(manifestPath);
  const manifestSha256=createHash("sha256").update(manifestBytes).digest("hex");
  const manifest=JSON.parse(manifestBytes.toString("utf8"));
- if(manifest.format!=="SHOP_POS_TEST_PAYLOAD_V1"||manifest.productionActivation!==false||manifest.schema!==41||manifest.node!=="24.22.3"||manifest.electron!=="45.3.3"||manifest.fuses!=="010000001"||!Array.isArray(manifest.files)||manifest.files.length>30000)throw Error("Unreviewed TEST payload.");
+ if(manifest.format!=="SHOP_POS_TEST_PAYLOAD_V1"||manifest.productionActivation!==false||manifest.schema!==41||manifest.node!=="24.22.3"||manifest.electron!==reviewedElectron||manifest.fuses!=="010000001"||!Array.isArray(manifest.files)||manifest.files.length>30000)throw Error("Unreviewed TEST payload.");
  const actual=new Map();let members=0,active=0;const waiting=[];
  async function io(work){if(active>=8)await new Promise(resolve=>waiting.push(resolve));else active++;try{return await work();}finally{const next=waiting.shift();if(next)next();else active--;}}
  async function scan(directory,depth=0){
@@ -27,28 +25,17 @@ async function verifyPayload(root){
   }));
  }
  await Promise.all(["app","payload","runtime"].map(name=>scan(path.join(root,name))));
- const scanMs=performance.now()-started,queue=[],fingerprintEntries=[];
+ const scanMs=performance.now()-started,queue=[];
  const seen=new Set();
  for(const item of manifest.files){
   if(!item||typeof item.path!=="string"||!/^[a-zA-Z0-9_()[\].@+~ /-]+$/.test(item.path)||item.path.split("/").some(v=>v==="."||v===".."||v==="")||!/^[a-f0-9]{64}$/.test(item.sha256)||!Number.isSafeInteger(item.bytes)||item.bytes<0||item.bytes>512*1024*1024||seen.has(item.path.toLowerCase()))throw Error("Invalid payload member.");
   const key=item.path.toLowerCase(),file=actual.get(key);seen.add(key);
   if(!file||file.size!==item.bytes)throw Error("Payload bytes differ.");
   queue.push({target:file.target,sha256:item.sha256,bytes:item.bytes});
-  fingerprintEntries.push({key,size:file.size,mtimeMs:file.mtimeMs,ctimeMs:file.ctimeMs,dev:file.dev,ino:file.ino});
  }
  if(seen.size!==actual.size)throw Error("Unlisted payload content.");
  for(const name of ["runtime/node.exe","payload/server/desktop/test-entry.js","payload/app/.next/BUILD_ID"])if(!seen.has(name.toLowerCase()))throw Error("Required payload member missing.");
- const fingerprint=inventoryFingerprint(fingerprintEntries);
- const cachePath=path.join(root,"payload-verify-cache.json");
- try{
-  const cacheStat=fs.lstatSync(cachePath);
-  if(cacheStat.isFile()&&!cacheStat.isSymbolicLink()&&cacheStat.nlink===1&&cacheStat.size>0&&cacheStat.size<=4096){
-   const cache=JSON.parse(fs.readFileSync(cachePath,"utf8"));
-   if(cache&&cache.format==="SHOP_POS_PAYLOAD_VERIFY_V1"&&cache.productionActivation===false&&cache.manifestSha256===manifestSha256&&cache.inventoryFingerprint===fingerprint&&cache.files===seen.size){
-    return {files:seen.size,productionActivation:false,scanMs,hashMs:0,reused:true};
-   }
-  }
- }catch{/* Missing/invalid cache falls through to full hash. */}
+ // A writable metadata cache cannot authorize executable bytes. Hash every member on every admission.
  let at=0,failed=false;
  async function verify(){while(!failed&&at<queue.length){const file=queue[at++],hash=createHash("sha256");try{if(file.bytes<=65536){
  const handle=await fs.promises.open(file.target,"r");const bytes=Buffer.alloc(file.bytes+1);
@@ -61,10 +48,6 @@ async function verifyPayload(root){
 }else{for await(const chunk of fs.createReadStream(file.target,{highWaterMark:256*1024}))hash.update(chunk);}if(hash.digest("hex")!==file.sha256)throw Error("Payload bytes differ.");}catch(error){failed=true;throw error;}}}
  await Promise.all(Array.from({length:4},()=>verify()));
  const hashMs=performance.now()-started-scanMs;
- try{
-  const payload=JSON.stringify({format:"SHOP_POS_PAYLOAD_VERIFY_V1",productionActivation:false,manifestSha256,inventoryFingerprint:fingerprint,files:seen.size});
-  const fd=fs.openSync(cachePath,"w");try{fs.writeSync(fd,payload);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
- }catch{/* Cache write failure does not invalidate a verified payload. */}
- return {files:seen.size,productionActivation:false,scanMs,hashMs,reused:false};
+ return {files:seen.size,manifestSha256,productionActivation:false,scanMs,hashMs,reused:false};
 }
 module.exports={verifyPayload};

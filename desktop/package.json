@@ -1,6 +1,6 @@
 {
   "name": "shop-pos-desktop-test",
-  "version": "0.2.0-test.16",
+  "version": "0.2.0-test.21r2",
   "private": true,
   "main": "main.cjs",
   "description": "Disposable TEST desktop; production disabled"

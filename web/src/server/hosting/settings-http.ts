@@ -28,7 +28,7 @@ export function createSettingsDispatcher(g:AuthorizationGateway,fallback:string)
  else if(p==="/api/admin/settings/history")value=await api.history(request,url.searchParams.get("cursor")??undefined);
  else if(op.test(p))value=await api.operation(request,uuid(op.exec(p)![1]),text(url.searchParams.get("context"),64),settingsKind(url.searchParams.get("kind")));
  else if(recover.test(p)){const b=object(await readSalesBody(req,8192),["password","context","kind","evidence"]);value=await api.cancel(request,b.password,recover.exec(p)![1],text(b.context,64),settingsKind(b.kind),text(b.evidence,160));}
- else if(p==="/api/admin/settings"){const b=object(await readSalesBody(req,8192),["key","context","password","input"]);value=await api.save(request,b.password,uuid(b.key),text(b.context,64),b.input);}
+ else if(p==="/api/admin/settings"){const b=object(await readSalesBody(req,8192),["key","context","input"],["password"]);value=await api.save(request,b.password,uuid(b.key),text(b.context,64),b.input);}
  else if(p.includes("/password/")){const b=object(await readSalesBody(req,8192),["key","context","password","newPassword"]);value=await api.password(request,b.password,uuid(b.key),text(b.context,64),p.endsWith("/ADMIN")?"ADMIN":"SALESPERSON",b.newPassword);}
  else throw Error();live();send(200,value);
  }catch(e){send((e as {code?:string})?.code==="AUTHORIZATION_DENIED"?403:(e as {code?:string})?.code==="INVALID_INPUT"?400:503,{error:"Settings unavailable."});}

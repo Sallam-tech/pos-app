@@ -1,10 +1,15 @@
 ﻿"use client";
-import { useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useInventoryRecovery } from "@/lib/inventory/client";
 import { sameMarker, type RecoveryMarker } from "@/lib/inventory/recovery-store";
 export function TestInventoryRecovery() {
  const recovery = useInventoryRecovery(), [confirmation, setConfirmation] = useState<RecoveryMarker | null>(null);
+ const checked = useRef("");
+ const checkPrevious = useEffectEvent(() => recovery.resolve());
+ useEffect(() => { const key = recovery.marker ? recovery.marker.context + recovery.marker.key : "";
+  if (recovery.ready && key && checked.current !== key && !recovery.busy && !recovery.fault) { checked.current = key; void checkPrevious(); }
+ }, [recovery.ready, recovery.marker?.key, recovery.marker?.context, recovery.busy, recovery.fault]);
  if (recovery.ready && !recovery.blocked) return null;
  const confirm = confirmation !== null && sameMarker(confirmation, recovery.marker);
  return <section aria-label="Operation recovery" className="mb-4 rounded-lg border bg-card p-4 text-sm">
@@ -22,7 +27,7 @@ export function TestInventoryRecovery() {
     <Button type="button" disabled={recovery.busy} onClick={() => { const expected = confirmation; setConfirmation(null); if (expected) void recovery.cancel(expected); }}>Confirm Resolve or Cancel</Button>
     <Button type="button" variant="outline" disabled={recovery.busy} onClick={() => setConfirmation(null)}>Keep Blocked</Button>
    </>}
-   {recovery.outcome && <Button type="button" disabled={recovery.busy} onClick={() => { setConfirmation(null); void recovery.acknowledge(); }}>{recovery.outcome === "COMMITTED" ? "Acknowledge Saved Operation" : "Acknowledge Cancelled Operation"}</Button>}
+   {recovery.outcome && <Button type="button" disabled={recovery.busy} onClick={() => { setConfirmation(null); void recovery.acknowledge(); }}>{recovery.outcome === "COMMITTED" ? "Continue: previous save confirmed" : "Continue: previous request cancelled"}</Button>}
   </div>}
  </section>;
 }

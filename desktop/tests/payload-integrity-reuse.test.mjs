@@ -19,16 +19,16 @@ try{
   {path:"payload/server/desktop/test-entry.js",bytes:Buffer.byteLength("export{};"),sha256:createHash("sha256").update("export{};").digest("hex")},
   {path:"payload/app/.next/BUILD_ID",bytes:4,sha256:createHash("sha256").update("test").digest("hex")},
  ];
- const manifest={format:"SHOP_POS_TEST_PAYLOAD_V1",productionActivation:false,schema:41,node:"24.22.3",electron:"45.3.3",fuses:"010000001",files};
+ const manifest={format:"SHOP_POS_TEST_PAYLOAD_V1",productionActivation:false,schema:41,node:"24.22.3",electron:"45.4.1",fuses:"010000001",files};
  writeFileSync(path.join(root,"payload","manifest.json"),JSON.stringify(manifest));
 
  const first=await verifyPayload(root);
  assert.equal(first.reused,false);
  assert.ok(first.hashMs>0);
- assert.ok(existsSync(path.join(root,"payload-verify-cache.json")));
+ assert.equal(existsSync(path.join(root,"payload-verify-cache.json")),false);
  const second=await verifyPayload(root);
- assert.equal(second.reused,true);
- assert.equal(second.hashMs,0);
+ assert.equal(second.reused,false);
+ assert.ok(second.hashMs>0);
 
  writeFileSync(path.join(root,"runtime","node.exe"),Buffer.from("NOPE"));
  await assert.rejects(()=>verifyPayload(root));

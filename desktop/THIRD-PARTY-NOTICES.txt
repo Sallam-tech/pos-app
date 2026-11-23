@@ -1,5 +1,5 @@
-﻿Shop POS disposable TEST build. Production activation is disabled.
-Electron 45.3.3: MIT license and Chromium notices distributed as LICENSE and
+Shop POS disposable TEST build. Production activation is disabled.
+Electron 45.4.1: MIT license and Chromium notices distributed as LICENSE and
 LICENSES.chromium.html. Node.js 24.22.3: complete notices in NODE-LICENSE.txt
 from the official Node.js v24.22.3 source tag.
 better-sqlite3 13.0.3 and all other runtime packages retain their own license

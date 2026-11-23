@@ -8,8 +8,8 @@ const [builtApp,electronDirectory,nodeFile,out]=process.argv.slice(2).map(p=>pat
 if(!builtApp||!electronDirectory||!nodeFile||!out||!out.startsWith(project+path.sep)||existsSync(out))throw Error("A new isolated workspace output directory is required.");
 const hash=p=>createHash("sha256").update(readFileSync(p)).digest("hex");
 if(hash(nodeFile)!=="86fc4785327db5f5c7558dc6156c543b433c313e813a222e088086222ab4afa6")throw Error("Reviewed patched runtime hash mismatch.");
-if(readFileSync(path.join(electronDirectory,"version"),"utf8").trim()!=="45.3.3")throw Error("Pinned Electron version mismatch.");
-if(hash(path.join(electronDirectory,"electron.exe"))!=="cf7ff337d82f32a437d315721ef361f53a8473905a655a0c650967a66ccd0724")throw Error("Verified original Electron executable mismatch.");
+if(readFileSync(path.join(electronDirectory,"version"),"utf8").trim()!=="45.4.1")throw Error("Pinned Electron version mismatch.");
+if(hash(path.join(electronDirectory,"electron.exe"))!=="a547b53fbee4dd4adca1a88e215270d06f7cb1e7d333ee402fb3dd677392a87a")throw Error("Verified original Electron executable mismatch.");
 if(!existsSync(path.join(builtApp,".next/BUILD_ID")))throw Error("Verified Next build required.");
 cpSync(electronDirectory,out,{recursive:true,force:false,errorOnExist:true});
 renameSync(path.join(out,"electron.exe"),path.join(out,"Shop POS TEST.exe"));
@@ -51,5 +51,5 @@ if(sharedCompiled.diagnostics?.some(d=>d.category===ts.DiagnosticCategory.Error)
 mkdirSync(sharedTarget,{recursive:true});writeFileSync(path.join(payload,"lib/package.json"),JSON.stringify({private:true,type:"module"}));writeFileSync(path.join(sharedTarget,"history-range.js"),sharedCompiled.outputText);
 sources.push({path:path.relative(web,sharedSource).replaceAll("\\","/"),sha256:hash(sharedSource)});
 writeFileSync(path.join(payload,"source-manifest.json"),JSON.stringify({format:"SHOP_POS_DESKTOP_SOURCE_V1",sources,productionActivation:false},null,2));
-writeFileSync(path.join(out,"TEST-README.txt"),"Shop POS TEST.19. Production disabled.\r\nThe versioned desktop shortcut opens this installed TEST application directly. Its protected persistent data root is %LOCALAPPDATA%\\Programs\\SalamTech\\ShopPOSTestData\\0.2.0-test.19\\ShopPOSTestData; it is separate from TEST.17 and TEST.18. TEST.18 remains harness-only.\r\nThe same password screen opens Admin Dashboard or Salesperson POS using the matching TEST.19 password. Set separate passwords during first enrollment. No reusable passwords/keys are distributed.\r\nUninstall retains TEST.19 data. Do not use for real business.\r\n");
+writeFileSync(path.join(out,"TEST-README.txt"),"Shop POS TEST.21r2. Production disabled.\r\nThe versioned Desktop or Start Menu shortcut opens this installed TEST application directly. Its protected persistent data root is %LOCALAPPDATA%\\Programs\\SalamTech\\0.2.0-test.21r2\\ShopPOSTestData; it is separate from TEST.17, TEST.18, TEST.19 and TEST.20. TEST.18 remains harness-only.\r\nThe same password screen opens Admin Dashboard or Salesperson POS using the matching TEST.21r2 password. Set separate passwords during first enrollment. No reusable passwords/keys are distributed.\r\nUninstall retains TEST.21r2 data. Do not use for real business.\r\n");
 console.log(JSON.stringify({out,payload,serverSources:sources.length,nextBuild:readFileSync(path.join(app,".next/BUILD_ID"),"utf8").trim(),productionActivation:false}));

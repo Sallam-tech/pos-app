@@ -1,0 +1,10 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {createRequire} from "node:module";
+import {mkdtempSync,mkdirSync,writeFileSync} from "node:fs";
+import {execFileSync} from "node:child_process";
+import path from "node:path";
+const require=createRequire(import.meta.url),{sourceState}=require("../frontend-source-proof.cjs");
+const fixture=mkdtempSync(path.resolve("build/ui-update-20261123-5115a5b8-bbf7-425f-ab5b-78d60a80fa35/source-proof-test-"));mkdirSync(path.join(fixture,"src"));mkdirSync(path.join(fixture,".next"));writeFileSync(path.join(fixture,"src/page.tsx"),"export default function Page(){return null}");for(const name of ["package.json","package-lock.json","next.config.ts","tsconfig.json"])writeFileSync(path.join(fixture,name),"{}");writeFileSync(path.join(fixture,".next/BUILD_ID"),"fixture-build");const proof=path.join(fixture,"proof.json");writeFileSync(proof,JSON.stringify({status:"PASS",source:sourceState(fixture),buildId:"fixture-build"}));
+test("fresh frontend proof verifies the exact completed source and build",()=>{const result=execFileSync(process.execPath,["desktop/frontend-source-proof.cjs",fixture,proof],{encoding:"utf8"});assert.equal(JSON.parse(result).status,"PASS");});
+test("a source edit after the build fails closed instead of accepting stale frontend output",()=>{writeFileSync(path.join(fixture,"src/page.tsx"),"export default function Updated(){return null}");assert.throws(()=>execFileSync(process.execPath,["desktop/frontend-source-proof.cjs",fixture,proof],{stdio:"pipe"}));});

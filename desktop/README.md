@@ -1,6 +1,6 @@
 # Windows disposable TEST application
 
-This adapter packages the existing protected HTTPS custom server and approved frontend. Production remains disabled. It uses pinned Electron45.3.3, separate verified Node24.22.3, and the existing better-sqlite3 Windows x64 prebuild. No Node installation, editor, development server or internet is needed on the target PC.
+This adapter packages the existing protected HTTPS custom server and approved frontend. Production remains disabled. It uses pinned Electron45.4.1, separate verified Node24.22.3, and the existing better-sqlite3 Windows x64 prebuild. No Node installation, editor, development server or internet is needed on the target PC.
 
 `main.cjs` owns sandboxed in-memory Admin/Salesperson windows. Each role still authenticates through its fixed HTTPS origin. Setup and native owner recovery have fixed-purpose sender/frame/file-URL validated preloads. Role windows have only a narrow typed operation-marker bridge: exact role/frame/HTTPS origin validation plus genuine existing gateway authentication on every access. No role renderer receives Node, filesystem, SQL, keys or a shell bridge. Certificate verification is restricted to the exact provisioned loopback certificate; no Windows trust-store or security-policy changes.
 

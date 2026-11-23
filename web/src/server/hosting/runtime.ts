@@ -139,17 +139,6 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     const conf = applicationConfig(input.applicationDirectory);
     ownership = await acquireRuntimeOwnership(location.filename);
     const liveGuard = ownership;
-    if (input.protectedIdentity) {
-      const identity = input.protectedIdentity, selected = identity.selected ?? identity.root;
-      if (Object.keys(identity).some(k => k !== "root" && k !== "selected" && k !== "importedRoot") || (identity.importedRoot !== undefined && identity.importedRoot !== true) || schema !== 41 ||
-          resolveDatabaseLocation(selected.database).filename.toLowerCase() !== location.filename.toLowerCase()) return reject();
-      await withProtectedLocalKeys(selected, async keys => {
-        if (!input.tls.key.equals(keys.tls.key) || !input.tls.certificate.equals(keys.tls.certificate) || !input.tls.trustAnchor.equals(keys.tls.trustAnchor) ||
-            config.signingSecrets.ADMIN !== keys.signingSecrets.ADMIN || config.signingSecrets.SALESPERSON !== keys.signingSecrets.SALESPERSON) return reject();
-      });
-      config.protectedAdmission = identity.selected ? await createSelectedWriterAdmission(identity.root, identity.selected, liveGuard) : identity.importedRoot ? await createImportedRootWriterAdmission(identity.root,liveGuard) : await createProtectedRootWriterAdmission(identity.root, liveGuard, 41);
-      if (assertProtectedWriterAdmission(config.protectedAdmission, config.database).restored) config.protectedHistory = createProtectedRestoredHistory(config.protectedAdmission, config.database);
-    }
     host = createLocalHttpsHost(port, origins, input.tls, async (request, response) => {
       liveGuard.assertHeld();
       await renderReadOnlyResponse(request,response,()=>handler(request,response));
@@ -173,6 +162,17 @@ export async function startLocalRuntime(input: LocalRuntimeConfiguration): Promi
     beforeListeners = new Set(process.listeners("uncaughtException"));
     preparing = app.prepare();
     preparing.catch(() => {}); // The rejection is surfaced where it is awaited, or by partial-startup cleanup.
+    if (input.protectedIdentity) {
+      const identity = input.protectedIdentity, selected = identity.selected ?? identity.root;
+      if (Object.keys(identity).some(k => k !== "root" && k !== "selected" && k !== "importedRoot") || (identity.importedRoot !== undefined && identity.importedRoot !== true) || schema !== 41 ||
+          resolveDatabaseLocation(selected.database).filename.toLowerCase() !== location.filename.toLowerCase()) return reject();
+      await withProtectedLocalKeys(selected, async keys => {
+        if (!input.tls.key.equals(keys.tls.key) || !input.tls.certificate.equals(keys.tls.certificate) || !input.tls.trustAnchor.equals(keys.tls.trustAnchor) ||
+            config.signingSecrets.ADMIN !== keys.signingSecrets.ADMIN || config.signingSecrets.SALESPERSON !== keys.signingSecrets.SALESPERSON) return reject();
+      });
+      config.protectedAdmission = identity.selected ? await createSelectedWriterAdmission(identity.root, identity.selected, liveGuard) : identity.importedRoot ? await createImportedRootWriterAdmission(identity.root,liveGuard) : await createProtectedRootWriterAdmission(identity.root, liveGuard, 41);
+      if (assertProtectedWriterAdmission(config.protectedAdmission, config.database).restored) config.protectedHistory = createProtectedRestoredHistory(config.protectedAdmission, config.database);
+    }
     gateway = await openAuthorizationGateway(config, testAuthentication ? schema : undefined); // SAME existing single native owner.
     const operationKeys=input.testDesktopOperationKeys?await openDesktopOperationKeys(input.protectedIdentity!.root,input.protectedIdentity!.selected??input.protectedIdentity!.root,()=>liveGuard.assertHeld()):undefined;
     const backupConfiguration=input.testBackups&&config.protectedAdmission?rebindProtectedBackupAdmission(input.testBackups,config.protectedAdmission,config.protectedHistory):input.testBackups;

@@ -11,9 +11,10 @@ const fields = [
  ["name", "Product Name"], ["purchaseCost", "Buying Price (Rs.)"], ["suggestedSellingPrice", "Selling Price (Rs.)"],
  ["initialQuantity", "Stock Quantity"], ["lowStockThreshold", "Low Stock Alert"], ["category", "Category"],
 ] as const;
-const emptyValues = { name: "", purchaseCost: "", suggestedSellingPrice: "", initialQuantity: "", lowStockThreshold: "", category: "", code: "", unit: "PACK" };
+const emptyValues = { name: "", purchaseCost: "", suggestedSellingPrice: "", initialQuantity: "", lowStockThreshold: "0", category: "", code: "", unit: "PACK" };
 export function TestProductForm() {
  const [values, setValues] = useState(emptyValues);
+ const [fieldErrors, setFieldErrors] = useState<Partial<Record<typeof fields[number][0], string>>>({});
  const [validation, setValidation] = useState<string | null>(null), [saved, setSaved] = useState<MutationResult | null>(null);
  const form = useRef<HTMLFormElement>(null);
  const onSaved = useCallback((result: MutationResult) => {
@@ -24,21 +25,36 @@ export function TestProductForm() {
  const mutation = useInventoryMutation(onSaved);
  function submit(event: FormEvent) {
   event.preventDefault(); setValidation(null);
-  try {
-   if (!values.name || values.name !== values.name.trim()) throw Error();
-   const buying = paisa(values.purchaseCost), selling = values.suggestedSellingPrice === "" ? null : paisa(values.suggestedSellingPrice);
-   if (selling !== null && BigInt(selling) < BigInt(buying)) throw Error();
-   void mutation.submit("/api/admin/products", { name: values.name, category: values.category || null,
-    ...(values.code ? { code: values.code } : {}), unit: values.unit, buyingPricePaisa: buying, sellingPricePaisa: selling,
-    sellingActive: selling !== null, openingQuantity: whole(values.initialQuantity), lowStockThreshold: whole(values.lowStockThreshold) });
-  } catch { setValidation("Check required fields, positive prices and whole PACK/BOX quantities. Selling price cannot be below buying price."); form.current?.querySelector<HTMLInputElement>("input")?.focus(); }
+  const errors: Partial<Record<typeof fields[number][0], string>> = {};
+  function parse(name: typeof fields[number][0], value: string, money: boolean) {
+   try { return money ? paisa(value.trim()) : whole(value.trim()); }
+   catch { errors[name] = money ? "Enter a price greater than 0, with at most 2 decimal places." : "Enter a whole quantity of 0 or more for PACK/BOX."; return null; }
+  }
+  const name = values.name.trim();
+  if (!name) errors.name = "Enter a product name.";
+  const buying = parse("purchaseCost", values.purchaseCost, true);
+  const selling = values.suggestedSellingPrice.trim() === "" ? null : parse("suggestedSellingPrice", values.suggestedSellingPrice, true);
+  const quantity = parse("initialQuantity", values.initialQuantity, false);
+  const lowStock = parse("lowStockThreshold", values.lowStockThreshold.trim() || "0", false);
+  if (buying !== null && selling !== null && BigInt(selling) < BigInt(buying)) errors.suggestedSellingPrice = "Selling price must be at least the buying price.";
+  setFieldErrors(errors);
+  const invalid = fields.find(([key]) => errors[key]);
+  if (invalid || buying === null || quantity === null || lowStock === null) {
+   setValidation("Please correct the marked fields.");
+   if (invalid) form.current?.querySelector<HTMLInputElement>('[name="' + invalid[0] + '"]')?.focus();
+   return;
+  }
+  void mutation.submit("/api/admin/products", { name, category: values.category || null,
+   ...(values.code ? { code: values.code } : {}), unit: values.unit, buyingPricePaisa: buying, sellingPricePaisa: selling,
+   sellingActive: selling !== null, openingQuantity: quantity, lowStockThreshold: lowStock });
  }
  function field(name: typeof fields[number][0]) {
-  const entry = fields.find(f => f[0] === name)!, optional = name === "category" || name === "suggestedSellingPrice";
-  return <Field id={"new-product-" + name} label={entry[1] + (optional ? "" : " *")} hint={name === "suggestedSellingPrice" ? "Optional. Without a price, selling stays stopped." : name === "initialQuantity" || name === "lowStockThreshold" ? "Whole PACK/BOX units only." : undefined}>
+  const entry = fields.find(f => f[0] === name)!, optional = name === "category" || name === "suggestedSellingPrice" || name === "lowStockThreshold";
+  return <Field id={"new-product-" + name} label={entry[1] + (optional ? "" : " *")} error={fieldErrors[name]} hint={name === "suggestedSellingPrice" ? "Optional. Without a price, selling stays stopped." : name === "lowStockThreshold" ? "Optional. Leave blank for 0 (no low stock alert)." : name === "initialQuantity" ? "Whole PACK/BOX units only." : undefined}>
    <Input id={"new-product-" + name} name={name} value={values[name]} autoComplete="off" required={!optional} maxLength={name === "name" ? 120 : name === "category" ? 80 : 16}
+    aria-invalid={!!fieldErrors[name] || undefined} aria-describedby={fieldErrors[name] ? "new-product-" + name + "-error" : undefined}
     inputMode={name === "name" || name === "category" ? undefined : "decimal"}
-    onChange={event => { setSaved(null); setValues(previous => ({ ...previous, [name]: event.target.value })); }} />
+    onChange={event => { setSaved(null); setValidation(null); setFieldErrors(previous => ({ ...previous, [name]: undefined })); setValues(previous => ({ ...previous, [name]: event.target.value })); }} />
   </Field>;
  }
  return <Card className="max-w-3xl shadow-none">

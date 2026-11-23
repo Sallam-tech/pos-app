@@ -1,7 +1,7 @@
 "use strict";
 const path=require("node:path");
 
-const normalRelease="0.2.0-test.19";
+const normalRelease="0.2.0-test.21r2";
 
 function resolveDisposableTestDataRoot(arguments_,environment){
  if(!Array.isArray(arguments_)||!arguments_.includes("--disposable-harness"))throw Error("Disposable TEST launch context required.");
@@ -32,7 +32,10 @@ function resolveTestDataRoot(arguments_,environment,identity){
  const expectedExecutable=path.win32.join(releaseDirectory,"Shop POS TEST.exe");
  if(!sameWindowsPath(identity.executablePath,expectedExecutable))throw Error("Installed TEST application identity required.");
 
- return path.win32.join(localAppData,"Programs","SalamTech","ShopPOSTestData",normalRelease,"ShopPOSTestData");
+ const dataRoot=path.win32.join(localAppData,"Programs","SalamTech",normalRelease,"ShopPOSTestData");
+ // Preserve the worker bounds, including its longest supported selected generation.
+ if(path.win32.join(dataRoot,"test-results","sqlite-b1b-part1","b999999999").length>120||path.win32.join(dataRoot,"test-results","sqlite-b1b-part1","e999999999").length>200)throw Error("Protected TEST backup path budget exceeded.");
+ return dataRoot;
 }
 
 module.exports={resolveDisposableTestDataRoot,resolveTestDataRoot};

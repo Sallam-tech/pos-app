@@ -39,16 +39,19 @@ test("both password controls use atomic version audit, target revocation and fre
 },180000);
 
 
-test("shop-detail writes require a current Admin password as well as the signed Admin session",async()=>{
+test("owner-approved ordinary shop settings require signed Admin, audit automatically and retain password/recovery protection",async()=>{
  const f=await gateway();try{
-  const api=createSettingsService(f.g,"TEST SHOP"),current=await api.current(f.admin,"ADMIN");if(!current.context)throw Error();
-  const key=randomUUID(),input={expectedRevision:"0",settings:settings(),reason:"TEST verified password-protected settings"};
-  for(const password of [undefined,passwords.ADMIN+"-wrong"]){
-   await expect(api.save(f.admin,password,key,current.context,input)).rejects.toThrow();
-   expect((await api.operation(f.admin,key,current.context,"SETTINGS")).state).toBe("UNKNOWN");
-   expect((await api.history(f.admin)).items).toHaveLength(0);
-  }
-  expect((await api.save(f.admin,passwords.ADMIN,key,current.context,input)).state).toBe("COMMITTED");
-  expect((await api.history(f.admin)).items).toHaveLength(1);
+  const repeatPassword=vi.fn(async()=>{throw Error("Routine settings must not request password again");});
+  const api=createSettingsService({...f.g,verifyAdminPassword:repeatPassword},"TEST SHOP"),current=await api.current(f.admin,"ADMIN");if(!current.context)throw Error();
+  const key=randomUUID(),input={expectedRevision:"0",settings:settings()};
+  await expect(api.save(f.staff,undefined,key,current.context,input)).rejects.toThrow();
+  await expect(api.save(new Request(f.admin.url),undefined,key,current.context,input)).rejects.toThrow();
+  expect((await api.operation(f.admin,key,current.context,"SETTINGS")).state).toBe("UNKNOWN");
+  const saved=await api.save(f.admin,undefined,key,current.context,input);expect(saved.state).toBe("COMMITTED");
+  expect(await api.save(f.admin,undefined,key,current.context,input)).toEqual(saved);
+  const history=await api.history(f.admin);expect(history.items).toHaveLength(1);expect(history.items[0].reason).toBe("Shop and receipt details updated by signed-in Admin");
+  expect(repeatPassword).not.toHaveBeenCalled();
+  await expect(api.password(f.admin,undefined,randomUUID(),current.context,"SALESPERSON","new-test-password")).rejects.toThrow();
+  await expect(api.cancel(f.admin,undefined,randomUUID(),current.context,"SETTINGS","No effect verified")).rejects.toThrow();
  }finally{await f.g.close();}
 },180000);

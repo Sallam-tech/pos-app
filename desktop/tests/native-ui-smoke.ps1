@@ -14,7 +14,9 @@
  [switch]$SidebarNavigationCheck,
  [switch]$ReportsPresentationCheck,
  [switch]$DisplayStateCheck,
- [string]$FreshDataRoot
+ [string]$FreshDataRoot,
+ [switch]$InstalledAcceptance,
+ [switch]$ResumeInstalledAcceptance
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
@@ -22,16 +24,47 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 $Bundle=[IO.Path]::GetFullPath($Bundle);$Evidence=[IO.Path]::GetFullPath($Evidence)
 $release=[string](Get-Content -LiteralPath (Join-Path $Bundle 'resources/app/package.json') -Raw | ConvertFrom-Json).version
-if($release -notmatch '^0\.2\.0-test\.[1-9][0-9]*$'){throw 'Exact disposable TEST bundle version required'}
+if($release -cne '0.2.0-test.21r2'){throw 'Exact disposable TEST bundle version required'}
 [void][IO.Directory]::CreateDirectory($Evidence)
 $dataRoot=Join-Path 'D:\pos\web\test-results' ('posdt-'+[guid]::NewGuid())
 if($FreshDataRoot){$dataRoot=[IO.Path]::GetFullPath($FreshDataRoot)}
-if([IO.Path]::GetDirectoryName($dataRoot) -cne 'D:\pos\web\test-results' -or [IO.Path]::GetFileName($dataRoot) -notmatch '^posdt-[a-f0-9-]{36}$' -or (Test-Path -LiteralPath $dataRoot)){throw 'Financial QA requires a fresh nonexistent workspace UUID root; owner data roots are forbidden'}
+if($InstalledAcceptance){
+ $expectedBundle=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\SalamTech\ShopPOSTest\0.2.0-test.21r2'
+ $dataRoot=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\SalamTech\0.2.0-test.21r2\ShopPOSTestData'
+ if($release -cne '0.2.0-test.21r2' -or $Bundle -ine $expectedBundle -or $FreshDataRoot -or ((Test-Path -LiteralPath $dataRoot) -and -not $ResumeInstalledAcceptance)){throw 'Installed acceptance requires the exact new TEST.21r2 installation and a nonexistent TEST.21r2 data root'}
+ if($LifecycleInstaller -or $SameVersionRetentionInstaller -or $UpgradeInstaller -or $OperationKeyCrashCheck -or $OwnerRecoveryEntryCheck){throw 'Destructive/lifecycle/recovery commands are excluded from installed acceptance'}
+ if($ResumeInstalledAcceptance){
+  $priorEvidence=Join-Path ([IO.Path]::GetDirectoryName($Evidence)) 'installed-acceptance'
+  $prior=Get-Content -LiteralPath (Join-Path $priorEvidence 'native-result.json') -Raw | ConvertFrom-Json
+  if($prior.bundle -ine $Bundle -or $prior.dataRoot -ine $dataRoot -or $prior.status -cne 'FAIL' -or $prior.checks.Count -ne 1 -or [string]$prior.checks[0] -notlike '*enrollment through UIAutomation*'){throw 'Resume requires this exact failed pre-financial TEST.21r2 enrollment attempt'}
+ }
+
+}else{
+ if([IO.Path]::GetDirectoryName($dataRoot) -cne 'D:\pos\web\test-results' -or [IO.Path]::GetFileName($dataRoot) -notmatch '^posdt-[a-f0-9-]{36}$' -or (Test-Path -LiteralPath $dataRoot)){throw 'Financial QA requires a fresh nonexistent workspace UUID root; owner data roots are forbidden'}
+}
+
 $record=@{format='SHOP_POS_NATIVE_UIA_TEST_V1';bundle=$Bundle;dataRoot=$dataRoot;productionActivation=$false;checks=@();status='IN_PROGRESS'}
 $record | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $Evidence 'native-attempt.json')
 $rng=[Security.Cryptography.RandomNumberGenerator]::Create();$bytes=New-Object byte[] 24;$rng.GetBytes($bytes);$admin='Test-A9!'+[BitConverter]::ToString($bytes).Replace('-','');$rng.GetBytes($bytes);$staff='Test-S9!'+[BitConverter]::ToString($bytes).Replace('-','');[Array]::Clear($bytes,0,$bytes.Length);$rng.Dispose()
+if($InstalledAcceptance -and $ResumeInstalledAcceptance){
+ $privateDirectory=Join-Path $priorEvidence 'private-test21r2-login'
+ $credentials=Import-Clixml -LiteralPath (Join-Path $privateDirectory 'credentials.clixml')
+ $admin=$credentials.Admin.GetNetworkCredential().Password;$staff=$credentials.Salesperson.GetNetworkCredential().Password;$credentials=$null
+ $record.credentialDirectory=$privateDirectory;$record.testCredentialHandoff='WINDOWS_DPAPI_CURRENT_USER_ONLY'
+ $record.checks+='one controlled normal installed TEST.21r2 restart after the retained pre-financial enrollment failure; no reset or enrollment replay'
+}elseif($InstalledAcceptance){
+ $privateDirectory=Join-Path $Evidence 'private-test21r2-login';[void][IO.Directory]::CreateDirectory($privateDirectory)
+ $owner=[Security.Principal.WindowsIdentity]::GetCurrent().User
+ $acl=New-Object Security.AccessControl.DirectorySecurity;$acl.SetOwner($owner);$acl.SetAccessRuleProtection($true,$false)
+ foreach($sid in @($owner,[Security.Principal.SecurityIdentifier]::new('S-1-5-18'))){$acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,[Security.AccessControl.FileSystemRights]::FullControl,[Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit',[Security.AccessControl.PropagationFlags]::None,[Security.AccessControl.AccessControlType]::Allow))}
+ Set-Acl -LiteralPath $privateDirectory -AclObject $acl
+ $credentials=@{Admin=[Management.Automation.PSCredential]::new('TEST.21r2 Admin',(ConvertTo-SecureString $admin -AsPlainText -Force));Salesperson=[Management.Automation.PSCredential]::new('TEST.21r2 Salesperson',(ConvertTo-SecureString $staff -AsPlainText -Force))}
+ $credentials | Export-Clixml -LiteralPath (Join-Path $privateDirectory 'credentials.clixml')
+ $credentials=$null;$record.testCredentialHandoff='WINDOWS_DPAPI_CURRENT_USER_ONLY';$record.credentialDirectory=$privateDirectory
+}
 $info=New-Object Diagnostics.ProcessStartInfo
 $info.FileName=Join-Path $Bundle 'Shop POS TEST.exe';$info.WorkingDirectory=$Bundle;$info.UseShellExecute=$false;$info.CreateNoWindow=$true;$info.RedirectStandardError=$true;$info.Arguments='--disposable-harness --force-renderer-accessibility';$info.EnvironmentVariables['SHOP_POS_DESKTOP_TEST_DATA']=$dataRoot
+if($InstalledAcceptance){$info.Arguments='';$info.EnvironmentVariables.Remove('SHOP_POS_DESKTOP_TEST_DATA')}
 if($LifecycleInstaller -or $SameVersionRetentionInstaller){$info.EnvironmentVariables['PATH']=$env:SystemRoot+'\System32;'+$env:SystemRoot+';'+$env:SystemRoot+'\System32\WindowsPowerShell\v1.0'}
  Add-Type -TypeDefinition @"
 using System;using System.Text;using System.Runtime.InteropServices;
@@ -51,7 +84,11 @@ function InvokeEnabled($control){
  $until=[DateTime]::UtcNow.AddSeconds(60)
  while(-not $control.Current.IsEnabled -and [DateTime]::UtcNow -lt $until){Start-Sleep -Milliseconds 100}
  if(-not $control.Current.IsEnabled){throw 'Owned form button did not become enabled'}
- ([Windows.Automation.InvokePattern]$control.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern)).Invoke()
+ $pattern=$null
+ if($control.TryGetCurrentPattern([Windows.Automation.InvokePattern]::Pattern,[ref]$pattern)){([Windows.Automation.InvokePattern]$pattern).Invoke()}
+ elseif($control.TryGetCurrentPattern([Windows.Automation.TogglePattern]::Pattern,[ref]$pattern)){([Windows.Automation.TogglePattern]$pattern).Toggle()}
+ elseif($control.TryGetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern,[ref]$pattern)){if(([Windows.Automation.ExpandCollapsePattern]$pattern).Current.ExpandCollapseState -eq [Windows.Automation.ExpandCollapseState]::Collapsed){([Windows.Automation.ExpandCollapsePattern]$pattern).Expand()}else{([Windows.Automation.ExpandCollapsePattern]$pattern).Collapse()}}
+ else{throw ("Owned control has no supported action: "+$control.Current.Name)}
 }
 function SetEnabledValue($control,[string]$value){
  $until=[DateTime]::UtcNow.AddSeconds(60)
@@ -59,7 +96,7 @@ function SetEnabledValue($control,[string]$value){
  if(-not $control.Current.IsEnabled){throw 'Owned form field did not become enabled'}
  ([Windows.Automation.ValuePattern]$control.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)).SetValue($value)
 }
-function SaveProgress { $record | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $Evidence 'native-progress.json') }
+function SaveProgress { $record | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $Evidence 'native-progress.json'); if($record.checks.Count -gt 0){Write-Host ('TEST.21r2: '+$record.checks[-1])} }
 function OwnedWindows {
  $condition=[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ProcessIdProperty,$process.Id)
  return [Windows.Automation.AutomationElement]::RootElement.FindAll([Windows.Automation.TreeScope]::Children,$condition)
@@ -73,12 +110,12 @@ function CloseOwnedWindows {
 }
 function FindControl($windows,[string]$name,[Windows.Automation.ControlType]$type){
  $condition=[Windows.Automation.AndCondition]::new([Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty,$name),[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::ControlTypeProperty,$type))
- foreach($window in $windows){$found=$window.FindFirst([Windows.Automation.TreeScope]::Descendants,$condition);if($null -ne $found){return $found}}
+ foreach($window in $windows){try{$found=$window.FindFirst([Windows.Automation.TreeScope]::Descendants,$condition);if($null -ne $found){return $found}}catch [Windows.Automation.ElementNotAvailableException]{continue}}
  return $null
 }
 function FindNamedControl($windows,[string]$name){
  $condition=[Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty,$name)
- foreach($window in $windows){$found=$window.FindFirst([Windows.Automation.TreeScope]::Descendants,$condition);if($null -ne $found){return $found}}
+ foreach($window in $windows){try{$found=$window.FindFirst([Windows.Automation.TreeScope]::Descendants,$condition);if($null -ne $found){return $found}}catch [Windows.Automation.ElementNotAvailableException]{continue}}
  return $null
 }
 function WaitControl([string]$name,[Windows.Automation.ControlType]$type,[int]$seconds=180){
@@ -215,6 +252,7 @@ function RetainedDataHashes {
  };return ($result.GetEnumerator()|Sort-Object Name|ForEach-Object {$_.Name+' '+$_.Value}) -join "`n"
 }
 try{
+ if(-not $ResumeInstalledAcceptance){
  $adminInput=WaitControl 'Admin password' ([Windows.Automation.ControlType]::Edit)
  $staffInput=WaitControl 'Salesperson password' ([Windows.Automation.ControlType]::Edit)
  if($SetupPolicyCheck){
@@ -238,9 +276,11 @@ try{
  ([Windows.Automation.TogglePattern]$confirmation.GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)).Toggle()
  $submit=WaitControl 'Confirm disposable TEST setup' ([Windows.Automation.ControlType]::Button)
  ([Windows.Automation.InvokePattern]$submit.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern)).Invoke()
- $record.checks+= 'actual fused Electron sandbox setup via owned-window UIAutomation; passwords only in RAM'
+ if($InstalledAcceptance){$record.checks+='actual installed TEST.21r2 enrollment through UIAutomation; generated test passwords have a CurrentUser DPAPI-protected local handoff'}else{$record.checks+= 'actual fused Electron sandbox setup via owned-window UIAutomation; passwords only in RAM'}
  SaveProgress
+ }
  $password=WaitControl 'Password' ([Windows.Automation.ControlType]::Edit)
+ if($InstalledAcceptance){Start-Sleep -Seconds 5;if($process.HasExited -or $password.Current.IsOffscreen){throw 'Installed login did not remain open'};SaveReportScreenshot 'login-first.png' '';$record.checks+='normal installed EXE reaches visible login and remains running for five seconds';SaveProgress}
  if($DisplayStateCheck){[void](WaitControl 'Isolated TEST' ([Windows.Automation.ControlType]::Text));if($null -ne (FindControl (OwnedWindows) 'Salesperson Isolated TEST' ([Windows.Automation.ControlType]::Text))){throw 'Shared entry still has a false role-specific label'};$record.checks+='actual installed shared entry has neutral TEST wording with original layout'}
  $record.lastLoginReadyMs=$launchClock.Elapsed.TotalMilliseconds
  $until=[DateTime]::UtcNow.AddSeconds(60);while(-not $password.Current.IsEnabled -and [DateTime]::UtcNow -lt $until){Start-Sleep -Milliseconds 200}
@@ -288,14 +328,19 @@ try{
   $record.checks+='same original Admin-origin login screen accepts Salesperson password and opens protected POS';SaveProgress
  }
  if($OwnerWorkflowsCheck){
-  $productName='Owner acceptance '+[guid]::NewGuid().ToString('N').Substring(0,10);$record.productName=$productName
-  InvokeEnabled (WaitControl 'Products' ([Windows.Automation.ControlType]::Hyperlink))
-  InvokeEnabled (WaitControl 'Add Product' ([Windows.Automation.ControlType]::Hyperlink))
-  foreach($item in @(@('Product Name *',$productName),@('Buying Price (Rs.) *','100'),@('Selling Price (Rs.)','150'),@('Stock Quantity *','12'),@('Low Stock Alert *','3'))){SetEnabledValue (WaitControl $item[0] ([Windows.Automation.ControlType]::Edit)) $item[1]}
-  InvokeEnabled (WaitControl 'Save Product' ([Windows.Automation.ControlType]::Button))
-  InvokeEnabled (WaitControl 'View Products' ([Windows.Automation.ControlType]::Hyperlink))
-  [void](WaitControl $productName ([Windows.Automation.ControlType]::Text))
-  $record.checks+='actual installed Admin UI creates product with stock12 and saved inventory';SaveProgress
+  $productName='Owner acceptance '+[guid]::NewGuid().ToString('N').Substring(0,10)
+  $productNames=@($productName)
+  if($InstalledAcceptance -and $ReportsPresentationCheck){$productNames=@(1..6 | ForEach-Object {$productName+' '+$_});$productName=$productNames[0]}
+  $record.productName=$productName;$record.productNames=$productNames;$expectedRevenue=150*$productNames.Count;$expectedProfit=50*$productNames.Count
+  foreach($name in $productNames){
+   InvokeEnabled (WaitControl 'Products' ([Windows.Automation.ControlType]::Hyperlink))
+   InvokeEnabled (WaitControl 'Add Product' ([Windows.Automation.ControlType]::Hyperlink))
+   foreach($item in @(@('Product Name *',$name),@('Buying Price (Rs.) *','100'),@('Selling Price (Rs.)','150'),@('Stock Quantity *','12'),@('Low Stock Alert *','3'))){SetEnabledValue (WaitControl $item[0] ([Windows.Automation.ControlType]::Edit)) $item[1]}
+   InvokeEnabled (WaitControl 'Save Product' ([Windows.Automation.ControlType]::Button))
+   InvokeEnabled (WaitControl 'View Products' ([Windows.Automation.ControlType]::Hyperlink))
+   [void](WaitControl $name ([Windows.Automation.ControlType]::Text))
+  }
+  $record.checks+=('actual installed Admin UI creates '+$productNames.Count+' fresh TEST products with stock12 each');SaveProgress
   if($SharedLoginCheck){
    InvokeEnabled (WaitControl 'Back to Login' ([Windows.Automation.ControlType]::Button))
    $switchClock=[Diagnostics.Stopwatch]::StartNew();SharedPasswordSubmit $staff
@@ -306,63 +351,98 @@ try{
 
   InvokeEnabled (WaitStaffControl 'Sales History' ([Windows.Automation.ControlType]::Hyperlink))
   InvokeEnabled (WaitControl 'Make a Sale' ([Windows.Automation.ControlType]::Hyperlink))
-  SetEnabledValue (WaitControl 'Find Product' ([Windows.Automation.ControlType]::ComboBox)) $productName
-  InvokeEnabled (WaitPrefix ($productName+' ') ([Windows.Automation.ControlType]::Button))
+  foreach($name in $productNames){
+   SetEnabledValue (WaitControl 'Find Product' ([Windows.Automation.ControlType]::ComboBox)) $name
+   InvokeEnabled (WaitPrefix ($name+' ') ([Windows.Automation.ControlType]::Button))
+  }
   InvokeEnabled (WaitControl 'Create Invoice' ([Windows.Automation.ControlType]::Button))
-  SetEnabledValue (WaitControl 'Cash Tendered (PKR, planned until handover)' ([Windows.Automation.ControlType]::Edit)) '150'
+  SetEnabledValue (WaitControl 'Cash Tendered (PKR, planned until handover)' ([Windows.Automation.ControlType]::Edit)) ([string]$expectedRevenue)
   InvokeEnabled (WaitControl 'Allow Cash Handover' ([Windows.Automation.ControlType]::Button))
   $cashCheck=WaitPrefix 'I verified the actual cash received and change once on ' ([Windows.Automation.ControlType]::CheckBox)
   ([Windows.Automation.TogglePattern]$cashCheck.GetCurrentPattern([Windows.Automation.TogglePattern]::Pattern)).Toggle()
   InvokeEnabled (WaitControl 'Confirm Cash and Save' ([Windows.Automation.ControlType]::Button))
+  SaveReportScreenshot 'saved-invoice.png' ''
   InvokeEnabled (WaitControl 'Done' ([Windows.Automation.ControlType]::Button))
   InvokeEnabled (WaitStaffControl 'Sales History' ([Windows.Automation.ControlType]::Hyperlink))
   InvokeEnabled (WaitStaffControl 'View Invoice' ([Windows.Automation.ControlType]::Button))
   InvokeEnabled (WaitControl 'Done' ([Windows.Automation.ControlType]::Button))
   $record.checks+='actual installed Staff UI original-key cash admission/sale150, saved invoice and history re-open without financial replay';SaveProgress
-  if($DisplayStateCheck -and $SharedLoginCheck){
+  if(($DisplayStateCheck -or $ReportsPresentationCheck) -and $SharedLoginCheck){
    InvokeEnabled (WaitStaffControl 'Back to Login' ([Windows.Automation.ControlType]::Button));SharedPasswordSubmit $admin
-   [void](WaitControl 'Dashboard' ([Windows.Automation.ControlType]::Hyperlink));[void](WaitControl 'Rs. 150' ([Windows.Automation.ControlType]::Text));[void](WaitControl 'Rs. 50' ([Windows.Automation.ControlType]::Text))
+   [void](WaitControl 'Dashboard' ([Windows.Automation.ControlType]::Hyperlink));[void](WaitControl ('Rs. '+$expectedRevenue) ([Windows.Automation.ControlType]::Text));[void](WaitControl ('Rs. '+$expectedProfit) ([Windows.Automation.ControlType]::Text))
    if($null -ne (FindControl (OwnedWindows) 'Unavailable' ([Windows.Automation.ControlType]::Text))){throw 'Saved sale dashboard is unavailable'}
    $record.checks+='actual installed Dashboard reports sole sale revenue150/profit50 after role switch; saved figures are not demo zeros';SaveProgress
-   InvokeEnabled (WaitControl 'Reports' ([Windows.Automation.ControlType]::Hyperlink));InvokeEnabled (WaitControl 'View Sales Report' ([Windows.Automation.ControlType]::Hyperlink));[void](WaitControl 'Rs. 150' ([Windows.Automation.ControlType]::Text))
+   InvokeEnabled (WaitControl 'Reports' ([Windows.Automation.ControlType]::Hyperlink));InvokeEnabled (WaitControl 'View Sales Report' ([Windows.Automation.ControlType]::Hyperlink));[void](WaitControl ('Rs. '+$expectedRevenue+'.00') ([Windows.Automation.ControlType]::Text))
    $record.checks+='actual installed sales report resolves current saved revenue150 after pending state';SaveProgress
   }
   if($ReportsPresentationCheck){
    if(-not $OwnerWorkflowsCheck -or -not $SharedLoginCheck){throw 'Actual report presentation check requires the isolated saved-sale workflow and shared role login'}
-   SaveReportScreenshot 'reports-sales-chart.png' 'Sales Report'
    [void](WaitNamedControl 'Sales by Product')
+   SaveReportScreenshot 'reports-sales-chart.png' 'Sales Report'
    [void](WaitNamedControl 'Total Sales')
    [void](WaitNamedControl 'Items Sold')
    [void](WaitNamedControl 'Products Sold')
    [void](WaitNamedControl 'Sales Details')
    if($null -ne (FindNamedControl (OwnedWindows) 'Daily Sales Revenue')){throw 'Replacement sales time-series panel is present'}
-   InvokeEnabled (WaitNamedControl 'View Sales Details')
+   if($InstalledAcceptance){
+    InvokeEnabled (WaitControl 'Show Top 5' ([Windows.Automation.ControlType]::Button));[void](WaitNamedControl 'Top 5 products')
+    SaveReportScreenshot 'reports-sales-top5.png' 'Sales Report'
+    InvokeEnabled (WaitControl 'Show All' ([Windows.Automation.ControlType]::Button));[void](WaitNamedControl 'All products')
+    $record.checks+='actual installed six-product Sales chart switches Show Top 5 and Show All';SaveProgress
+   }
+   InvokeEnabled (WaitControl 'View Sales Details' ([Windows.Automation.ControlType]::Button))
    SaveReportScreenshot 'reports-sales-details.png' 'Sales Report'
-   InvokeEnabled (WaitNamedControl ('View sales for '+$productName))
+   InvokeEnabled (WaitControl ('View sales for '+$productName) ([Windows.Automation.ControlType]::Button))
    [void](WaitNamedControl ('Individual sales for '+$productName))
    [void](WaitNamedControl 'Sale')
    $record.checks+='actual packaged Sales Report renders the saved SQLite sale, approved product chart/table, and View sales details';SaveProgress
 
    InvokeEnabled (WaitControl 'Reports' ([Windows.Automation.ControlType]::Hyperlink))
    InvokeEnabled (WaitControl 'View Profit Report' ([Windows.Automation.ControlType]::Hyperlink))
-   SaveReportScreenshot 'reports-profit-chart.png' 'Profit Report'
    [void](WaitNamedControl 'Profit by Product')
+   SaveReportScreenshot 'reports-profit-chart.png' 'Profit Report'
    [void](WaitNamedControl 'Gross Profit')
    [void](WaitNamedControl 'Cost of Sold Items')
    [void](WaitNamedControl 'Highest Profit Product')
    [void](WaitNamedControl 'Profit Details')
    if($null -ne (FindNamedControl (OwnedWindows) 'Gross profit comparison') -or $null -ne (FindNamedControl (OwnedWindows) 'Daily Gross Profit')){throw 'Replacement profit report panels are present'}
-   InvokeEnabled (WaitNamedControl 'View Profit Details')
+   InvokeEnabled (WaitControl 'View Profit Details' ([Windows.Automation.ControlType]::Button))
    SaveReportScreenshot 'reports-profit-details.png' 'Profit Report'
    [void](WaitNamedControl $productName)
    $search=WaitControl 'Search by product name' ([Windows.Automation.ControlType]::Edit)
    SetEnabledValue $search '__no_matching_report_product__'
    [void](WaitNamedControl 'No products match your search in this period.' 30)
-   InvokeEnabled (WaitNamedControl 'Clear search')
+   InvokeEnabled (WaitControl 'Clear search' ([Windows.Automation.ControlType]::Button))
    [void](WaitNamedControl $productName 30)
-   if($null -ne (FindNamedControl (OwnedWindows) 'Show Top 5')){$record.checks+='actual packaged Profit chart exposes Show Top 5 for its current product count'}else{$record.checks+='actual packaged one-product fixture has no Show Top 5 control; six-product interaction covered by focused UI tests'}
+   if($InstalledAcceptance){
+    InvokeEnabled (WaitControl 'Show Top 5' ([Windows.Automation.ControlType]::Button));[void](WaitNamedControl 'Top 5 products')
+    SaveReportScreenshot 'reports-profit-top5.png' 'Profit Report'
+    InvokeEnabled (WaitControl 'Show All' ([Windows.Automation.ControlType]::Button));[void](WaitNamedControl 'All products')
+    $record.checks+='actual installed six-product Profit chart switches Show Top 5 and Show All'
+   }else{if($null -ne (FindNamedControl (OwnedWindows) 'Show Top 5')){$record.checks+='actual packaged Profit chart exposes Show Top 5 for its current product count'}else{$record.checks+='actual packaged one-product fixture has no Show Top 5 control; six-product interaction covered by focused UI tests'}}
    $record.checks+='actual packaged Profit Report renders the saved SQLite sale, approved product chart/table, search and Clear Search';SaveProgress
   }
+ }
+ if($InstalledAcceptance -and $OwnerWorkflowsCheck){
+  InvokeEnabled (WaitControl 'Settings' ([Windows.Automation.ControlType]::Hyperlink))
+  SetEnabledValue (WaitControl 'Admin password for backup or export' ([Windows.Automation.ControlType]::Edit)) $admin
+  if((WaitControl 'Restore Backup' ([Windows.Automation.ControlType]::Button)).Current.IsEnabled){throw 'Restore enabled without explicit confirmation'}
+  InvokeEnabled (WaitControl 'Backup Now' ([Windows.Automation.ControlType]::Button))
+  $deadline=[DateTime]::UtcNow.AddSeconds(120);$ack=$null
+  while([DateTime]::UtcNow -lt $deadline){
+   InvokeEnabled (WaitControl 'Check Original Backup' ([Windows.Automation.ControlType]::Button))
+   $until=[DateTime]::UtcNow.AddSeconds(2)
+   while([DateTime]::UtcNow -lt $until){
+    if($null -ne (FindNamedControl (OwnedWindows) 'FAILED')){throw 'Installed TEST.21r2 backup verification failed'}
+    $ack=FindControl (OwnedWindows) 'OK, I have seen the result' ([Windows.Automation.ControlType]::Button)
+    if($null -ne $ack -and $ack.Current.IsEnabled){break};Start-Sleep -Milliseconds 200
+   }
+   if($null -ne $ack -and $ack.Current.IsEnabled){break}
+  }
+  [void](WaitNamedControl 'SNAPSHOT_VERIFIED' 5)
+  if($null -eq $ack){throw 'Original backup terminal proof unavailable'}
+  InvokeEnabled $ack;SaveReportScreenshot 'backup-verified.png' ''
+  $record.checks+='actual installed Admin creates a verified encrypted backup and acknowledges its original key; restore remains uninvoked and disabled without confirmation';SaveProgress
  }
  $second=[Diagnostics.Process]::Start($info);$secondExit=$second.WaitForExit(60000)
  if(-not $secondExit -or $process.HasExited){throw 'Single-instance handoff not confirmed'}
@@ -505,6 +585,7 @@ try{
  $password=WaitControl 'Password' ([Windows.Automation.ControlType]::Edit)
  $record.lastLoginReadyMs=$launchClock.Elapsed.TotalMilliseconds
  $until=[DateTime]::UtcNow.AddSeconds(60);while(-not $password.Current.IsEnabled -and [DateTime]::UtcNow -lt $until){Start-Sleep -Milliseconds 200}
+ if($InstalledAcceptance){Start-Sleep -Seconds 5;if($process.HasExited -or $password.Current.IsOffscreen){throw 'Reopened login did not remain open'};SaveReportScreenshot 'login-reopened.png' '';$record.checks+='normal installed EXE close/reopen reaches stable visible login with original TEST credentials';SaveProgress}
  SetEnabledValue $password $staff
  $open=WaitControl 'Open Shop' ([Windows.Automation.ControlType]::Button)
  $loginClock=[Diagnostics.Stopwatch]::StartNew();InvokeEnabled $open
@@ -518,9 +599,10 @@ try{
   [void](WaitControl 'Done' ([Windows.Automation.ControlType]::Button))
   $record.checks+='actual EXE restart and fresh Staff login reopen saved invoice; original product/sale persist';SaveProgress
  }
+ if($OwnerWorkflowsCheck){$record.expectedRevenuePkr=$expectedRevenue;$record.expectedGrossProfitPkr=$expectedProfit;$record.expectedProducts=$productNames.Count}
  $record.status='PASS'
 }catch{
- $record.status='FAIL';$record.error=$_.Exception.Message
+ $record.status='FAIL';$record.error=$_.Exception.Message;$record.exceptionTypes=@();$failure=$_.Exception;while($null -ne $failure){$record.exceptionTypes+=@{type=$failure.GetType().FullName;hresult=$failure.HResult};$failure=$failure.InnerException}
  try{Add-Type -AssemblyName System.Drawing;$captureIndex=0;foreach($owned in (OwnedWindows)){if($owned.Current.Name -notmatch 'Shop POS|Shop POS TEST|Sales History|Make a Sale'){continue};$rectangle=$owned.Current.BoundingRectangle;if($rectangle.Width -lt 1 -or $rectangle.Height -lt 1){continue};$picture=New-Object Drawing.Bitmap ([int]$rectangle.Width),([int]$rectangle.Height);$graphics=[Drawing.Graphics]::FromImage($picture);try{$graphics.CopyFromScreen([int]$rectangle.X,[int]$rectangle.Y,0,0,$picture.Size);$picture.Save((Join-Path $Evidence ('owned-failure-'+($captureIndex++)+'.png')),[Drawing.Imaging.ImageFormat]::Png)}finally{$graphics.Dispose();$picture.Dispose()}}}catch{}
  $controls=@();foreach($window in (OwnedWindows)){$nodes=$window.FindAll([Windows.Automation.TreeScope]::Descendants,[Windows.Automation.Condition]::TrueCondition);foreach($node in $nodes){$current=$node.Current;if(-not $current.IsPassword){$controls+=@{name=$current.Name;type=[string]$current.ControlType;controlTypeId=$current.ControlType.Id;enabled=$current.IsEnabled}}}}
  $controls | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $Evidence 'owned-controls.json')
@@ -530,7 +612,7 @@ try{
  CloseOwnedWindows
  $closed=$process.WaitForExit(60000);$record.drainedExitObserved=$closed
  if(-not $closed){$record.status='FAIL';$record.shutdown='NOT_VERIFIED; owned process retained'}
- if($closed){if($stderrTask.Wait(5000)){$stderrTask.Result | Set-Content -LiteralPath (Join-Path $Evidence 'desktop-stderr.log')}else{$record.status='FAIL';$record.stderrDrain='NOT_VERIFIED; redirected stream retained'}}
+ if($closed){$record.exitCode=$process.ExitCode;if($stderrTask.Wait(5000)){$stderrTask.Result | Set-Content -LiteralPath (Join-Path $Evidence 'desktop-stderr.log')}else{$record.status='FAIL';$record.stderrDrain='NOT_VERIFIED; redirected stream retained'}}
  $record | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $Evidence 'native-result.json')
 }
 $record | ConvertTo-Json -Depth 5

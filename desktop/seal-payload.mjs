@@ -32,7 +32,7 @@ function packages(directory){
  }
 }
 packages(path.join(payload,"node_modules"));
-const manifest={format:"SHOP_POS_TEST_PAYLOAD_V1",schema:41,node:"24.22.3",electron:"45.3.3",productionActivation:false,fuses,files};
+const manifest={format:"SHOP_POS_TEST_PAYLOAD_V1",schema:41,node:"24.22.3",electron:"45.4.1",productionActivation:false,fuses,files};
 writeFileSync(path.join(payload,"manifest.json"),JSON.stringify(manifest));
 writeFileSync(path.join(out,"runtime-package-inventory.json"),JSON.stringify({packages:licenses,productionActivation:false},null,2));
 writeFileSync(path.join(out,"artifact-verification.json"),JSON.stringify({executableSha256:hash(executable),manifestSha256:hash(path.join(payload,"manifest.json")),files:files.length,bytes:files.reduce((n,f)=>n+f.bytes,0),fuses,unsignedTestBuild:true,productionActivation:false},null,2));

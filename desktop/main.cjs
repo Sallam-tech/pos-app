@@ -7,7 +7,7 @@ const {resolveTestDataRoot}=require("./data-root-policy.cjs");
 const {passwordInput,cookiesForRole}=require("./shared-login.cjs");
 const fs=require("node:fs"),path=require("node:path"),{pathToFileURL}=require("node:url");
 const payload=path.join(process.resourcesPath,"payload"),root=process.resourcesPath;
-const roleWindows=new Map(),roleOrigins=new Map();let child,setupWindow,pendingSetup,setupValues,ready,quitting=false,shutdownStarted=false,initializing=true;
+const roleWindows=new Map(),roleOrigins=new Map();let startupWindow,child,setupWindow,pendingSetup,setupValues,ready,quitting=false,shutdownStarted=false,initializing=true;
 app.enableSandbox();
 let ownerWindow,ownerRequest,recoveryBusy=false,recoveryCompleted=false;
 let sharedLoginBusy=false;const sharedLoginRequests=new Map();
@@ -24,11 +24,11 @@ function protectData(directory){
 }
 function prepareNormalDataRootParent(dataRoot){
  const base=path.join(process.env.LOCALAPPDATA,"Programs","SalamTech");
- const parent=path.join(base,"ShopPOSTestData","0.2.0-test.19");
+ const parent=path.join(base,"0.2.0-test.21r2");
  if(path.resolve(path.dirname(dataRoot))!==path.resolve(parent))throw Error();
  const baseStat=fs.lstatSync(base);if(!baseStat.isDirectory()||baseStat.isSymbolicLink())throw Error();
  let current=base;
- for(const part of ["ShopPOSTestData","0.2.0-test.19"]){
+ for(const part of ["0.2.0-test.21r2"]){
   current=path.join(current,part);
   try{const stat=fs.lstatSync(current);if(!stat.isDirectory()||stat.isSymbolicLink())throw Error();}
   catch(error){if(error?.code!=="ENOENT")throw error;fs.mkdirSync(current);const stat=fs.lstatSync(current);if(!stat.isDirectory()||stat.isSymbolicLink())throw Error();}
@@ -45,7 +45,15 @@ function harden(window,allowed){
  window.webContents.session.on("will-download",event=>event.preventDefault());
 }
 function preferences(partition,preload){return {nodeIntegration:false,nodeIntegrationInWorker:false,nodeIntegrationInSubFrames:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,webviewTag:false,devTools:false,partition,...(preload?{preload}:{})};}
+function closeStartupWindow(){if(startupWindow&&!startupWindow.isDestroyed())startupWindow.destroy();startupWindow=undefined;}
+function showStartupWindow(){
+ startupWindow=new BrowserWindow({width:500,height:260,resizable:false,title:"Opening Shop POS",webPreferences:preferences("startup-"+Date.now())});
+ const html=`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Opening Shop POS</title></head><body style="font:18px Segoe UI,sans-serif;background:#f0f7f4;color:#102b3e;padding:32px"><h2>Opening Shop POS</h2><p>Checking your protected database and backups.</p><p style="font-size:14px">Please wait. Your saved data is being kept safe.</p></body></html>`;
+ const target="data:text/html;charset=utf-8,"+encodeURIComponent(html);harden(startupWindow,url=>url===target);
+ startupWindow.on("close",event=>{if(!quitting&&!shutdownStarted){event.preventDefault();void close();}});void startupWindow.loadURL(target);
+}
 function setup(message){
+ closeStartupWindow();
  if(setupWindow||pendingSetup)throw Error();pendingSetup=message;
  setupWindow=new BrowserWindow({width:650,height:720,title:"Disposable TEST setup",webPreferences:preferences("setup-"+message.id,path.join(__dirname,"setup-preload.cjs"))});
  const expected=pathToFileURL(path.join(__dirname,"setup.html")).href;harden(setupWindow,url=>url===expected);
@@ -111,6 +119,7 @@ function roleWindow(role,initialPath="/login"){
  });
  ses.webRequest.onBeforeRequest((details,callback)=>{try{callback({cancel:new URL(details.url).origin!==origin});}catch{callback({cancel:true});}});
  const window=new BrowserWindow({width:1280,height:900,title:"Shop POS TEST - "+role,webPreferences:preferences(partition,path.join(__dirname,"operation-key-preload.cjs"))});
+ window.webContents.once("did-finish-load",closeStartupWindow);
  const contentsId=window.webContents.id;roleWindows.set(role,window);roleOrigins.set(contentsId,origin);
  harden(window,url=>{try{return new URL(url).origin===origin;}catch{return false;}});
  window.webContents.on("preload-error",()=>diagnostic("OPERATION_KEYS_PRELOAD_ERROR"));
@@ -190,7 +199,7 @@ async function close(){
  quitting=true;app.quit();
 }
 app.on("before-quit",event=>{if(!quitting){event.preventDefault();void close();}});
-app.on("window-all-closed",()=>{if(!initializing&&!setupWindow&&!pendingSetup&&!ownerWindow)void close();});
+app.on("window-all-closed",()=>{if(!initializing&&!startupWindow&&!setupWindow&&!pendingSetup&&!ownerWindow)void close();});
 app.on("second-instance",()=>{for(const window of roleWindows.values()){window.show();window.focus();break;}});
 app.on("web-contents-created",(_event,contents)=>{contents.on("will-attach-webview",event=>event.preventDefault());});
 function installerGuard(){return new Promise((resolve,reject)=>{
@@ -207,8 +216,12 @@ async function boot(){
  if(!harness)prepareNormalDataRootParent(dataRoot);
  protectData(dataRoot);if(harness)diagnosticPath=path.join(dataRoot,"desktop-harness-lifecycle.log");app.setPath("userData",path.join(dataRoot,"browser"));
  if(!app.requestSingleInstanceLock()){quitting=true;app.quit();return;}
- await installerGuard(); // Must hold the installer mutex BEFORE any payload verification (no replace-after-verify window).
- await Promise.all([verifyPayload(root),app.whenReady()]); // Independent; both must succeed before the backend starts.
+ // Admit and verify in parallel with Electron initialization, never with installer replacement.
+ // Promise.all attaches both rejection handlers immediately; neither failure can start a backend.
+ await Promise.all([
+  app.whenReady().then(()=>{if(!shutdownStarted&&!quitting)showStartupWindow();}),
+  installerGuard().then(()=>{if(!shutdownStarted&&!quitting)return verifyPayload(root);})
+ ]);if(shutdownStarted||quitting)return;
  Menu.setApplicationMenu(Menu.buildFromTemplate([{label:"Shop POS TEST",submenu:[{label:"Salesperson",click:()=>roleWindow("SALESPERSON")},{label:"Admin",click:()=>roleWindow("ADMIN")},{label:"Recover disposable TEST archive...",click:()=>void chooseRecovery()},{type:"separator"},{label:"Exit",click:()=>void close()}]}]));
  const environment={...process.env,NODE_ENV:"test",NEXT_TELEMETRY_DISABLED:"1"};for(const key of Object.keys(environment))if(/^(?:NODE_OPTIONS|NODE_PATH|NODE_EXTRA_CA_CERTS|NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|ELECTRON_EXTRA_LAUNCH_ARGS)$/i.test(key))delete environment[key];
  environment.PATH=path.join(root,"runtime")+path.delimiter+(environment.PATH??"");
@@ -230,7 +243,7 @@ async function boot(){
   else if(message.type==="fatal"){diagnostic("NODE_FATAL");unavailable();}
  });
  child.once("error",unavailable);
- child.once("exit",()=>{for(const pending of sharedLoginRequests.values())pending.finish({ok:false});for(const pending of markerRequests.values())pending.finish({ok:false});diagnostic("NODE_EXIT");child=undefined;ready=undefined;if(!shutdownStarted)void dialog.showMessageBox({type:"error",title:"Shop POS TEST",message:safeError});for(const window of roleWindows.values())if(!window.isDestroyed())window.destroy();if(shutdownStarted){quitting=true;app.quit();}});
+ child.once("exit",()=>{for(const pending of sharedLoginRequests.values())pending.finish({ok:false});for(const pending of markerRequests.values())pending.finish({ok:false});diagnostic("NODE_EXIT");child=undefined;ready=undefined;if(!shutdownStarted)unavailable();for(const window of roleWindows.values())if(!window.isDestroyed())window.destroy();if(shutdownStarted){quitting=true;app.quit();}});
  child.send({type:"start",dataRoot,applicationDirectory:path.join(payload,"app")});
 }
 void boot().catch(async()=>{
