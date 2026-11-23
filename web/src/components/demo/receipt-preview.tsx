@@ -50,6 +50,7 @@ export function ReceiptPreview({ children, triggerLabel, triggerDescription, bac
         #shop-pos-print-receipt { display: block !important; color: #111; background: white; font: 12pt/1.5 system-ui,sans-serif; padding: 8mm; width: 100%; }
         #shop-pos-print-receipt[data-layout="compact"] { width: 80mm; max-width: 100%; padding: 4mm; font-size: 10pt; }
         #shop-pos-print-receipt table { width: 100%; }
+        #shop-pos-print-receipt .receipt-logo { display: block; width: 22mm; height: 22mm; margin: 0 auto 2mm; }
         #shop-pos-print-receipt * { color: #111 !important; background: white !important; overflow-wrap: anywhere; }
       }`}</style>
     </div>, document.body)}

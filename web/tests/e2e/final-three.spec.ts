@@ -31,7 +31,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.evaluate(() => { window.print = () => document.documentElement.setAttribute("data-printed", "true"); }); await receipt.getByRole("button", { name: "Print", exact: true }).click(); await expect(page.locator("html")).toHaveAttribute("data-printed", "true");
     for (const layout of ["ordinary", "compact"]) {
       await receipt.getByLabel("Print layout", { exact: true }).selectOption(layout); await page.emulateMedia({ media: "print" }); const printed = page.locator("#shop-pos-print-receipt");
-      await expect(printed).toBeVisible(); await expect(printed).toContainText("Rs. 1,885.00"); await expect(printed).toContainText("Rs. 115.00"); await expect(printed.locator("[data-developer-credit] p")).toHaveText(["Developed by SalamTech", "AbdulSalam · +92-310-3698984"]);
+      await expect(printed).toBeVisible(); await expect(printed).toContainText("Rs. 1,885.00"); await expect(printed).toContainText("Rs. 115.00"); await expect(printed.locator("[data-developer-credit] p")).toHaveText(["Software Developed by: SalamTech", "+92-310-3698984"]);
       expect(await printed.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true); await expect(printed.getByRole("button")).toHaveCount(0); await page.emulateMedia({ media: "screen" });
     }
     await receipt.getByRole("button", { name: "Edit Sale", exact: true }).click(); await expect(discount).toHaveValue("10"); await expect(milk).toHaveValue("5"); await expect(price).toHaveValue("1250"); await expect(quantity).toHaveValue("1");

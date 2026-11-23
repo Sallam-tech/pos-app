@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { expectReadableContrast } from "./support/contrast";
 test.use({ actionTimeout: 10_000 });
-const faults = new WeakMap<Page, string[]>(), credit = "Developed by SalamTech";
+const faults = new WeakMap<Page, string[]>(), credit = "Software Developed by: SalamTech";
 test.beforeEach(async ({ page, baseURL }) => {
   const found: string[] = []; faults.set(page, found); page.on("pageerror", (error) => found.push(error.message));
   await page.route("**/*", (route) => {

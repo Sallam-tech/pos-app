@@ -9,7 +9,7 @@ import { ConnectivityIndicator } from "@/components/shell/connectivity-indicator
 import { ThemeSelector } from "@/components/theme/theme-selector";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Icon } from "@/components/ui/icon";
+import { ShopLogo } from "@/components/brand/shop-logo";
 
 export const metadata: Metadata = {
   title: "Login | Shop POS",
@@ -29,7 +29,7 @@ export default async function LoginPage() {
       <div className="mx-auto my-auto w-full max-w-[448px]">
         <Card className="px-6 py-6 sm:px-8 sm:py-6">
           <div className="text-center">
-            <span className="mx-auto mb-3 grid size-11 place-items-center rounded-lg bg-primary text-primary-foreground"><Icon name="store" className="size-6" /></span>
+            <ShopLogo className="mx-auto mb-3 size-28 rounded-full bg-white object-contain" />
             <ShopName as="h1" className="page-title break-words [overflow-wrap:anywhere]" />
             <p className="mt-2 text-sm text-muted-foreground">{role ? "Enter your password to open the shop." : "Open Shop POS from the desktop app to sign in."}</p>
             {role && <div className="mt-3"><Badge>Test mode</Badge></div>}

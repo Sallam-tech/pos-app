@@ -1,11 +1,13 @@
 import { formatPreviewPKR } from "@/lib/pos-preview";
 import "./sale-preview.css";
+import { ShopLogo } from "@/components/brand/shop-logo";
 
 /** Shared paper presentation only; callers provide current draft or recorded snapshots. */
 export function InvoicePaperHeader({ shopName, address = "", phone = "", notice = "SAMPLE / DEMO — NOT SAVED" }: {
   shopName: string; address?: string; phone?: string; notice?: string;
 }) {
   return <header className="text-center">
+    <ShopLogo className="receipt-logo mx-auto mb-2 block size-20 object-contain" />
     <p className="break-words text-2xl font-bold tracking-tight [overflow-wrap:anywhere]">{shopName.trim()}</p>
     {address.trim() && <p className="mt-1 whitespace-pre-wrap break-words text-xs [overflow-wrap:anywhere]">{address.trim()}</p>}
     {phone && <p className="mt-1 break-words text-xs">Phone: {phone}</p>}

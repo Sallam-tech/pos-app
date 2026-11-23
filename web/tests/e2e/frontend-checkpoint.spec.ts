@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { expectReadableContrast } from "./support/contrast";
-const lines = ["Developed by SalamTech", "AbdulSalam · +92-310-3698984"];
+const lines = ["Software Developed by: SalamTech", "+92-310-3698984"];
 const faults = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => { const found: string[] = []; faults.set(page, found); page.on("pageerror", (error) => found.push(error.message)); });
 test.afterEach(({ page }) => expect(faults.get(page)).toEqual([]));

@@ -107,12 +107,12 @@ it("opens a single invoice directly with actual optional customer text, bottom a
   expect(within(dialog).getByTestId("receipt-total")).toHaveTextContent("Rs. 3,900.00");
   expect(within(dialog).getByText("A & B <shop>")).toBeVisible(); expect(within(dialog).getByText("+92 300 1234567")).toBeVisible();
   expect(within(dialog).getByText(/PREVIEW-001/)).toBeVisible(); expect(within(dialog).getByRole("heading", { name: "SALES INVOICE" })).toBeVisible();
-  expect(within(dialog).getByText("Developed by SalamTech")).toBeVisible();
+  expect(within(dialog).getByText("Software Developed by: SalamTech")).toBeVisible();
   const paper = dialog.querySelector(".receipt-sheet")!, actions = dialog.querySelector("[data-receipt-actions]")!;
   expect(paper.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(within(dialog).getAllByRole("button", { name: "Print" })).toHaveLength(1);
   fireEvent.click(within(dialog).getByRole("button", { name: "Print" })); expect(print).toHaveBeenCalledOnce();
-  expect(document.getElementById("shop-pos-print-receipt")).toHaveTextContent("Developed by SalamTech");
+  expect(document.getElementById("shop-pos-print-receipt")).toHaveTextContent("Software Developed by: SalamTech");
   fireEvent.click(within(dialog).getByRole("button", { name: "Done" })); expect(screen.queryByRole("dialog")).toBeNull();
   expect(search()).toHaveFocus(); expect(screen.queryAllByRole("listitem")).toHaveLength(0); expect(document.getElementById("shop-pos-print-receipt")).toBeNull();
 });
