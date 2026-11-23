@@ -22,7 +22,7 @@ it.skip.each([["Admin", AdminShell], ["Salesperson", SalespersonShell]] as const
   expect(within(header).getByText("Shop server connected")).toBeVisible();
   const sidebar = screen.getByRole("complementary", { name: role + " sidebar" });
   const brand = sidebar.querySelector("[data-developer-credit]")!;
-  expect(Array.from(brand.children).map((line) => line.textContent)).toEqual(["Developed by SalamTech", "AbdulSalam · +92-310-3698984"]);
+  expect(Array.from(brand.children).map((line) => line.textContent)).toEqual(["Software Developed by: SalamTech", "+92-310-3698984"]);
   expect(brand).not.toHaveClass("border", "border-t"); expect(brand.querySelector("input,a,button,svg")).toBeNull();
   expect(brand.parentElement?.lastElementChild).toBe(brand);
   expect(within(sidebar).getByText("Demo Mode", { exact: true })).toBeVisible();
@@ -38,6 +38,6 @@ it("the Login action protects unsaved input and keeping it restores focus", () =
 });
 it("receipt branding is two fixed presentation lines without decoration or an editable value", () => {
   const { container } = render(<DeveloperCredit />); const credit = container.firstElementChild!;
-  expect(Array.from(credit.children).map((line) => line.textContent)).toEqual(["Developed by SalamTech", "AbdulSalam · +92-310-3698984"]);
+  expect(Array.from(credit.children).map((line) => line.textContent)).toEqual(["Software Developed by: SalamTech", "+92-310-3698984"]);
   expect(credit).not.toHaveClass("border-t"); expect(credit.querySelector("input,a,button,svg")).toBeNull();
 });

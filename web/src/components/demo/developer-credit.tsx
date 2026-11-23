@@ -1,7 +1,7 @@
 /** Fixed presentation text: never read from editable shop/receipt preferences. */
 const developerBrand = {
-  label: "Developed by SalamTech",
-  contact: "AbdulSalam · +92-310-3698984",
+  label: "Software Developed by: SalamTech",
+  contact: "+92-310-3698984",
 } as const;
 
 export function DeveloperCredit({ variant = "receipt" }: { variant?: "receipt" | "sidebar" }) {

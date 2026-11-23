@@ -5,7 +5,7 @@ import { HistoricalReceipt } from "@/components/pos/historical-receipt";
 import { SettingsPreview } from "@/components/settings/settings-preview";
 import { validateReceiptDraft } from "@/lib/receipt-draft-preview";
 import { defaultShopSettings, shopSettingsStorageKey } from "@/lib/shop-display-settings";
-const credit = "Developed by SalamTech";
+const credit = "Software Developed by: SalamTech";
 beforeEach(() => {
   localStorage.clear();
   Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value(this: HTMLDialogElement) { this.open = true; } });

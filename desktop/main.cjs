@@ -44,10 +44,11 @@ function harden(window,allowed){
  window.webContents.session.setPermissionCheckHandler(()=>false);
  window.webContents.session.on("will-download",event=>event.preventDefault());
 }
+const appIcon=path.join(__dirname,"shop-logo.ico");
 function preferences(partition,preload){return {nodeIntegration:false,nodeIntegrationInWorker:false,nodeIntegrationInSubFrames:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,webviewTag:false,devTools:false,partition,...(preload?{preload}:{})};}
 function closeStartupWindow(){if(startupWindow&&!startupWindow.isDestroyed())startupWindow.destroy();startupWindow=undefined;}
 function showStartupWindow(){
- startupWindow=new BrowserWindow({width:500,height:260,resizable:false,title:"Opening Shop POS",webPreferences:preferences("startup-"+Date.now())});
+ startupWindow=new BrowserWindow({width:500,height:260,resizable:false,title:"Opening Shop POS",icon:appIcon,webPreferences:preferences("startup-"+Date.now())});
  const html=`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Opening Shop POS</title></head><body style="font:18px Segoe UI,sans-serif;background:#f0f7f4;color:#102b3e;padding:32px"><h2>Opening Shop POS</h2><p>Checking your protected database and backups.</p><p style="font-size:14px">Please wait. Your saved data is being kept safe.</p></body></html>`;
  const target="data:text/html;charset=utf-8,"+encodeURIComponent(html);harden(startupWindow,url=>url===target);
  startupWindow.on("close",event=>{if(!quitting&&!shutdownStarted){event.preventDefault();void close();}});void startupWindow.loadURL(target);
@@ -55,7 +56,7 @@ function showStartupWindow(){
 function setup(message){
  closeStartupWindow();
  if(setupWindow||pendingSetup)throw Error();pendingSetup=message;
- setupWindow=new BrowserWindow({width:650,height:720,title:"Disposable TEST setup",webPreferences:preferences("setup-"+message.id,path.join(__dirname,"setup-preload.cjs"))});
+ setupWindow=new BrowserWindow({width:650,height:720,title:"Disposable TEST setup",icon:appIcon,webPreferences:preferences("setup-"+message.id,path.join(__dirname,"setup-preload.cjs"))});
  const expected=pathToFileURL(path.join(__dirname,"setup.html")).href;harden(setupWindow,url=>url===expected);
  setupWindow.on("closed",()=>{setupWindow=undefined;if(pendingSetup){child?.send({type:"reply",id:pendingSetup.id,value:"CANCELLED"});pendingSetup=undefined;setupValues=undefined;void close();}});
  void setupWindow.loadFile(path.join(__dirname,"setup.html"));
@@ -80,7 +81,7 @@ ipcMain.handle("shop-pos:trusted-test-setup",async(event,value)=>{
 function ownerSender(event){const expected=pathToFileURL(path.join(__dirname,"recovery.html")).href;return !!ownerWindow&&!!ownerRequest&&event.sender===ownerWindow.webContents&&event.senderFrame===event.sender.mainFrame&&event.senderFrame.url===expected;}
 function ownerForm(request){
  if(ownerWindow||ownerRequest||setupWindow||pendingSetup||shutdownStarted)throw Error();ownerRequest=request;
- ownerWindow=new BrowserWindow({width:740,height:850,title:"Shop POS TEST owner recovery",webPreferences:preferences("owner-"+Date.now(),path.join(__dirname,"recovery-preload.cjs"))});const expected=pathToFileURL(path.join(__dirname,"recovery.html")).href;harden(ownerWindow,url=>url===expected);
+ ownerWindow=new BrowserWindow({width:740,height:850,title:"Shop POS TEST owner recovery",icon:appIcon,webPreferences:preferences("owner-"+Date.now(),path.join(__dirname,"recovery-preload.cjs"))});const expected=pathToFileURL(path.join(__dirname,"recovery.html")).href;harden(ownerWindow,url=>url===expected);
  ownerWindow.on("closed",()=>{ownerWindow=undefined;const r=ownerRequest;ownerRequest=undefined;if(r?.id)child?.send({type:"reply",id:r.id,value:"CANCELLED"});if(["RECOVERY","RECOVERY_REVIEW","QUARANTINE"].includes(r?.mode))recoveryBusy=false;});void ownerWindow.loadFile(path.join(__dirname,"recovery.html"));
 }
 ipcMain.handle("shop-pos:native-owner-context",async event=>ownerSender(event)?{mode:ownerRequest.mode,description:ownerRequest.description??(ownerRequest.mode==="RECOVERY"?"Archive: "+path.basename(ownerRequest.archive)+"; SHA256: "+ownerRequest.archiveSha256:"Native CURRENT generation "+ownerRequest.generation+". A fresh backup namespace will retain the original custody and all prior archives.")}:undefined);
@@ -118,7 +119,7 @@ function roleWindow(role,initialPath="/login"){
   }catch{callback(-2);}
  });
  ses.webRequest.onBeforeRequest((details,callback)=>{try{callback({cancel:new URL(details.url).origin!==origin});}catch{callback({cancel:true});}});
- const window=new BrowserWindow({width:1280,height:900,title:"Shop POS TEST - "+role,webPreferences:preferences(partition,path.join(__dirname,"operation-key-preload.cjs"))});
+ const window=new BrowserWindow({width:1280,height:900,title:"Shop POS TEST - "+role,icon:appIcon,webPreferences:preferences(partition,path.join(__dirname,"operation-key-preload.cjs"))});
  window.webContents.once("did-finish-load",closeStartupWindow);
  const contentsId=window.webContents.id;roleWindows.set(role,window);roleOrigins.set(contentsId,origin);
  harden(window,url=>{try{return new URL(url).origin===origin;}catch{return false;}});

@@ -29,14 +29,15 @@ DisableProgramGroupPage=yes
 SetupMutex=Local\ShopPOS-Disposable-Installer-v1
 AppMutex=Local\ShopPOS-Disposable-Desktop-v1
 UninstallDisplayName=Shop POS TEST {#AppRelease} (isolated TEST data retained)
-UninstallDisplayIcon={app}\Shop POS TEST.exe
+UninstallDisplayIcon={app}\resources\app\shop-logo.ico
 InfoBeforeFile={#Payload}\TEST-README.txt
 WizardStyle=modern
+SetupIconFile={#Payload}\resources\app\shop-logo.ico
 [Files]
 Source: "{#Payload}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Icons]
-Name: "{autodesktop}\Shop POS TEST 0.2.0-test.21r2"; Filename: "{app}\Shop POS TEST.exe"; WorkingDir: "{app}"
-Name: "{userprograms}\SalamTech\Shop POS TEST 0.2.0-test.21r2\Shop POS TEST 0.2.0-test.21r2"; Filename: "{app}\Shop POS TEST.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\Shop POS TEST 0.2.0-test.21r2"; Filename: "{app}\Shop POS TEST.exe"; WorkingDir: "{app}"; IconFilename: "{app}\resources\app\shop-logo.ico"
+Name: "{userprograms}\SalamTech\Shop POS TEST 0.2.0-test.21r2\Shop POS TEST 0.2.0-test.21r2"; Filename: "{app}\Shop POS TEST.exe"; WorkingDir: "{app}"; IconFilename: "{app}\resources\app\shop-logo.ico"
 [Code]
 function InitializeUninstall(): Boolean;
 begin

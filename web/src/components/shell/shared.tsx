@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { SafeNavigationLink } from "@/components/shell/safe-navigation-link";
 import { ShopName } from "@/components/settings/shop-identity";
+import { ShopLogo } from "@/components/brand/shop-logo";
 import { DemoExitLink } from "@/components/demo/demo-navigation";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,7 @@ import { Icon } from "@/components/ui/icon";
 
 export function Brand() {
   return <div className="flex min-w-0 items-center gap-3">
-    <span className="grid size-9 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground"><Icon name="store" className="size-5" /></span>
+    <ShopLogo className="size-10 shrink-0 rounded-full bg-white object-contain" />
     <ShopName className="min-w-0 break-words text-lg font-bold tracking-[-0.025em] [overflow-wrap:anywhere]" />
   </div>;
 }

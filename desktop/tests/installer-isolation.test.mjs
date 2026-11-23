@@ -20,6 +20,20 @@ test("TEST.21r2 has a unique AppId, version-specific install identity, and direc
  assert.doesNotMatch(installer,/^\[Run\]|^\[(InstallDelete|UninstallDelete)\]/mi);
 });
 
+test("AL.MADINA logo is the installer, shortcut, uninstall and window icon without modifying the pinned EXE",()=>{
+ const icon="{app}\\resources\\app\\shop-logo.ico";
+ for(const source of [installer,readFileSync(path.resolve("desktop/installer-reviewed-update.iss"),"utf8")]){
+  assert.ok(source.includes("SetupIconFile={#Payload}\\resources\\app\\shop-logo.ico"));
+  assert.ok(source.includes("UninstallDisplayIcon="+icon));
+  assert.equal(source.split('IconFilename: "'+icon+'"').length-1,2);
+ }
+ for(const script of [build,readFileSync(path.resolve("desktop/build-reviewed-update.ps1"),"utf8")])assert.equal(script.split('IconFilename: "'+icon+'"').length-1,2);
+ assert.match(payloadBuilder,/"shop-logo\.ico"\]/);
+ assert.equal(main.split("icon:appIcon").length-1,4);
+ const ico=readFileSync(path.resolve("desktop/shop-logo.ico"));
+ assert.deepEqual([...ico.subarray(0,4)],[0,0,1,0]);assert.equal(ico.readUInt16LE(4),7);
+});
+
 test("TEST.21r2 build refuses reused AppIds, installation directories, and Desktop shortcuts",()=>{
  assert.match(build,/This normal-launch installer identity is reserved for TEST\.21r2/);
  assert.match(build,/The isolated TEST uninstall identity already exists/);

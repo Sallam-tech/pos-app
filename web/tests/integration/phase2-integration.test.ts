@@ -91,7 +91,7 @@ test("actual Chromium saved-invoice search and ordinary/80mm print output create
    await page.emulateMedia({media:"print"});
    expect(await portal.isVisible()).toBe(true);
    expect(await portal.textContent()).toContain("315");
-   expect(await portal.textContent()).toContain("Developed by SalamTech");
+   expect(await portal.textContent()).toContain("Software Developed by: SalamTech");
    const pdf=await page.pdf({printBackground:true,preferCSSPageSize:true,...(layout==="compact"?{width:"80mm",height:"300mm"}:{format:"A4" as const})});
    expect(pdf.subarray(0,5).toString()).toBe("%PDF-");
    writeFileSync(path.join(evidence,"saved-invoice-"+layout+".pdf"),pdf);

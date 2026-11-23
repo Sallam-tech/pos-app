@@ -50,7 +50,7 @@ describe("original demo Sales History", () => {
     fireEvent.click(screen.getByRole("button", { name: "View Receipt for demo-sale-2" }));
     const dialog = screen.getByRole("dialog", { name: "Sample Receipt" });
     expect(within(dialog).getByText("demo-sale-2")).toBeVisible();
-    expect(within(dialog).getByText("Developed by SalamTech")).toBeVisible();
+    expect(within(dialog).getByText("Software Developed by: SalamTech")).toBeVisible();
     expect(within(dialog).queryByRole("button", { name: "Edit Sale" })).not.toBeInTheDocument();
     expect(within(dialog).getByText("1,249.75")).toBeVisible();
     expect(within(dialog).getByTestId("historical-receipt-total")).toHaveTextContent("Rs. 4,999.00");
