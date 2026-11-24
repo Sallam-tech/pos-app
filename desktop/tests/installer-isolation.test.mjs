@@ -46,7 +46,7 @@ test("TEST.21r2 build refuses reused AppIds, installation directories, and Deskt
 
 test("normal TEST.21r2 startup resolves its isolated root before any data-root access",()=>{
  assert.match(payloadBuilder,/"data-root-policy\.cjs"/);
- const resolve=main.indexOf("resolveTestDataRoot(process.argv.slice(1),process.env");
+ const resolve=main.indexOf("resolveInstalledDataRoot(process.argv.slice(1),process.env");
  const protect=main.indexOf("protectData(dataRoot)",resolve);
  assert(resolve>=0&&protect>resolve);
  assert.match(main,/prepareNormalDataRootParent\(dataRoot\)/);

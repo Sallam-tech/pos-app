@@ -134,7 +134,7 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
         native.pragma("quick_check", { simple: true }) !== "ok") deny();
     // Bounded64MiB SQLite page cache for the approved TEST38/39 report books. This is native
     // coherent page storage, never a cache of authorization/validation results.
-    if(options.mode==="test"&&[38,39,40,41].includes(native.pragma("user_version",{simple:true}) as number)){native.pragma("cache_size=-131072");if(native.pragma("cache_size",{simple:true})!==-131072)deny();
+    if((options.mode==="test"||!!config.protectedAdmission)&&[38,39,40,41].includes(native.pragma("user_version",{simple:true}) as number)){native.pragma("cache_size=-131072");if(native.pragma("cache_size",{simple:true})!==-131072)deny();
       // Native read-only page mapping avoids redundant OS/page-cache copies.
       // SQLite still reads the current snapshot/WAL and writes through FULL WAL;
       // every authorization, row/hash guard and native file fence remains fresh.
@@ -143,7 +143,7 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
       if(typeof mapped!=="number"||!Number.isSafeInteger(mapped)||mapped<0||mapped>536870912)deny();}
     // Pure, direct-only Unicode text folding for admitted TEST report/history
     // searches. No SQL, I/O, authorization or persisted schema capability.
-    if(options.mode==="test"&&[36,37,38,39,40,41].includes(native.pragma("user_version",{simple:true}) as number))native.function("pos_lower",{deterministic:true,directOnly:true},value=>typeof value==="string"?value.toLowerCase():null);
+    if((options.mode==="test"||!!config.protectedAdmission)&&[36,37,38,39,40,41].includes(native.pragma("user_version",{simple:true}) as number))native.function("pos_lower",{deterministic:true,directOnly:true},value=>typeof value==="string"?value.toLowerCase():null);
     // Pinned adapter converts boolean columns only when they are JS Numbers.
     // Its tables contain only 0/1 numeric fields. All authorization/business SQL
     // below opts into safeIntegers per statement; no financial Number reads.
@@ -225,7 +225,7 @@ export function openAsyncOwner(config: Pick<AuthorizationConfiguration, "databas
         async run(sql:string,values:readonly SqlValue[]=[]){guard();if(readOnly)return deny();return run(sql,values);},
       });
       inputScopes.set(transaction,{
-        capture(kind){guard();if(options.mode!=="test"||reservedGeneration!==generation)return;const version=get("SELECT user_version FROM pragma_user_version")?.user_version;if(version!==BigInt(40)&&version!==BigInt(41))return;journal??=createNativeInputJournal(observe,reviewInsert);return journal.capture(kind);},
+        capture(kind){guard();if((options.mode!=="test"&&!config.protectedAdmission)||reservedGeneration!==generation)return;const version=get("SELECT user_version FROM pragma_user_version")?.user_version;if(version!==BigInt(40)&&version!==BigInt(41))return;journal??=createNativeInputJournal(observe,reviewInsert);return journal.capture(kind);},
         unchanged(point,kind,noWrites){guard();return !!journal&&journal.unchanged(point,kind,noWrites);},
         resume(kind,owner){guard();const saved=continuations.get(owner);return saved?.kind===kind&&!!journal&&journal.unchanged(saved.point,kind); },
         retain(point,kind,owner){guard();if(journal?.unchanged(point,kind,true))continuations.set(owner,{kind,point});}

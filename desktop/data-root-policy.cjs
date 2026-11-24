@@ -1,7 +1,9 @@
 "use strict";
 const path=require("node:path");
+const {release:productionRelease,resolveProductionDataRoot}=require("./production-data-root.cjs");
 
 const normalRelease="0.2.0-test.21r2";
+const evaluationRelease="0.2.0-eval.3";
 
 function resolveDisposableTestDataRoot(arguments_,environment){
  if(!Array.isArray(arguments_)||!arguments_.includes("--disposable-harness"))throw Error("Disposable TEST launch context required.");
@@ -38,4 +40,18 @@ function resolveTestDataRoot(arguments_,environment,identity){
  return dataRoot;
 }
 
-module.exports={resolveDisposableTestDataRoot,resolveTestDataRoot};
+function resolveInstalledDataRoot(arguments_,environment,identity){
+ if(identity?.version===productionRelease)return Object.freeze({mode:"production",dataRoot:resolveProductionDataRoot(arguments_,environment,identity)});
+ if(identity?.version===evaluationRelease){
+  if(!Array.isArray(arguments_)||arguments_.length||environment?.SHOP_POS_DESKTOP_TEST_DATA!==undefined)throw Error("Normal evaluation launch context required.");
+  const local=environment?.LOCALAPPDATA,roaming=identity?.appDataPath,exe=identity?.executablePath;
+  if(typeof local!=="string"||typeof roaming!=="string"||typeof exe!=="string"||!sameWindowsPath(path.win32.join(path.win32.dirname(roaming),"Local"),local)||path.win32.basename(roaming).toLowerCase()!=="roaming")throw Error("Windows evaluation user profile required.");
+  const install=path.win32.join(local,"Programs","SalamTech","ShopPOSEval",evaluationRelease,"Shop POS.exe");
+  if(!sameWindowsPath(exe,install))throw Error("Installed evaluation identity required.");
+  const dataRoot=path.win32.join(local,"Programs","SalamTech",evaluationRelease,"ShopPOSEvalData");
+  if(path.win32.join(dataRoot,"test-results","sqlite-b1b-part1","b999999999").length>120)throw Error("Evaluation backup path budget exceeded.");
+  return Object.freeze({mode:"evaluation",dataRoot});
+ }
+ return Object.freeze({mode:"test",dataRoot:resolveTestDataRoot(arguments_,environment,identity)});
+}
+module.exports={resolveDisposableTestDataRoot,resolveTestDataRoot,resolveInstalledDataRoot};

@@ -58,6 +58,18 @@ function configuration(input: LocalKeyConfiguration) {
   if (!input || !input.database || input.database.mode !== "test" || input.database.create === true || Object.keys(input).sort().join(",") !== "database,directory,migrationsDirectory") return rejectBootstrap();
   return Object.freeze({ directory: input.directory, migrationsDirectory: input.migrationsDirectory, database: Object.freeze({ ...input.database, create: false }) });
 }
+function productionRootConfiguration(input: LocalKeyConfiguration) {
+  const local=process.env.LOCALAPPDATA;
+  if(process.env.NODE_ENV!=="production"||typeof local!=="string"||!path.win32.isAbsolute(local)||
+      !input||!input.database||input.database.mode!=="persistent"||input.database.create===true||
+      Object.keys(input).sort().join(",")!=="database,directory,migrationsDirectory")return rejectBootstrap();
+  const root=path.win32.join(local,"Programs","SalamTech","ShopPOSData","1.0.0");
+  if(path.win32.resolve(input.directory).toLowerCase()!==root.toLowerCase()||
+      path.win32.resolve(input.database.directory).toLowerCase()!==path.win32.join(root,"d").toLowerCase()||
+      input.database.filename!=="shop.sqlite3")return rejectBootstrap();
+  resolveDatabaseLocation({...input.database,create:false});
+  return Object.freeze({directory:input.directory,migrationsDirectory:input.migrationsDirectory,database:Object.freeze({...input.database,create:false})});
+}
 const reader = (db: ProofDatabase) => ({ get: async (sql: string, values: readonly import("../db/connection").SqlValue[] = []) => db.prepare(sql).get(...values), all: async (sql: string, values: readonly import("../db/connection").SqlValue[] = []) => db.prepare(sql).all(...values) });
 async function enrollment(config: LocalKeyConfiguration, version: 8 | 41, records: Awaited<ReturnType<typeof readEnrollmentJournal>>, anchorVersion: 8 | 41 = version) {
   const filename = resolveDatabaseLocation(config.database).filename, db = new Driver(filename, { readonly: true, fileMustExist: true }); db.defaultSafeIntegers(true);
@@ -95,6 +107,18 @@ export async function createProtectedRootWriterAdmission(input: LocalKeyConfigur
     if (!candidatePendingCompatible(facts) || !["ABSENT", "QUARANTINED_ONLY"].includes(classifyCandidateLedger(facts).status)) return rejectBootstrap();
     return mint(runtime, config, version, "ROOT", directories, before, await secretDigests(config));
   } catch { return rejectBootstrap(); }
+}
+// Fresh production root follows the same native vault, enrollment, schema and
+// candidate-ledger checks. It cannot select or adopt a TEST writer.
+export async function createProductionRootWriterAdmission(input: LocalKeyConfiguration,runtime:unknown):Promise<ProtectedWriterAdmission>{
+ try{
+  assertRuntimeOwnership(runtime);const config=productionRootConfiguration(input),directories=Object.freeze([path.join(config.directory,"protected-identity")]),before=checkpoints(directories);
+  const vault=await inspectLocalVault(config),records=await readEnrollmentJournal(vault,protectedManifestDigest(41));
+  if((await readProtectedMaintenance(vault)).length)return rejectBootstrap();
+  const anchor=await enrollment(config,41,records),facts=await readProtectedCandidateLedger(vault,enrollmentDigest(anchor));
+  if(!candidatePendingCompatible(facts)||!["ABSENT","QUARANTINED_ONLY"].includes(classifyCandidateLedger(facts).status))return rejectBootstrap();
+  return mint(runtime,config,41,"ROOT",directories,before,await secretDigests(config));
+ }catch{return rejectBootstrap();}
 }
 // Recovery can verify the existing Admin and surrender the sole owner only.
 // It cannot issue sessions, execute business transactions or repair journals.

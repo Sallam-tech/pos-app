@@ -3,7 +3,7 @@ const {app,BrowserWindow,Menu,ipcMain,dialog,session}=require("electron");
 const {spawn,spawnSync}=require("node:child_process");
 const {createHash,X509Certificate,randomUUID}=require("node:crypto");
 const {verifyPayload}=require("./payload-integrity.cjs");
-const {resolveTestDataRoot}=require("./data-root-policy.cjs");
+const {resolveInstalledDataRoot}=require("./data-root-policy.cjs");
 const {passwordInput,cookiesForRole}=require("./shared-login.cjs");
 const fs=require("node:fs"),path=require("node:path"),{pathToFileURL}=require("node:url");
 const payload=path.join(process.resourcesPath,"payload"),root=process.resourcesPath;
@@ -12,23 +12,26 @@ app.enableSandbox();
 let ownerWindow,ownerRequest,recoveryBusy=false,recoveryCompleted=false;
 let sharedLoginBusy=false;const sharedLoginRequests=new Map();
 const diagnosticHarness=process.argv.includes("--disposable-harness");let diagnosticPath,diagnosticStreamOpen=true;if(diagnosticHarness)process.stderr.on("error",()=>{diagnosticStreamOpen=false;});
+let evaluationMode=false;
+app.on("browser-window-created",(_event,window)=>{if(evaluationMode){window.setTitle("Shop POS");window.on("page-title-updated",event=>{event.preventDefault();window.setTitle("Shop POS");});}});
 function diagnostic(value){if(diagnosticHarness){if(diagnosticPath)try{fs.appendFileSync(diagnosticPath,value+"\n");}catch{}if(diagnosticStreamOpen)try{process.stderr.write("SHOP_POS_TEST_LIFECYCLE "+value+"\n",error=>{if(error)diagnosticStreamOpen=false;});}catch{diagnosticStreamOpen=false;}}}
 const safeError="Shop POS TEST unavailable. Existing data has been retained. No production activation or automatic reset was performed.";
 function protectData(directory){
  // These tiny native helpers are pinned before first execution. The complete
  // inventory is still verified before any backend/database/account startup.
- const helpers={"private-data.ps1":"ad53c8fcce4e7c5cfb9178385e648d2ddd5bbe4c46b52cd19597cbaa4b64f3e3","lifecycle.ps1":"39f98e78923ce65c8cc665289bf4b12381f67c70c0739239a80ec27416b7a7b9"};
+ const helpers={"private-data.ps1":"3363e67a6e5875cc36b09a1102f0bc5f5d8f92b62054e46afd346c90325bd708","lifecycle.ps1":"e67d396b60425ce8a93f8745603173bc8bdcbacf46e862cea8fcef0e5064c49d"};
  for(const [name,expected]of Object.entries(helpers)){const file=path.join(__dirname,name),stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||createHash("sha256").update(fs.readFileSync(file)).digest("hex")!==expected)throw Error();}
  const result=spawnSync(path.join(process.env.SystemRoot,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-File",path.join(__dirname,"private-data.ps1")],{windowsHide:true,input:JSON.stringify({directory}),encoding:"utf8",maxBuffer:8192,timeout:15000});
  if(result.error||result.status!==0||result.stderr||result.stdout!=="true")throw Error();
 }
-function prepareNormalDataRootParent(dataRoot){
+function prepareNormalDataRootParent(dataRoot,mode){
  const base=path.join(process.env.LOCALAPPDATA,"Programs","SalamTech");
- const parent=path.join(base,"0.2.0-test.21r2");
+ const release=mode==="evaluation"?"0.2.0-eval.3":"0.2.0-test.21r2";
+ const parent=path.join(base,release);
  if(path.resolve(path.dirname(dataRoot))!==path.resolve(parent))throw Error();
  const baseStat=fs.lstatSync(base);if(!baseStat.isDirectory()||baseStat.isSymbolicLink())throw Error();
  let current=base;
- for(const part of ["0.2.0-test.21r2"]){
+ for(const part of [release]){
   current=path.join(current,part);
   try{const stat=fs.lstatSync(current);if(!stat.isDirectory()||stat.isSymbolicLink())throw Error();}
   catch(error){if(error?.code!=="ENOENT")throw error;fs.mkdirSync(current);const stat=fs.lstatSync(current);if(!stat.isDirectory()||stat.isSymbolicLink())throw Error();}
@@ -213,8 +216,13 @@ async function boot(){
  const allowedArguments=new Set(["--disposable-harness","--force-renderer-accessibility"]);
  if(process.platform!=="win32"||process.arch!=="x64"||process.argv.slice(1).some(v=>!allowedArguments.has(v))||process.argv.includes("--force-renderer-accessibility")&&!process.argv.includes("--disposable-harness"))throw Error();
  const harness=process.argv.includes("--disposable-harness");
- const dataRoot=resolveTestDataRoot(process.argv.slice(1),process.env,{version:app.getVersion(),executablePath:app.getPath("exe"),appDataPath:app.getPath("appData")});
- if(!harness)prepareNormalDataRootParent(dataRoot);
+ const installation=resolveInstalledDataRoot(process.argv.slice(1),process.env,{version:app.getVersion(),executablePath:app.getPath("exe"),appDataPath:app.getPath("appData")});
+ evaluationMode=installation.mode==="evaluation";if(evaluationMode)app.setName("Shop POS");
+ // Production identity is recognized but cannot launch the TEST-only backend.
+ // A production backend must finish its own schema, writer, auth and recovery admission first.
+ if(installation.mode!=="test"&&installation.mode!=="evaluation")throw Error("Production runtime admission unavailable.");
+ const dataRoot=installation.dataRoot;
+ if(!harness)prepareNormalDataRootParent(dataRoot,installation.mode);
  protectData(dataRoot);if(harness)diagnosticPath=path.join(dataRoot,"desktop-harness-lifecycle.log");app.setPath("userData",path.join(dataRoot,"browser"));
  if(!app.requestSingleInstanceLock()){quitting=true;app.quit();return;}
  // Admit and verify in parallel with Electron initialization, never with installer replacement.
@@ -223,7 +231,7 @@ async function boot(){
   app.whenReady().then(()=>{if(!shutdownStarted&&!quitting)showStartupWindow();}),
   installerGuard().then(()=>{if(!shutdownStarted&&!quitting)return verifyPayload(root);})
  ]);if(shutdownStarted||quitting)return;
- Menu.setApplicationMenu(Menu.buildFromTemplate([{label:"Shop POS TEST",submenu:[{label:"Salesperson",click:()=>roleWindow("SALESPERSON")},{label:"Admin",click:()=>roleWindow("ADMIN")},{label:"Recover disposable TEST archive...",click:()=>void chooseRecovery()},{type:"separator"},{label:"Exit",click:()=>void close()}]}]));
+ Menu.setApplicationMenu(Menu.buildFromTemplate([{label:evaluationMode?"Shop POS":"Shop POS TEST",submenu:[{label:"Salesperson",click:()=>roleWindow("SALESPERSON")},{label:"Admin",click:()=>roleWindow("ADMIN")},{label:"Recover disposable TEST archive...",click:()=>void chooseRecovery()},{type:"separator"},{label:"Exit",click:()=>void close()}]}]));
  const environment={...process.env,NODE_ENV:"test",NEXT_TELEMETRY_DISABLED:"1"};for(const key of Object.keys(environment))if(/^(?:NODE_OPTIONS|NODE_PATH|NODE_EXTRA_CA_CERTS|NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|ELECTRON_EXTRA_LAUNCH_ARGS)$/i.test(key))delete environment[key];
  environment.PATH=path.join(root,"runtime")+path.delimiter+(environment.PATH??"");
  child=spawn(path.join(root,"runtime/node.exe"),[path.join(payload,"server/desktop/test-entry.js")],{env:environment,cwd:dataRoot,windowsHide:true,stdio:["ignore","ignore","ignore","ipc"]});

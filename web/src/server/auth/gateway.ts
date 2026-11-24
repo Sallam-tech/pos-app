@@ -137,7 +137,15 @@ export function adminMaintenanceSourceEvidence(source: unknown, database: Databa
 // Missing configuration is a usable deny-only foundation, never a bypass.
 export async function openAuthorizationGateway(config?: AuthorizationConfiguration, requiredSchema?: 35 | 36 | 37 | 38 | 39 | 40 | 41): Promise<AuthorizationGateway> {
   if (!config) return deniedGateway();
-  if (requiredSchema !== undefined && ((requiredSchema !== 35 && requiredSchema !== 36 && requiredSchema !== 37 && requiredSchema !== 38 && requiredSchema !== 39 && requiredSchema !== 40 && requiredSchema !== 41) || config.database.mode !== "test")) return deny();
+  if(requiredSchema!==undefined){
+    if(![35,36,37,38,39,40,41].includes(requiredSchema))return deny();
+    if(config.database.mode==="persistent"){
+      if(requiredSchema!==41||!config.protectedAdmission)return deny();
+      try{const admitted=assertProtectedWriterAdmission(config.protectedAdmission,config.database,config.signingSecrets,true);
+        if(admitted.schema!==41||admitted.maintenanceOnly||admitted.restored||admitted.generation!=="ROOT")return deny();}
+      catch{return deny();}
+    }else if(config.database.mode!=="test")return deny();
+  }
   if (processState[ownerKey]) return deny();
   const origins = {} as Record<Role, string>;
   try {

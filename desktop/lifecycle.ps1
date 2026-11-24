@@ -9,6 +9,7 @@ try {
  if($parentProcess.HasExited){throw 'Denied'}
  # Installer coordination only. The existing runtime guard remains the sole writer fence.
  $mutex=[Threading.Mutex]::new($false,'Local\ShopPOS-Disposable-Desktop-v1')
+ $evaluationMutex=[Threading.Mutex]::new($false,'Local\ShopPOS-Client-Evaluation-Desktop-v1')
  # Create the application fence BEFORE checking maintenance. Setup/uninstall
  # create their maintenance fence BEFORE checking the application fence.
  # Either ordering therefore denies a simultaneous conflicting start.
@@ -16,7 +17,10 @@ try {
  try {$maintenance=[Threading.Mutex]::OpenExisting('Local\ShopPOS-Disposable-Installer-v1')}
  catch [Threading.WaitHandleCannotBeOpenedException] {}
  if($null -ne $maintenance){$maintenance.Dispose();throw 'Maintenance active'}
+ try {$maintenance=[Threading.Mutex]::OpenExisting('Local\ShopPOS-Client-Evaluation-Installer-v1')}
+ catch [Threading.WaitHandleCannotBeOpenedException] {}
+ if($null -ne $maintenance){$maintenance.Dispose();throw 'Maintenance active'}
  [Console]::Out.WriteLine('READY');[Console]::Out.Flush()
  $parentProcess.WaitForExit()
 } catch {exit 1}
-finally {if($mutex){$mutex.Dispose()};if($parentProcess){$parentProcess.Dispose()}}
+finally {if($evaluationMutex){$evaluationMutex.Dispose()};if($mutex){$mutex.Dispose()};if($parentProcess){$parentProcess.Dispose()}}

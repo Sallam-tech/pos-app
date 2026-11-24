@@ -16,7 +16,7 @@ renameSync(path.join(out,"electron.exe"),path.join(out,"Shop POS TEST.exe"));
 const resources=path.join(out,"resources"),payload=path.join(resources,"payload"),app=path.join(payload,"app"),server=path.join(payload,"server"),runtime=path.join(resources,"runtime");
 mkdirSync(payload);mkdirSync(app);mkdirSync(server);mkdirSync(runtime);
 cpSync(nodeFile,path.join(runtime,"node.exe"),{errorOnExist:true});
-for(const name of ["main.cjs","data-root-policy.cjs","shared-login.cjs","payload-integrity.cjs","package.json","private-data.ps1","lifecycle.ps1","setup.html","setup.css","setup.js","setup-preload.cjs","operation-key-preload.cjs","recovery.html","recovery.js","recovery-preload.cjs","shop-logo.ico"]) {
+for(const name of ["main.cjs","data-root-policy.cjs","production-data-root.cjs","shared-login.cjs","payload-integrity.cjs","package.json","private-data.ps1","lifecycle.ps1","setup.html","setup.css","setup.js","setup-preload.cjs","operation-key-preload.cjs","recovery.html","recovery.js","recovery-preload.cjs","shop-logo.ico"]) {
  mkdirSync(path.join(resources,"app"),{recursive:true});cpSync(path.join(project,"desktop",name),path.join(resources,"app",name),{errorOnExist:true});
 }
 cpSync(path.join(builtApp,".next"),path.join(app,".next"),{recursive:true,filter:p=>!p.startsWith(path.join(builtApp,".next/cache"))&&(!/\.(?:map|d\.ts|d\.mts|d\.cts)$/.test(p)||!lstatSync(p).isFile())});

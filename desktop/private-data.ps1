@@ -6,7 +6,7 @@ try {
  $target=[string]$m.directory
  if (-not [IO.Path]::IsPathRooted($target) -or $target.StartsWith('\\') -or [IO.Path]::GetFullPath($target) -ne $target) {throw 'Denied'}
  $leaf=[IO.Path]::GetFileName($target)
- if ($leaf -ne 'ShopPOSTestData' -and $leaf -notmatch '^posdt-[a-f0-9-]{36}$') {throw 'Denied'}
+ if ($leaf -ne 'ShopPOSTestData' -and $leaf -ne 'ShopPOSEvalData' -and $leaf -notmatch '^posdt-[a-f0-9-]{36}$') {throw 'Denied'}
  $parent=New-Object IO.DirectoryInfo([IO.Path]::GetDirectoryName($target))
  if (-not $parent.Exists) {throw 'Denied'}
  while($null -ne $parent) {if(-not $parent.Exists -or ($parent.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Denied'};$parent=$parent.Parent}

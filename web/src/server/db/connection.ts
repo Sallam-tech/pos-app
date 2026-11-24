@@ -10,6 +10,8 @@ import { returnsSteps } from "./returns-program";
 import { salesSteps } from "./sales-program";
 
 import { createRequire } from "node:module";
+import { closeSync, openSync } from "node:fs";
+import path from "node:path";
 import { types } from "node:util";
 import { DatabaseFoundationError } from "./errors";
 import { int64 } from "./integers";
@@ -36,6 +38,7 @@ export function executeReviewedSalesProgram(connection:SqliteConnection,tx:SqlTr
 export function executeReviewedReturnsProgram(connection:SqliteConnection,tx:SqlTransaction){assertDisposableMigrationConnection(connection);const execute=maintenanceExecutors.get(connection);if(!execute)throw Error("Maintenance unavailable.");execute(tx,37);}
 export function executeReviewedExpensesProgram(connection:SqliteConnection,tx:SqlTransaction){assertDisposableMigrationConnection(connection);const execute=maintenanceExecutors.get(connection);if(!execute)throw Error();execute(tx,38);}
 const disposableConnections = new WeakMap<object, () => void>();
+const productionBootstrapOptions = new WeakSet<object>();
 // Private migration admission, not a database/SQL capability. Structural clones
 // and persistent connections cannot opt themselves into TEST schema35 writes.
 export function assertDisposableMigrationConnection(connection: SqliteConnection): void {
@@ -47,6 +50,23 @@ export interface SqliteConnection extends SqlReader {
   readonly settings: Readonly<{ sqliteVersion: string; journalMode: "wal"; foreignKeys: true; synchronous: "FULL"; busyTimeoutMs: number }>;
   transaction<T>(work: (transaction: SqlTransaction) => T): T;
   close(): void;
+}
+// Only a freshly reserved, dedicated production database can use the reviewed
+// schema program. Existing persistent databases never acquire this capability.
+export function openProductionBootstrapDatabase(options: DatabaseOptions): SqliteConnection {
+  const local=process.env.LOCALAPPDATA;
+  if(process.env.NODE_ENV!=="production"||typeof local!=="string"||!path.win32.isAbsolute(local)||
+      !options||options.mode!=="persistent"||options.create!==true||options.filename!=="shop.sqlite3")
+    fail("MIGRATION_INVALID","Production bootstrap identity required.");
+  const directory=path.win32.join(local,"Programs","SalamTech","ShopPOSData","1.0.0","d");
+  if(path.win32.resolve(options.directory).toLowerCase()!==directory.toLowerCase())
+    fail("MIGRATION_INVALID","Production bootstrap directory required.");
+  const target=resolveDatabaseLocation(options).filename;
+  let handle:number;
+  try{handle=openSync(target,"wx",0o600);closeSync(handle);}
+  catch(cause){throw new DatabaseFoundationError("MIGRATION_INVALID","Production bootstrap requires a new database.",cause);}
+  const admitted={...options,create:false};productionBootstrapOptions.add(admitted);
+  try{return openDatabase(admitted);}finally{productionBootstrapOptions.delete(admitted);}
 }
 
 // Narrow boundary for the pinned CJS driver; no additional typing dependency.
@@ -97,6 +117,7 @@ function statementError(cause: unknown): never {
 
 export function openDatabase(options: DatabaseOptions): SqliteConnection {
   const location = resolveDatabaseLocation(options);
+  const reviewedBootstrap=productionBootstrapOptions.has(options);
   const [major, minor] = process.versions.node.split(".").map(Number);
   if (typeof window !== "undefined" || process.platform !== "win32" || process.arch !== "x64" || major !== 24 || minor < 11) {
     fail("RUNTIME_UNSUPPORTED", "This foundation requires the reviewed Windows x64 / Node 24.11+ runtime.");
@@ -232,8 +253,8 @@ export function openDatabase(options: DatabaseOptions): SqliteConnection {
       }
     },
   });
-  if (options.mode === "test") disposableConnections.set(connection, () => { assertOpen(); resolveDatabaseLocation({ ...options, create: false }); });
-  if (options.mode === "test") maintenanceExecutors.set(connection, (tx,target) => {
+  if (options.mode === "test"||reviewedBootstrap) disposableConnections.set(connection, () => { assertOpen(); resolveDatabaseLocation({ ...options, create: false }); });
+  if (options.mode === "test"||reviewedBootstrap) maintenanceExecutors.set(connection, (tx,target) => {
     assertOpen();
     if (!active || !native.inTransaction || tx !== currentScope || maintenanceFailed) fail("SCOPE_CLOSED", "Maintenance scope unavailable.");
     // Poison the entire transaction until every pinned step succeeds. Catching
@@ -244,7 +265,7 @@ export function openDatabase(options: DatabaseOptions): SqliteConnection {
     for (const sql of (target===36?salesSteps():target===37?returnsSteps():expensesSteps())) native.prepare(sql).run();
     maintenanceFailed = false;
   });
-  if(options.mode==="test")invoiceExecutors.set(connection,()=>{
+  if(options.mode==="test"||reviewedBootstrap)invoiceExecutors.set(connection,()=>{
     outside();assertDisposableMigrationConnection(connection);
     const marker=native.pragma("user_version",{simple:true});
     if((marker!==BigInt(38)&&marker!==BigInt(39))||native.prepare("SELECT id FROM auth_enrollment_binding LIMIT 1").get()!==undefined)fail("MIGRATION_INVALID","Only unenrolled TEST38/39 maintenance is admitted.");
@@ -260,7 +281,7 @@ export function openDatabase(options: DatabaseOptions): SqliteConnection {
       if(native.pragma("foreign_keys",{simple:true})!==BigInt(1)){closed=true;try{native.close();}catch{}throw Error("Maintenance handle quarantined.");}
     }
   });
-  if(options.mode==="test")cashExecutors.set(connection,()=>{
+  if(options.mode==="test"||reviewedBootstrap)cashExecutors.set(connection,()=>{
     outside();assertDisposableMigrationConnection(connection);
     const marker=native.pragma("user_version",{simple:true});
     if((marker!==BigInt(39)&&marker!==BigInt(40))||native.prepare("SELECT id FROM auth_enrollment_binding LIMIT 1").get()!==undefined)fail("MIGRATION_INVALID","Only unenrolled TEST39/40 maintenance is admitted.");
@@ -276,7 +297,7 @@ export function openDatabase(options: DatabaseOptions): SqliteConnection {
       if(native.pragma("foreign_keys",{simple:true})!==BigInt(1)){closed=true;try{native.close();}catch{}throw Error("Maintenance handle quarantined.");}
     }
   });
-  if(options.mode==="test")settingsExecutors.set(connection,()=>{
+  if(options.mode==="test"||reviewedBootstrap)settingsExecutors.set(connection,()=>{
     outside();assertDisposableMigrationConnection(connection);const marker=native.pragma("user_version",{simple:true});
     if((marker!==BigInt(40)&&marker!==BigInt(41))||native.prepare("SELECT id FROM auth_enrollment_binding LIMIT 1").get()!==undefined)fail("MIGRATION_INVALID","Only unenrolled TEST40/41 maintenance is admitted.");
     return connection.transaction(tx=>settingsMigrationTransaction(tx,()=>{if(!active||tx!==currentScope||!native.inTransaction)throw Error();maintenanceFailed=true;for(const sql of settingsSteps())native.prepare(sql).run();maintenanceFailed=false;}));
