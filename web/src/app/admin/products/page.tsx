@@ -19,7 +19,7 @@ export default function ProductsPage() {
   return <div className="mx-auto w-full max-w-5xl">
     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div>
-        <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/products"}>Products</PageHeading><Badge>Test mode</Badge></div>
+        <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/products"}>Products</PageHeading><Badge>Shop</Badge></div>
         <p className="sr-only">Shop stock (test mode).</p>
       </div>
       <div className="flex flex-wrap gap-3">

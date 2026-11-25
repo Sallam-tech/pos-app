@@ -48,7 +48,7 @@ export function TestCashClosing(){
  const c=summary?.count,difference=c?.variancePaisa===null||c?.variancePaisa===undefined?null:BigInt(c.variancePaisa);
  const amount=(v:string|null|undefined)=>v===null||v===undefined?"Unavailable":rupees(v);
  return <div className="mx-auto w-full max-w-5xl">
- <div className="mb-5 flex flex-wrap items-start gap-3"><PageHeading route="/admin/daily-closing">Daily Closing</PageHeading><Badge>Test mode</Badge></div>
+ <div className="mb-5 flex flex-wrap items-start gap-3"><PageHeading route="/admin/daily-closing">Daily Closing</PageHeading><Badge>Shop</Badge></div>
  <Card className="mb-5"><Field id="cash-business-date" label="Business Date (Asia/Karachi)"><Input id="cash-business-date" type="date" value={date} disabled={busy||!!marker} onChange={e=>{setDate(e.target.value);setCount("");setSummary(null);}}/></Field><Button className="mt-3" disabled={busy} onClick={()=>void work(load)}>Apply Date / Refresh Saved Figures</Button><p className="mt-2 text-sm">Calendar days end at midnight. Next-day sales continue while an earlier day awaits closing.</p></Card>
  {error&&<p role="alert" className="mb-3 text-danger">{error}</p>}
  <section aria-label="Daily closing summary" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{([["Total Sales","revenuePaisa"],["Cost of Sold Items","cogsPaisa"],["Gross Profit","grossProfitPaisa"],["Shop Expenses","expensesPaisa"],["Returns / Refunds","refundsPaisa"],["Profit After Expenses","netProfitPaisa"]] as const).map(([label,key])=><Card key={key} role="group" aria-label={label} className="p-4"><h2 className="text-sm font-semibold text-muted-foreground">{label}</h2><p className="numeric mt-2 break-words text-2xl font-bold">{amount(summary?.financial[key])}</p></Card>)}</section>

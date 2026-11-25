@@ -15,7 +15,7 @@ export default async function ReportsPage() {
  await connection();const live=readTestInvoicesRender();
   return <div className="reports-workspace">
     <div className="mb-5">
-      <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/reports"}>Reports</PageHeading>{live&&<Badge>Test mode</Badge>}</div>
+      <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/reports"}>Reports</PageHeading>{live&&<Badge>Shop</Badge>}</div>
       <p className="mt-1 text-sm leading-6 text-muted-foreground">Choose a report to view recorded sales or profit.</p>
     </div>
     <section aria-label="Available reports" className="grid max-w-4xl gap-4 md:grid-cols-2">

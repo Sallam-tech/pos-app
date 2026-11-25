@@ -11,5 +11,5 @@ export const metadata: Metadata = { title: "Edit Product | Shop POS" };
 export default async function EditProductPage({ params }: { params: Promise<{ productId: string }> }) {
   const { productId } = await params;
   if(!isTestProductControlsRender())return <LiveDataRequired route={"/admin/products/"+productId+"/edit"} title="Edit Product"/>;
-  return <div className="mx-auto w-full max-w-3xl"><div className="mb-4 flex flex-wrap items-center gap-3"><PageHeading route={"/admin/products/"+productId+"/edit"}>Edit Product</PageHeading><Badge>Test mode</Badge></div><TestProductEditor id={productId}/></div>;
+  return <div className="mx-auto w-full max-w-3xl"><div className="mb-4 flex flex-wrap items-center gap-3"><PageHeading route={"/admin/products/"+productId+"/edit"}>Edit Product</PageHeading><Badge>Shop</Badge></div><TestProductEditor id={productId}/></div>;
 }

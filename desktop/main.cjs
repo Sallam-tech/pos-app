@@ -12,26 +12,27 @@ app.enableSandbox();
 let ownerWindow,ownerRequest,recoveryBusy=false,recoveryCompleted=false;
 let sharedLoginBusy=false;const sharedLoginRequests=new Map();
 const diagnosticHarness=process.argv.includes("--disposable-harness");let diagnosticPath,diagnosticStreamOpen=true;if(diagnosticHarness)process.stderr.on("error",()=>{diagnosticStreamOpen=false;});
-let evaluationMode=false;
-app.on("browser-window-created",(_event,window)=>{if(evaluationMode){window.setTitle("Shop POS");window.on("page-title-updated",event=>{event.preventDefault();window.setTitle("Shop POS");});}});
+let evaluationMode=false,shopMode=false;
+app.on("browser-window-created",(_event,window)=>{if(shopMode||evaluationMode){window.setTitle("Shop POS");window.on("page-title-updated",event=>{event.preventDefault();window.setTitle("Shop POS");});}});
+function productTitle(){return shopMode?"Shop POS":"Shop POS TEST";}
+function safeErrorMessage(){return shopMode?"Shop POS could not open. Saved shop data has been retained. Nothing was reset.":"Shop POS TEST unavailable. Existing data has been retained. No production activation or automatic reset was performed.";}
 function diagnostic(value){if(diagnosticHarness){if(diagnosticPath)try{fs.appendFileSync(diagnosticPath,value+"\n");}catch{}if(diagnosticStreamOpen)try{process.stderr.write("SHOP_POS_TEST_LIFECYCLE "+value+"\n",error=>{if(error)diagnosticStreamOpen=false;});}catch{diagnosticStreamOpen=false;}}}
-const safeError="Shop POS TEST unavailable. Existing data has been retained. No production activation or automatic reset was performed.";
 function protectData(directory){
  // These tiny native helpers are pinned before first execution. The complete
  // inventory is still verified before any backend/database/account startup.
- const helpers={"private-data.ps1":"3363e67a6e5875cc36b09a1102f0bc5f5d8f92b62054e46afd346c90325bd708","lifecycle.ps1":"e67d396b60425ce8a93f8745603173bc8bdcbacf46e862cea8fcef0e5064c49d"};
+ const helpers={"private-data.ps1":"e2bbc7ab94d42931f542ab576b5e4328c3908b68c11f7885896b699087aca2af","lifecycle.ps1":"c60f5ce8c095948068d027517c8232d16cd8d9409ae9235e0813b8797275c8f7"};
  for(const [name,expected]of Object.entries(helpers)){const file=path.join(__dirname,name),stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||createHash("sha256").update(fs.readFileSync(file)).digest("hex")!==expected)throw Error();}
  const result=spawnSync(path.join(process.env.SystemRoot,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-File",path.join(__dirname,"private-data.ps1")],{windowsHide:true,input:JSON.stringify({directory}),encoding:"utf8",maxBuffer:8192,timeout:15000});
  if(result.error||result.status!==0||result.stderr||result.stdout!=="true")throw Error();
 }
 function prepareNormalDataRootParent(dataRoot,mode){
  const base=path.join(process.env.LOCALAPPDATA,"Programs","SalamTech");
- const release=mode==="evaluation"?"0.2.0-eval.3":"0.2.0-test.21r2";
- const parent=path.join(base,release);
+ const parts=mode==="production"?["ShopPOSData"]:mode==="evaluation"?["0.2.0-eval.3"]:["0.2.0-test.21r2"];
+ const parent=path.join(base,...parts);
  if(path.resolve(path.dirname(dataRoot))!==path.resolve(parent))throw Error();
  const baseStat=fs.lstatSync(base);if(!baseStat.isDirectory()||baseStat.isSymbolicLink())throw Error();
  let current=base;
- for(const part of [release]){
+ for(const part of parts){
   current=path.join(current,part);
   try{const stat=fs.lstatSync(current);if(!stat.isDirectory()||stat.isSymbolicLink())throw Error();}
   catch(error){if(error?.code!=="ENOENT")throw error;fs.mkdirSync(current);const stat=fs.lstatSync(current);if(!stat.isDirectory()||stat.isSymbolicLink())throw Error();}
@@ -56,20 +57,21 @@ function showStartupWindow(){
  const target="data:text/html;charset=utf-8,"+encodeURIComponent(html);harden(startupWindow,url=>url===target);
  startupWindow.on("close",event=>{if(!quitting&&!shutdownStarted){event.preventDefault();void close();}});void startupWindow.loadURL(target);
 }
+function setupPage(){return shopMode?"shop-setup.html":"setup.html";}
 function setup(message){
  closeStartupWindow();
  if(setupWindow||pendingSetup)throw Error();pendingSetup=message;
- setupWindow=new BrowserWindow({width:650,height:720,title:"Disposable TEST setup",icon:appIcon,webPreferences:preferences("setup-"+message.id,path.join(__dirname,"setup-preload.cjs"))});
- const expected=pathToFileURL(path.join(__dirname,"setup.html")).href;harden(setupWindow,url=>url===expected);
+ setupWindow=new BrowserWindow({width:650,height:720,title:shopMode?"Shop POS setup":"Disposable TEST setup",icon:appIcon,webPreferences:preferences("setup-"+message.id,path.join(__dirname,"setup-preload.cjs"))});
+ const expected=pathToFileURL(path.join(__dirname,setupPage())).href;harden(setupWindow,url=>url===expected);
  setupWindow.on("closed",()=>{setupWindow=undefined;if(pendingSetup){child?.send({type:"reply",id:pendingSetup.id,value:"CANCELLED"});pendingSetup=undefined;setupValues=undefined;void close();}});
- void setupWindow.loadFile(path.join(__dirname,"setup.html"));
+ void setupWindow.loadFile(path.join(__dirname,setupPage()));
 }
 async function validSetupPasswords(value){
  if(value.ADMIN===value.SALESPERSON)return false;
  try{const {assertOfflinePassword}=await import(pathToFileURL(path.join(payload,"server/auth/offline-password.js")).href);assertOfflinePassword(value.ADMIN);assertOfflinePassword(value.SALESPERSON);return true;}catch{return false;}
 }
 ipcMain.handle("shop-pos:trusted-test-setup",async(event,value)=>{
- const expected=pathToFileURL(path.join(__dirname,"setup.html")).href;
+ const expected=pathToFileURL(path.join(__dirname,setupPage())).href;
  if(!setupWindow||!pendingSetup||event.sender!==setupWindow.webContents||event.senderFrame!==event.sender.mainFrame||event.senderFrame.url!==expected||!value||Object.keys(value).sort().join(",")!=="ADMIN,SALESPERSON,confirmed"||value.confirmed!==true||["ADMIN","SALESPERSON"].some(k=>typeof value[k]!=="string"||value[k].length<8||value[k].length>128))return {ok:false};
  // Preflight only: the unchanged sole account provisioner still performs every policy/KDF/ownership check.
  const submittedWindow=setupWindow,submittedRequest=pendingSetup;
@@ -81,11 +83,12 @@ ipcMain.handle("shop-pos:trusted-test-setup",async(event,value)=>{
  setupWindow.destroy();setupWindow=undefined;return {ok:true};
 });
 
-function ownerSender(event){const expected=pathToFileURL(path.join(__dirname,"recovery.html")).href;return !!ownerWindow&&!!ownerRequest&&event.sender===ownerWindow.webContents&&event.senderFrame===event.sender.mainFrame&&event.senderFrame.url===expected;}
+function recoveryPage(){return shopMode?"shop-recovery.html":"recovery.html";}
+function ownerSender(event){const expected=pathToFileURL(path.join(__dirname,recoveryPage())).href;return !!ownerWindow&&!!ownerRequest&&event.sender===ownerWindow.webContents&&event.senderFrame===event.sender.mainFrame&&event.senderFrame.url===expected;}
 function ownerForm(request){
  if(ownerWindow||ownerRequest||setupWindow||pendingSetup||shutdownStarted)throw Error();ownerRequest=request;
- ownerWindow=new BrowserWindow({width:740,height:850,title:"Shop POS TEST owner recovery",icon:appIcon,webPreferences:preferences("owner-"+Date.now(),path.join(__dirname,"recovery-preload.cjs"))});const expected=pathToFileURL(path.join(__dirname,"recovery.html")).href;harden(ownerWindow,url=>url===expected);
- ownerWindow.on("closed",()=>{ownerWindow=undefined;const r=ownerRequest;ownerRequest=undefined;if(r?.id)child?.send({type:"reply",id:r.id,value:"CANCELLED"});if(["RECOVERY","RECOVERY_REVIEW","QUARANTINE"].includes(r?.mode))recoveryBusy=false;});void ownerWindow.loadFile(path.join(__dirname,"recovery.html"));
+ ownerWindow=new BrowserWindow({width:740,height:850,title:shopMode?"Shop POS recovery":"Shop POS TEST owner recovery",icon:appIcon,webPreferences:preferences("owner-"+Date.now(),path.join(__dirname,"recovery-preload.cjs"))});const expected=pathToFileURL(path.join(__dirname,recoveryPage())).href;harden(ownerWindow,url=>url===expected);
+ ownerWindow.on("closed",()=>{ownerWindow=undefined;const r=ownerRequest;ownerRequest=undefined;if(r?.id)child?.send({type:"reply",id:r.id,value:"CANCELLED"});if(["RECOVERY","RECOVERY_REVIEW","QUARANTINE"].includes(r?.mode))recoveryBusy=false;});void ownerWindow.loadFile(path.join(__dirname,recoveryPage()));
 }
 ipcMain.handle("shop-pos:native-owner-context",async event=>ownerSender(event)?{mode:ownerRequest.mode,description:ownerRequest.description??(ownerRequest.mode==="RECOVERY"?"Archive: "+path.basename(ownerRequest.archive)+"; SHA256: "+ownerRequest.archiveSha256:"Native CURRENT generation "+ownerRequest.generation+". A fresh backup namespace will retain the original custody and all prior archives.")}:undefined);
 ipcMain.handle("shop-pos:native-owner-submit",async(event,value)=>{
@@ -99,13 +102,13 @@ ipcMain.handle("shop-pos:native-owner-submit",async(event,value)=>{
 });
 async function chooseRecovery(){
  if(!ready||recoveryBusy||sharedLoginBusy||shutdownStarted||ownerWindow)return;recoveryBusy=true;
- try{const selected=await dialog.showOpenDialog({title:"Choose existing protected TEST archive",properties:["openFile"],filters:[{name:"Protected encrypted snapshot",extensions:["age"]}]});if(selected.canceled||selected.filePaths.length!==1){recoveryBusy=false;return;}const archive=selected.filePaths[0],stat=fs.lstatSync(archive);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.size<1||stat.size>2147483648)throw Error();const digest=createHash("sha256");for await(const bytes of fs.createReadStream(archive))digest.update(bytes);ownerForm({mode:"RECOVERY",archive,archiveSha256:digest.digest("hex")});}catch{recoveryBusy=false;unavailable();}
+ try{const selected=await dialog.showOpenDialog({title:shopMode?"Choose protected shop archive":"Choose existing protected TEST archive",properties:["openFile"],filters:[{name:"Protected encrypted snapshot",extensions:["age"]}]});if(selected.canceled||selected.filePaths.length!==1){recoveryBusy=false;return;}const archive=selected.filePaths[0],stat=fs.lstatSync(archive);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||stat.size<1||stat.size>2147483648)throw Error();const digest=createHash("sha256");for await(const bytes of fs.createReadStream(archive))digest.update(bytes);ownerForm({mode:"RECOVERY",archive,archiveSha256:digest.digest("hex")});}catch{recoveryBusy=false;unavailable();}
 }
 async function ownerConfirmation(message){
  const r=message.value,selection=message.type==="confirm-writer-selection",quarantine=message.type==="confirm-quarantine",fields=selection?["action","operationId","destinationFileIdentity","targetStateDigest","targetVaultDigest","productionActivation"]:quarantine?["action","operationId","destinationFileIdentity","sourceStateDigest","intentDigest","sqlOutcome","productionActivation"]:["action","operationId","archiveSha256","sourceFileIdentity","productionActivation"];
  const action=selection?"SELECT_KNOWN_COMPLETED_WRITER":quarantine?"QUARANTINE_NEVER_ADMITTED":"RESTORE_SEPARATE_PROTECTED41";
  if(!recoveryBusy||!r||Object.keys(r).sort().join(",")!==fields.sort().join(",")||r.productionActivation!==false||r.action!==action||! /^[a-f0-9-]{36}$/.test(r.operationId)||quarantine&&r.sqlOutcome!=="UNKNOWN"||fields.filter(k=>!["action","operationId","productionActivation","sqlOutcome"].includes(k)).some(k=>!(quarantine&&k==="intentDigest"&&r[k]===null)&&! /^[a-f0-9]{64}$/.test(r[k])))throw Error();
- const result=await dialog.showMessageBox({type:"warning",title:"Confirm exact TEST recovery operation",message:selection?"Select this exact known completed TEST database and retire the prior writer?":quarantine?"Permanently deny this never-admitted candidate? Its SQL outcome remains UNKNOWN. All original data will be retained.":"Create this separate TEST restore candidate?",detail:fields.filter(k=>k!=="action").map(k=>k+": "+r[k]).join("\n"),buttons:["Cancel","Confirm exact TEST operation"],defaultId:0,cancelId:0,noLink:true});
+ const result=await dialog.showMessageBox({type:"warning",title:shopMode?"Confirm exact shop recovery operation":"Confirm exact TEST recovery operation",message:selection?"Select this exact known completed database and retire the prior writer?":quarantine?"Permanently deny this never-admitted candidate? Its SQL outcome remains UNKNOWN. All original data will be retained.":"Create this separate restore candidate?",detail:fields.filter(k=>k!=="action").map(k=>k+": "+r[k]).join("\n"),buttons:["Cancel",shopMode?"Confirm exact shop operation":"Confirm exact TEST operation"],defaultId:0,cancelId:0,noLink:true});
  child?.send({type:"reply",id:message.id,value:result.response===1?(selection?"CONFIRM_TEST_WRITER_SELECTION":quarantine?"CONFIRM_PERMANENT_NO_ADMISSION":"CONFIRM_SEPARATE_TEST_RESTORE41"):"CANCELLED"});
 }
 
@@ -193,7 +196,7 @@ function validReady(value){
 const reportedFailures=new Set();
 function unavailable(){
  setupValues=undefined;const kind=shutdownStarted?"SHUTDOWN":"STARTUP";if(reportedFailures.has(kind))return;reportedFailures.add(kind);
- void dialog.showMessageBox({type:"error",title:"Shop POS TEST",message:shutdownStarted?"Safe shutdown could not be confirmed. Data and ownership are retained. Keep the application open for recovery review.":safeError}).then(()=>{if(kind==="STARTUP")return close();for(const window of roleWindows.values())if(!window.isDestroyed())window.show();});
+ void dialog.showMessageBox({type:"error",title:productTitle(),message:shutdownStarted?"Safe shutdown could not be confirmed. Data and ownership are retained. Keep the application open for recovery review.":safeErrorMessage()}).then(()=>{if(kind==="STARTUP")return close();for(const window of roleWindows.values())if(!window.isDestroyed())window.show();});
 }
 async function close(){
  diagnostic("CLOSE_REQUESTED");
@@ -217,10 +220,10 @@ async function boot(){
  if(process.platform!=="win32"||process.arch!=="x64"||process.argv.slice(1).some(v=>!allowedArguments.has(v))||process.argv.includes("--force-renderer-accessibility")&&!process.argv.includes("--disposable-harness"))throw Error();
  const harness=process.argv.includes("--disposable-harness");
  const installation=resolveInstalledDataRoot(process.argv.slice(1),process.env,{version:app.getVersion(),executablePath:app.getPath("exe"),appDataPath:app.getPath("appData")});
- evaluationMode=installation.mode==="evaluation";if(evaluationMode)app.setName("Shop POS");
- // Production identity is recognized but cannot launch the TEST-only backend.
- // A production backend must finish its own schema, writer, auth and recovery admission first.
- if(installation.mode!=="test"&&installation.mode!=="evaluation")throw Error("Production runtime admission unavailable.");
+ shopMode=installation.mode==="production";evaluationMode=installation.mode==="evaluation";if(shopMode||evaluationMode)app.setName("Shop POS");
+ // Shop 1.0.0 uses the reviewed desktop runtime and its own durable data root.
+ // The payload activation flag stays false until a signed release trust anchor exists.
+ if(installation.mode!=="test"&&installation.mode!=="evaluation"&&installation.mode!=="production")throw Error("Production runtime admission unavailable.");
  const dataRoot=installation.dataRoot;
  if(!harness)prepareNormalDataRootParent(dataRoot,installation.mode);
  protectData(dataRoot);if(harness)diagnosticPath=path.join(dataRoot,"desktop-harness-lifecycle.log");app.setPath("userData",path.join(dataRoot,"browser"));
@@ -231,7 +234,7 @@ async function boot(){
   app.whenReady().then(()=>{if(!shutdownStarted&&!quitting)showStartupWindow();}),
   installerGuard().then(()=>{if(!shutdownStarted&&!quitting)return verifyPayload(root);})
  ]);if(shutdownStarted||quitting)return;
- Menu.setApplicationMenu(Menu.buildFromTemplate([{label:evaluationMode?"Shop POS":"Shop POS TEST",submenu:[{label:"Salesperson",click:()=>roleWindow("SALESPERSON")},{label:"Admin",click:()=>roleWindow("ADMIN")},{label:"Recover disposable TEST archive...",click:()=>void chooseRecovery()},{type:"separator"},{label:"Exit",click:()=>void close()}]}]));
+ Menu.setApplicationMenu(Menu.buildFromTemplate([{label:shopMode||evaluationMode?"Shop POS":"Shop POS TEST",submenu:[{label:"Salesperson",click:()=>roleWindow("SALESPERSON")},{label:"Admin",click:()=>roleWindow("ADMIN")},{label:shopMode?"Recover protected archive...":"Recover disposable TEST archive...",click:()=>void chooseRecovery()},{type:"separator"},{label:"Exit",click:()=>void close()}]}]));
  const environment={...process.env,NODE_ENV:"test",NEXT_TELEMETRY_DISABLED:"1"};for(const key of Object.keys(environment))if(/^(?:NODE_OPTIONS|NODE_PATH|NODE_EXTRA_CA_CERTS|NODE_V8_COVERAGE|ELECTRON_RUN_AS_NODE|ELECTRON_EXTRA_LAUNCH_ARGS)$/i.test(key))delete environment[key];
  environment.PATH=path.join(root,"runtime")+path.delimiter+(environment.PATH??"");
  child=spawn(path.join(root,"runtime/node.exe"),[path.join(payload,"server/desktop/test-entry.js")],{env:environment,cwd:dataRoot,windowsHide:true,stdio:["ignore","ignore","ignore","ipc"]});
@@ -240,9 +243,9 @@ async function boot(){
   if(message.type==="confirm-enrollment"){try{setup(message);}catch{unavailable();}}
   else if(message.type==="read-passwords"){const values=setupValues;setupValues=undefined;child.send({type:"reply",id:message.id,value:values});}
   else if(message.type==="backup-handoff-password"){try{ownerForm({mode:"BACKUP_HANDOFF",id:message.id,generation:message.value?.generation});}catch{unavailable();}}
-  else if(message.type==="recovery-review"){try{const r=message.value;if(!r||r.productionActivation!==false||!["INTENT","COMMITTED"].includes(r.kind))throw Error();recoveryBusy=true;ownerForm({mode:r.kind==="COMMITTED"?"RECOVERY_REVIEW":"QUARANTINE",id:message.id,description:"Interrupted TEST operation "+r.operationId+"; state "+r.kind+"; target file identity "+r.destinationFileIdentity+"; source state "+r.sourceStateDigest+". No automatic replay or promotion."});}catch{unavailable();}}
+  else if(message.type==="recovery-review"){try{const r=message.value;if(!r||r.productionActivation!==false||!["INTENT","COMMITTED"].includes(r.kind))throw Error();recoveryBusy=true;ownerForm({mode:r.kind==="COMMITTED"?"RECOVERY_REVIEW":"QUARANTINE",id:message.id,description:(shopMode?"Interrupted shop operation ":"Interrupted TEST operation ")+r.operationId+"; state "+r.kind+"; target file identity "+r.destinationFileIdentity+"; source state "+r.sourceStateDigest+". No automatic replay or promotion."});}catch{unavailable();}}
   else if(["confirm-protected-restore","confirm-writer-selection","confirm-quarantine"].includes(message.type))void ownerConfirmation(message).catch(unavailable);
-  else if(message.type==="recovery-completed"){if(message.value?.status==="TEST_RECOVERY_SELECTED_BACKUP_CONFIGURED"&&message.value.productionActivation===false&&!recoveryCompleted){recoveryCompleted=true;void dialog.showMessageBox({type:"info",title:"Shop POS TEST recovery",message:"Exact TEST writer selected and new backup namespace configured. Original data retained. Close this application, restart and log in with the inherited passwords. Production remains disabled."}).then(()=>close());}else unavailable();}
+  else if(message.type==="recovery-completed"){if(message.value?.status==="TEST_RECOVERY_SELECTED_BACKUP_CONFIGURED"&&message.value.productionActivation===false&&!recoveryCompleted){recoveryCompleted=true;void dialog.showMessageBox({type:"info",title:shopMode?"Shop POS recovery":"Shop POS TEST recovery",message:shopMode?"The selected shop database is ready and a new backup folder is configured. Original data was kept. Close this application, restart, and sign in with the same passwords.":"Exact TEST writer selected and new backup namespace configured. Original data retained. Close this application, restart and log in with the inherited passwords. Production remains disabled."}).then(()=>close());}else unavailable();}
   else if(message.type==="shared-login-result"&&typeof message.id==="string"){sharedLoginRequests.get(message.id)?.finish(message.value);}
   else if(message.type==="operation-keys-result"&&typeof message.id==="string"){const pending=markerRequests.get(message.id);if(pending)pending.finish(message.value);else diagnostic("OPERATION_KEYS_RESULT_LATE");}
   else if(message.type==="ready"){recoveryBusy=false;if(!validReady(message.value)){unavailable();return;}if(shutdownStarted)return;ready=message.value;initializing=false;roleWindow("SALESPERSON");}
@@ -256,7 +259,7 @@ async function boot(){
  child.send({type:"start",dataRoot,applicationDirectory:path.join(payload,"app")});
 }
 void boot().catch(async()=>{
- try{await app.whenReady();await dialog.showMessageBox({type:"error",title:"Shop POS TEST",message:safeError});}
+ try{await app.whenReady();await dialog.showMessageBox({type:"error",title:productTitle(),message:safeErrorMessage()});}
  catch{/* App never became ready; fail closed without a second crash. */}
  quitting=true;app.quit();
 });

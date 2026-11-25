@@ -49,8 +49,8 @@ test("normal TEST.21r2 startup resolves its isolated root before any data-root a
  const resolve=main.indexOf("resolveInstalledDataRoot(process.argv.slice(1),process.env");
  const protect=main.indexOf("protectData(dataRoot)",resolve);
  assert(resolve>=0&&protect>resolve);
- assert.match(main,/prepareNormalDataRootParent\(dataRoot\)/);
- assert.match(main,/for\(const part of \["0\.2\.0-test\.21r2"\]\)/);
+ assert.match(main,/prepareNormalDataRootParent\(dataRoot,installation\.mode\)/);
+ assert.match(main,/mode==="production"\?\["ShopPOSData"\]:mode==="evaluation"\?\["0\.2\.0-eval\.3"\]:\["0\.2\.0-test\.21r2"\]/);
  assert.match(build,/dataRootPolicy='LOCALAPPDATA_PROGRAMS_SALAMTECH_VERSIONED_TEST21R2'/);
 });
 

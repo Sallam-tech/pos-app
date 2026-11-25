@@ -8,6 +8,7 @@ import {readSalesBody} from "./sales-http";
 import {object,uuid} from "../inventory/validation";
 import {inspectTestSchema41Readiness} from "../backup/readiness";
 import {createTestIsolatedRestore,type TestBackupWorker,type TestBackupConfiguration} from "../backup/worker";
+import {productionCloudStatus} from "../cloud/production-link";
 const id="[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const job=new RegExp("^/api/admin/backups/jobs/("+id+")$");
 const paths=["/api/admin/backups/status","/api/admin/backups/manual","/api/admin/backups/export","/api/admin/backups/readiness","/api/admin/backups/restore"];
@@ -22,7 +23,7 @@ export function createBackupDispatcher(g:AuthorizationGateway,database:DatabaseO
  try{
   live();await g.authorizeAdmin(request);live();
   if(p.endsWith("/readiness")){const value=await inspectTestSchema41Readiness(database);live();send(200,value);return;}
-  if(p.endsWith("/status")){send(200,worker?worker.status():{configured:false,productionActivation:false,cloud:"NOT_CONFIGURED"});return;}
+  if(p.endsWith("/status")){const base=worker?worker.status():{configured:false,productionActivation:false,cloud:"NOT_CONFIGURED"};const cloud=await productionCloudStatus();live();send(200,{...base,...cloud});return;}
   if(!worker)throw Error();
   if(job.test(p)){send(200,worker.job(uuid(job.exec(p)![1])));return;}
   const b=object(await readSalesBody(req,2048),!p.endsWith("/manual")?["key","archiveId","password"]:["key","password"]);

@@ -18,6 +18,7 @@ function resolveProductionDataRoot(arguments_,environment,identity){
  const executable=path.win32.join(local,"Programs","SalamTech","ShopPOS",release,"Shop POS.exe");
  if(!same(identity.executablePath,executable))throw Error("Installed production executable required.");
  const root=path.win32.join(local,"Programs","SalamTech","ShopPOSData",release);
+ if(path.win32.join(root,"test-results","sqlite-b1b-part1","b999999999").length>120||path.win32.join(root,"test-results","sqlite-b1b-part1","e999999999").length>200)throw Error("Protected shop backup path budget exceeded.");
  if(path.win32.join(root,"protected-identity","candidate-authority","e999999999").length>200)throw Error("Protected data path budget exceeded.");
  return root;
 }

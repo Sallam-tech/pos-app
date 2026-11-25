@@ -67,7 +67,7 @@ export function TestProductForm() {
     <details className="optional-details border-y"><summary>More Details (Optional)</summary><div className="grid min-w-0 items-start gap-4 pb-4 sm:grid-cols-2">{field("category")}<Field id="product-code" label="Product Code (Optional)" hint="Leave empty for an automatic code like DIA-001 (first 3 letters + number)."><Input id="product-code" name="productCode" value={values.code} autoComplete="off" maxLength={32} onChange={event => setValues(v => ({ ...v, code: event.target.value }))} /></Field></div></details>
    </fieldset>
    <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4"><Button asChild variant="outline"><Link href="/admin/products" prefetch={false}>Cancel</Link></Button><Button type="submit" disabled={mutation.busy || mutation.uncertain}>{mutation.busy ? "Saving..." : "Save Product"}</Button></div>
-   <p className="mt-3 text-xs text-muted-foreground">Test mode: practice data only.</p>
+   <p className="mt-3 text-xs text-muted-foreground">Saved on this computer.</p>
    {(validation || mutation.error) && <p role="alert" className="mt-3 text-sm text-danger">{validation || mutation.error}</p>}
   </form>
   {saved && <p role="status" className="mt-5 rounded-md border border-primary bg-accent p-4 text-sm">Saved <strong>{saved.product.name}</strong> to the TEST database. <Link href="/admin/products" prefetch={false} className="underline">View Products</Link></p>}

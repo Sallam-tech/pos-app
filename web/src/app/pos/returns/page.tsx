@@ -8,5 +8,5 @@ export const metadata: Metadata = { title: "Return & Refund | Shop POS" };
 export default async function ReturnsPage() {
   await connection();
   if(!readTestReturnsRender())return <LiveDataRequired route="/pos/returns" title="Return & Refund"/>;
-  return <WorkspacePage route="/pos/returns" title="Return & Refund" badge="Test mode"><TestReturns role="SALESPERSON"/></WorkspacePage>;
+  return <WorkspacePage route="/pos/returns" title="Return & Refund" badge="Shop"><TestReturns role="SALESPERSON"/></WorkspacePage>;
 }

@@ -15,7 +15,7 @@ export default function AvailableStockPage() {
   return <div className="inventory-workspace">
     <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div>
-        <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/inventory/available-stock"} className="page-title flex items-center gap-2"><Icon name="layers" className="size-6 text-success" />Inventory</PageHeading><Badge>Test mode</Badge></div>
+        <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/inventory/available-stock"} className="page-title flex items-center gap-2"><Icon name="layers" className="size-6 text-success" />Inventory</PageHeading><Badge>Shop</Badge></div>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">Stock saved in your shop database (test mode).</p>
       </div>
     </div>

@@ -7,6 +7,12 @@ const identity={version:"1.0.0",appDataPath:"C:\\Users\\owner\\AppData\\Roaming"
 test("installed production identity resolves only its own durable data root",()=>{
  assert.equal(resolveProductionDataRoot([],environment,identity),local+"\\Programs\\SalamTech\\ShopPOSData\\1.0.0");
 });
+test("a Windows profile that would exceed the backup path budget is rejected",()=>{
+ const longUser="C:\\Users\\"+ "a".repeat(40);
+ const longLocal=longUser+"\\AppData\\Local";
+ const longIdentity={version:"1.0.0",appDataPath:longUser+"\\AppData\\Roaming",executablePath:longLocal+"\\Programs\\SalamTech\\ShopPOS\\1.0.0\\Shop POS.exe"};
+ assert.throws(()=>resolveProductionDataRoot([],{LOCALAPPDATA:longLocal},longIdentity),/backup path budget/);
+});
 test("TEST installation, harness and selected database cannot enter production",()=>{
  for(const [args,env,id] of [
   [["--disposable-harness"],environment,identity],

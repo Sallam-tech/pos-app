@@ -6,7 +6,7 @@ import {Card} from "@/components/ui/card";
 import {Field} from "@/components/ui/field";
 import {Input} from "@/components/ui/input";
 type Job={id:string;kind:string;state:string;createdAtMs:string;sourceId?:string};
-type Status={configured:boolean;cloud:string;jobs?:Job[]};
+type Status={configured:boolean;cloud:string;projectHost?:string;cloudReachable?:boolean;jobs?:Job[]};
 type Marker={key:string;kind:"manual"|"export"|"restore";archiveId?:string};
 const markerKey="pos.test.backup.original.v1";
 function browserMarker():Marker|null{
@@ -46,7 +46,7 @@ export function TestBackupCard(){
  async function acknowledge(){if(!terminal||!marker||busy)return;try{await navigator.locks.request(markerKey,async()=>{await clearMarker(marker);setMarker(null);setTerminal(false);});}catch{setMessage("Original backup key changed.");}}
  const last=status?.jobs?.find(j=>j.state==="SNAPSHOT_VERIFIED");
  return <Card className="p-4 sm:p-5"><h2 className="font-semibold">Backup &amp; Restore</h2>
- <dl className="mt-3 grid gap-2 text-sm">{[["Automatic Backup",status?.configured?"Every 30 minutes while running ? TEST":"Not configured"],["Last Local Backup",last?new Date(Number(last.createdAtMs)).toLocaleString("en-PK",{timeZone:"Asia/Karachi"}):"No verified snapshot"],["Latest Backup Job",status?.jobs?.[0]?status.jobs[0].kind+" ? "+status.jobs[0].state:"No job recorded"],["Last Cloud Backup","Not configured"],["Independent Recovery","Not verified"]].map(([label,value])=><div key={label} className="flex flex-wrap justify-between gap-2"><dt className="text-muted-foreground">{label}</dt><dd>{value}</dd></div>)}</dl>
+ <dl className="mt-3 grid gap-2 text-sm">{[["Automatic Backup",status?.configured?"Every 30 minutes while running ? TEST":"Not configured"],["Last Local Backup",last?new Date(Number(last.createdAtMs)).toLocaleString("en-PK",{timeZone:"Asia/Karachi"}):"No verified snapshot"],["Latest Backup Job",status?.jobs?.[0]?status.jobs[0].kind+" ? "+status.jobs[0].state:"No job recorded"],["Last Cloud Backup",status?.cloud==="SUPABASE"?(status.cloudReachable?"Connected to "+status.projectHost:"Linked to "+status.projectHost+"; shop keeps working offline"):"Not configured"],["Independent Recovery","Not verified"]].map(([label,value])=><div key={label} className="flex flex-wrap justify-between gap-2"><dt className="text-muted-foreground">{label}</dt><dd>{value}</dd></div>)}</dl>
  {status?.configured&&<div className="mt-3"><Field id="backup-admin-password" label="Admin password for backup or export"><Input id="backup-admin-password" type="password" autoComplete="off" value={password} onChange={e=>setPassword(e.target.value)} /></Field></div>}
  <label className="mt-3 flex items-center gap-2 text-xs"><input type="checkbox" checked={confirmRestore} onChange={e=>setConfirmRestore(e.target.checked)} />Create a separate TEST restore; preserve the original database</label>
  <div className="mt-3 flex flex-wrap gap-3"><Button disabled={!ready||!status?.configured||busy||!!marker||!password} onClick={()=>void execute("manual")}>Backup Now</Button>

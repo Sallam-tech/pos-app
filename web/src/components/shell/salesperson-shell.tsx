@@ -34,7 +34,7 @@ export function SalespersonShell({ children,testSales=false,testReturns=false,te
       <Brand />
       <p className="mt-7 text-xs font-bold uppercase tracking-widest text-muted-foreground">Sales workspace</p>
       <SalespersonNavigation testSales={testSales} testReturns={testReturns} testExpenses={testExpenses}/>
-      <div className="mt-auto border-t pt-4"><Badge>{testSales?"Test mode":"Not connected"}</Badge><p className="mt-2 text-xs leading-5 text-muted-foreground">{testSales?"Test mode. Practice data only.":"Shop database not connected."}</p>{!testSales&&<DemoExitLink />}<DeveloperCredit variant="sidebar" /></div>
+      <div className="mt-auto border-t pt-4"><Badge>{testSales?"Shop":"Not connected"}</Badge><p className="mt-2 text-xs leading-5 text-muted-foreground">{testSales?"Saved on this computer.":"Shop database not connected."}</p>{!testSales&&<DemoExitLink />}<DeveloperCredit variant="sidebar" /></div>
     </aside>
     <div className="min-w-0 flex-1">
       <header className="workspace-header flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 py-3 sm:px-6 lg:px-8">
@@ -43,7 +43,7 @@ export function SalespersonShell({ children,testSales=false,testReturns=false,te
       </header>
       <SalespersonNavigation mobile testSales={testSales} testReturns={testReturns} testExpenses={testExpenses}/>
       <main id="main-content" tabIndex={-1} className="content-container outline-none">{children}</main>
-      <footer className="border-t px-4 py-3 text-sm lg:hidden">{testSales?<TestInventoryExit label="Exit TEST"/>:<DemoExitLink />}</footer>
+      <footer className="border-t px-4 py-3 text-sm lg:hidden">{testSales?<TestInventoryExit label="Sign out"/>:<DemoExitLink />}</footer>
     </div>
   </div>;
 }

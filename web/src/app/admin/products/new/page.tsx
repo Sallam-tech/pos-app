@@ -12,7 +12,7 @@ export default function AddProductPage() {
   if (!isTestInventoryRender()) return <LiveDataRequired route="/admin/products/new" title="Add Product"/>;
   return <div className="mx-auto w-full max-w-3xl">
     <div className="mb-4">
-      <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/products/new"}>Add Product</PageHeading><Badge>Test mode</Badge></div>
+      <div className="flex flex-wrap items-center gap-3"><PageHeading route={"/admin/products/new"}>Add Product</PageHeading><Badge>Shop</Badge></div>
     </div>
     <TestProductForm />
   </div>;

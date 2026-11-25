@@ -1,6 +1,6 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-$mutex=$null;$parentProcess=$null
+ $mutex=$null;$parentProcess=$null;$shopMutex=$null
 try {
  $m=[Console]::In.ReadToEnd() | ConvertFrom-Json
  if ((($m.PSObject.Properties.Name | Sort-Object) -join ',') -ne 'parentId') {throw 'Denied'}
@@ -10,6 +10,7 @@ try {
  # Installer coordination only. The existing runtime guard remains the sole writer fence.
  $mutex=[Threading.Mutex]::new($false,'Local\ShopPOS-Disposable-Desktop-v1')
  $evaluationMutex=[Threading.Mutex]::new($false,'Local\ShopPOS-Client-Evaluation-Desktop-v1')
+ $shopMutex=[Threading.Mutex]::new($false,'Local\ShopPOS-Shop-Desktop-v1')
  # Create the application fence BEFORE checking maintenance. Setup/uninstall
  # create their maintenance fence BEFORE checking the application fence.
  # Either ordering therefore denies a simultaneous conflicting start.
@@ -20,7 +21,10 @@ try {
  try {$maintenance=[Threading.Mutex]::OpenExisting('Local\ShopPOS-Client-Evaluation-Installer-v1')}
  catch [Threading.WaitHandleCannotBeOpenedException] {}
  if($null -ne $maintenance){$maintenance.Dispose();throw 'Maintenance active'}
+ try {$maintenance=[Threading.Mutex]::OpenExisting('Local\ShopPOS-Shop-Installer-v1')}
+ catch [Threading.WaitHandleCannotBeOpenedException] {}
+ if($null -ne $maintenance){$maintenance.Dispose();throw 'Maintenance active'}
  [Console]::Out.WriteLine('READY');[Console]::Out.Flush()
  $parentProcess.WaitForExit()
 } catch {exit 1}
-finally {if($evaluationMutex){$evaluationMutex.Dispose()};if($mutex){$mutex.Dispose()};if($parentProcess){$parentProcess.Dispose()}}
+ finally {if($shopMutex){$shopMutex.Dispose()};if($evaluationMutex){$evaluationMutex.Dispose()};if($mutex){$mutex.Dispose()};if($parentProcess){$parentProcess.Dispose()}}

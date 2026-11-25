@@ -17,7 +17,7 @@ export default async function PosPage() {
         <h1 className="page-title">Make a Sale</h1>
         <p className="mt-1 text-sm text-muted-foreground">Add items, review and save an isolated TEST invoice.</p>
       </div>
-      <Badge className="mt-1">Test mode</Badge>
+      <Badge className="mt-1">Shop</Badge>
     </div>
     <TestSales cashManaged={readTestCashRender()}/>
   </div>;

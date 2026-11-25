@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Shop POS setup</title><link rel="stylesheet" href="setup.css"></head>
+<body><main><h1>Set up Shop POS</h1><p>Choose the Admin password and the Salesperson password for this computer. They are stored only by the protected account setup on this PC. Write them down and keep them private. There is no vendor recovery password.</p>
+<form id="setup"><label>Admin password<input id="admin" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label>
+<label>Salesperson password<input id="salesperson" type="password" minlength="8" maxlength="128" autocomplete="new-password" required></label>
+<label class="confirmation"><input id="confirm" type="checkbox" required>I confirm these two shop passwords. Existing saved data must be kept.</label>
+<button type="submit">Save shop passwords</button><p id="error" role="alert"></p></form></main><script src="setup.js"></script></body></html>

@@ -32,14 +32,14 @@ export default async function LoginPage() {
             <ShopLogo className="mx-auto mb-3 size-28 rounded-full bg-white object-contain" />
             <ShopName as="h1" className="page-title break-words [overflow-wrap:anywhere]" />
             <p className="mt-2 text-sm text-muted-foreground">{role ? "Enter your password to open the shop." : "Open Shop POS from the desktop app to sign in."}</p>
-            {role && <div className="mt-3"><Badge>Test mode</Badge></div>}
+            {role && <div className="mt-3"><Badge>Shop</Badge></div>}
           </div>
-          {role ? <><p id="login-preview-description" className="mt-3 text-sm leading-5 text-muted-foreground">Enter your existing password. Every visit requires fresh sign-in. Production remains disabled.</p>
+          {role ? <><p id="login-preview-description" className="mt-3 text-sm leading-5 text-muted-foreground">Enter your existing password. Every visit requires fresh sign-in.</p>
           <LoginForm testRole={role} testSales={isTestSalesRender()} /></> : <p role="status" className="mt-4 rounded-md border bg-card p-3 text-sm leading-5 text-muted-foreground"><strong className="block text-foreground">Shop database not connected</strong>Sign-in works only inside the Shop POS desktop app.</p>}
           {role && <div className="mt-4 border-t pt-3"><ConnectivityIndicator compact /></div>}
         </Card>
       </div>
     </main>
-    <footer className="px-4 pb-3 text-center text-xs leading-5 text-muted-foreground">{role ? "Test mode: practice data only." : "No accounts are connected outside the desktop app."}</footer>
+    <footer className="px-4 pb-3 text-center text-xs leading-5 text-muted-foreground">{role ? "Saved on this computer." : "No accounts are connected outside the desktop app."}</footer>
   </div>;
 }

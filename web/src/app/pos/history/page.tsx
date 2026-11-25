@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Sales History | Shop POS" };
 export default async function SalesHistoryPage() {
   await connection();
   if(!isTestSalesRender())return <LiveDataRequired route="/pos/history" title="Sales History"/>;
-  return <WorkspacePage route="/pos/history" title="Sales History" badge="Test mode">
+  return <WorkspacePage route="/pos/history" title="Sales History" badge="Shop">
     <TestSalesHistory revisions={readTestInvoicesRender()}/>
   </WorkspacePage>;
 }
