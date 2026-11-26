@@ -19,7 +19,9 @@ cpSync(nodeFile,path.join(runtime,"node.exe"),{errorOnExist:true});
 for(const name of ["main.cjs","data-root-policy.cjs","production-data-root.cjs","shared-login.cjs","payload-integrity.cjs","package.json","private-data.ps1","lifecycle.ps1","setup.html","shop-setup.html","setup.css","setup.js","setup-preload.cjs","operation-key-preload.cjs","recovery.html","shop-recovery.html","recovery.js","recovery-preload.cjs","shop-logo.ico"]) {
  mkdirSync(path.join(resources,"app"),{recursive:true});cpSync(path.join(project,"desktop",name),path.join(resources,"app",name),{errorOnExist:true});
 }
-cpSync(path.join(builtApp,".next"),path.join(app,".next"),{recursive:true,filter:p=>!p.startsWith(path.join(builtApp,".next/cache"))&&(!/\.(?:map|d\.ts|d\.mts|d\.cts)$/.test(p)||!lstatSync(p).isFile())});
+// .next/cache and .next/dev (the `next dev` Turbopack cache, ~65 MB) are never read by the
+// packaged production server; leaving them out also shortens the per-launch integrity check.
+cpSync(path.join(builtApp,".next"),path.join(app,".next"),{recursive:true,filter:p=>!p.startsWith(path.join(builtApp,".next/cache"))&&!p.startsWith(path.join(builtApp,".next/dev"))&&(!/\.(?:map|d\.ts|d\.mts|d\.cts)$/.test(p)||!lstatSync(p).isFile())});
 if(existsSync(path.join(builtApp,"public")))cpSync(path.join(builtApp,"public"),path.join(app,"public"),{recursive:true});
 // runtime-dependencies.mjs writes a derived lock with only the reviewed production dependency closure.
 writeFileSync(path.join(server,"package.json"),JSON.stringify({private:true,type:"module"}));

@@ -24,7 +24,7 @@ function openHelper():Promise<HelperSession>{
  if(helper)return Promise.resolve(helper);
  if(helperReady)return helperReady;
  helperReady=(async()=>{
-  const child=spawn(path.join(process.env.SystemRoot!,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-File",fileURLToPath(new URL("./operation-keys-session.ps1",import.meta.url))],{windowsHide:true,stdio:["pipe","pipe","pipe"]});
+  const child=spawn(path.join(process.env.SystemRoot!,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-ExecutionPolicy","RemoteSigned","-File",fileURLToPath(new URL("./operation-keys-session.ps1",import.meta.url))],{windowsHide:true,stdio:["pipe","pipe","pipe"]});
   let buffer="",ready=false,failed=false,pending:((value:unknown)=>void)|null=null,timer:ReturnType<typeof setTimeout>|undefined;
   const fail=()=>{failed=true;helper=null;helperReady=null;if(pending){const p=pending;pending=null;p(null);}try{child.kill();}catch{/* already gone */}};
   const finishLine=(line:string)=>{
@@ -44,7 +44,7 @@ function openHelper():Promise<HelperSession>{
   });
   child.stderr.on("data",()=>fail());
   child.once("error",fail);child.once("close",fail);child.stdin.once("error",fail);
-  const boot=await new Promise<unknown>(resolve=>{pending=resolve;timer=setTimeout(()=>{fail();resolve(null);},15000);timer.unref();});
+  const boot=await new Promise<unknown>(resolve=>{pending=resolve;timer=setTimeout(()=>{fail();resolve(null);},60000);timer.unref();});
   if(boot!==true){fail();throw Error("Original recovery key storage unavailable.");}
   const session:HelperSession={
    async call(body){
@@ -63,6 +63,15 @@ function openHelper():Promise<HelperSession>{
   helper=session;return session;
  })();
  return helperReady;
+}
+/** Starts the helper's ~2 s PowerShell boot early so it overlaps other startup work. Nothing is read or
+ *  written until the runtime uses it; a failed boot is simply retried on first use. */
+export function prewarmDesktopOperationKeys(){void openHelper().catch(()=>{});}
+/** Closes the helper if startup ends before the runtime took it over (the runtime closes it otherwise). */
+export function closeDesktopOperationKeysHelper(){
+ const current=helper,booting=helperReady;helper=null;
+ if(current){current.close();return;}
+ if(booting)void booting.then(session=>session.close()).catch(()=>{});
 }
 async function native(directory:string,operation:"read"|"cas",fields:Record<string,string>={}){
  return (await openHelper()).call({directory,operation,...fields});

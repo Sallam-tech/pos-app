@@ -926,3 +926,8 @@ STOP for owner/mentor review. No implementation, dependency install, SQLite file
 
 
 Current TEST-only delivery/evidence: [Sales36 implementation report](SALES_SCHEMA36_COORDINATED_TEST_IMPLEMENTATION_REPORT.md).64 distinct checks pass across recorded runs; scoped TypeScript/zero-warning ESLint and final isolated build pass. Production remains disabled.
+
+
+## Amendment: read-only sync observer for the hosted projection - 26 November 2026
+
+Owner decision (26 Nov 2026): the P10 hosted projection is fed by a **read-only sync observer** instead of the `sync_outbox` table written inside every business transaction (section 11, "Local SQLite additions"). The observer opens its own read-only connection, finds new append-only ledger rows by `rowid` and changed `products`/`stock_balances` rows by `version`, and publishes bundles. Schema stays 41; no sale, return, stock, expense, correction or closing service changes. The `sync_outbox` row in section 11 is therefore NOT built for this module. The hosted tables, the generation/contiguous-batch/hash rules, RLS, MFA, "never a second writer" and the deferred queue and tunnel are unchanged. The hosted schema is a simplified form of the six proposed tables (memberships, sync_state, batches, entities); command tables arrive with the deferred queue. Details and the verification plan: [CLOUD_SYNC_DESIGN.md](CLOUD_SYNC_DESIGN.md). Order: remote viewing first, then encrypted cloud backup (B12). The viewer is a separate Windows app only.

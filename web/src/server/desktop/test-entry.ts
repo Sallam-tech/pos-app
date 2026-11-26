@@ -23,6 +23,8 @@ import {assertPatchedLocalRuntime} from "../hosting/runtime-policy";
 import {createDesktopTestTls} from "./tls";
 import {startLocalRuntime,withLocalRuntimeOperationKeys,withLocalRuntimeSharedLogin,type LocalRuntime} from "../hosting/runtime";
 import {rejectRedirectedPath} from "../db/location";
+import {closeHelperSession} from "../bootstrap/powershell-session";
+import {prewarmDesktopOperationKeys,closeDesktopOperationKeysHelper} from "./operation-keys";
 const fail=():never=>{throw Error("Disposable TEST desktop unavailable. Data retained; recovery review may be required.");};
 type Message={type:string;id?:string;value?:unknown;dataRoot?:string;applicationDirectory?:string};
 const pending=new Map<string,{resolve(v:unknown):void;reject(e:unknown):void;timer:ReturnType<typeof setTimeout>}>();
@@ -55,6 +57,7 @@ async function start(message:Message){
   if(Object.keys(record).sort().join(",")!=="format,id,productionActivation"||record.format!=="SHOP_POS_DISPOSABLE_DESKTOP_V1"||record.productionActivation!==false||typeof record.id!=="string"||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(record.id))return fail();
   id=record.id;
  }
+ prewarmDesktopOperationKeys();
  const shop=path.join(base,id),data=path.join(shop,"d"),migrations=fileURLToPath(new URL("../db/migrations/",import.meta.url));
  const config:LocalKeyConfiguration={directory:shop,database:{directory:data,filename:"shop.sqlite3",mode:"test",create:false},migrationsDirectory:migrations};
  if(fresh){
@@ -92,7 +95,7 @@ async function start(message:Message){
   context={root:config,active,base,origins};setStage("READY");process.send?.({type:"ready",value:{origins,certificate:keys.tls.certificate.toString("utf8"),trustAnchor:keys.tls.trustAnchor.toString("utf8"),productionActivation:false}});
  });
 }
-async function stop(){if(closing)return;closing=true;process.send?.({type:"lifecycle",value:"STOP_RECEIVED"});cancelPending();await startup?.catch(()=>{});await recovery?.catch(()=>{});process.send?.({type:"lifecycle",value:"STARTUP_DRAINED"});await runtime?.close();process.send?.({type:"lifecycle",value:"RUNTIME_CLOSED"});if(process.connected){process.send?.({type:"stopped"});process.disconnect?.();}}
+async function stop(){if(closing)return;closing=true;process.send?.({type:"lifecycle",value:"STOP_RECEIVED"});cancelPending();await startup?.catch(()=>{});await recovery?.catch(()=>{});process.send?.({type:"lifecycle",value:"STARTUP_DRAINED"});await runtime?.close();closeHelperSession();closeDesktopOperationKeysHelper();process.send?.({type:"lifecycle",value:"RUNTIME_CLOSED"});if(process.connected){process.send?.({type:"stopped"});process.disconnect?.();}}
 function replyOperationKeys(id:string,value:unknown){if(process.connected&&!closing)process.send?.({type:"operation-keys-result",id,value},()=>{});}
 process.on("message",(message:Message)=>{
  if(!message||typeof message!=="object")return;

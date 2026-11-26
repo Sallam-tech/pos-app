@@ -12,6 +12,7 @@ import {readReceipt} from "../sales/service";
 import {InventoryError} from "../inventory/contracts";
 import {cumulativeRefund,unsigned,SaleError} from "../sales/calculations";
 import {assertReturnLedgers} from "./ledgers";
+import {returnSearch,lineMatches} from "./search";
 type Tx=AuthorizedTransaction;
 type Row=Awaited<ReturnType<Tx["get"]>>;
 type Kind="REFUND"|"DISPOSITION";
@@ -162,8 +163,27 @@ export function createReturnsService(gateway:AuthorizationGateway,schema:37|38|3
   context:(r:Request,role:Role)=>scope(r,role,async tx=>({context:await context(tx)})),
   quote:(r:Request,role:Role,input:unknown)=>scope(r,role,async tx=>(await refundQuote(tx,input)).public),
   invoices:(r:Request,role:Role,query="",cursor?:string)=>scope(r,role,async tx=>{
-   text(query,120,true);const rows=await tx.all("SELECT id FROM sales WHERE (instr(pos_lower(invoice_number),?)>0 OR EXISTS(SELECT 1 FROM sale_lines l WHERE l.invoice_id=sales.id AND instr(pos_lower(l.name),?)>0)) AND (? IS NULL OR id<?) ORDER BY id DESC LIMIT 51",[query.toLowerCase(),query.toLowerCase(),cursor?uuid(cursor):null,cursor??null]),items=[];
-   for(const row of rows.slice(0,50)){const receipt=await readReceipt(tx,String(row.id)),basis=schema>=39?await invoiceBasis(tx,String(row.id)):undefined,lines=[];const source:NonNullable<Row>[]=basis?.revision?basis.rows.map(l=>({...l,id:l.sale_line_id})):await tx.all("SELECT id,quantity_q,name,unit_payable_m,charged_m FROM sale_lines WHERE invoice_id=? ORDER BY line_no",[row.id]);for(const l of source){const returned=big((await tx.get("SELECT coalesce(sum(quantity_q),0) AS q FROM return_lines WHERE sale_line_id=?",[l.id]))?.q);lines.push({saleLineId:String(l.id),name:String(l.name),quantity:(big(l.quantity_q)/SCALE).toString(),remainingQuantity:((big(l.quantity_q)-returned)/SCALE).toString(),unitPayablePaisa:String(l.unit_payable_m),paidPaisa:receipt.payment?String(l.charged_m):null});}items.push({invoiceId:receipt.id,invoiceNumber:receipt.number,paymentRecorded:!!receipt.payment,lines});}return {items,nextCursor:rows.length>50?String(rows[49].id):null};
+   text(query,120,true);const s=returnSearch(query),t=s.text;
+   // Bill number, sale date, product name/code/size/barcode on any line, or the customer saved on the bill.
+   // An empty search still lists the newest bills (instr(x,'') is 1). Only public sale fields are read.
+   const rows=await tx.all(`SELECT id FROM sales WHERE (instr(pos_lower(invoice_number),?)>0
+     OR (? IS NOT NULL AND instr(business_date,?)=1)
+     OR EXISTS(SELECT 1 FROM sale_lines l LEFT JOIN product_identifiers b ON b.product_id=l.product_id WHERE l.invoice_id=sales.id AND (instr(pos_lower(l.name),?)>0 OR instr(pos_lower(l.code),?)>0 OR instr(pos_lower(l.size_label),?)>0 OR instr(pos_lower(b.value),?)>0))
+     OR EXISTS(SELECT 1 FROM invoice_snapshots v WHERE v.invoice_id=sales.id AND (instr(pos_lower(json_extract(v.receipt_json,'$.customerName')),?)>0
+       OR (? IS NOT NULL AND instr(replace(replace(replace(replace(replace(json_extract(v.receipt_json,'$.customerPhone'),' ',''),'-',''),'+',''),'(',''),')',''),?)>0))))
+     AND (? IS NULL OR id<?) ORDER BY id DESC LIMIT 51`,[t,s.date,s.date,t,t,t,t,t,s.phone,s.phone,cursor?uuid(cursor):null,cursor??null]),items=[];
+   for(const row of rows.slice(0,50)){
+    const receipt=await readReceipt(tx,String(row.id)),basis=schema>=39?await invoiceBasis(tx,String(row.id)):undefined,lines=[];
+    const source:NonNullable<Row>[]=basis?.revision?basis.rows.map(l=>({...l,id:l.sale_line_id})):await tx.all("SELECT id,quantity_q,name,unit_payable_m,charged_m FROM sale_lines WHERE invoice_id=? ORDER BY line_no",[row.id]);
+    const details=new Map((await tx.all("SELECT l.id,l.code,l.size_label,b.value AS barcode FROM sale_lines l LEFT JOIN product_identifiers b ON b.product_id=l.product_id WHERE l.invoice_id=?",[row.id])).map(d=>[String(d?.id),d]));
+    for(const l of source){
+     const returned=big((await tx.get("SELECT coalesce(sum(quantity_q),0) AS q FROM return_lines WHERE sale_line_id=?",[l.id]))?.q),d=details.get(String(l.id));
+     const code=d?.code==null?"":String(d.code),sizeLabel=d?.size_label==null?null:String(d.size_label);
+     lines.push({saleLineId:String(l.id),name:String(l.name),code,sizeLabel,quantity:(big(l.quantity_q)/SCALE).toString(),remainingQuantity:((big(l.quantity_q)-returned)/SCALE).toString(),unitPayablePaisa:String(l.unit_payable_m),paidPaisa:receipt.payment?String(l.charged_m):null,matched:lineMatches(s,{name:String(l.name),code,sizeLabel,barcode:d?.barcode==null?null:String(d.barcode)})});
+    }
+    items.push({invoiceId:receipt.id,invoiceNumber:receipt.number,paymentRecorded:!!receipt.payment,businessDate:receipt.businessDate,customerName:receipt.customerName||null,customerPhone:receipt.customerPhone||null,lines});
+   }
+   return {items,nextCursor:rows.length>50?String(rows[49].id):null};
   }),
   prepareSalesperson:(r:Request,key:string,input:unknown)=>scope(r,"SALESPERSON",async(tx,a)=>{await prepare(tx,a,"REFUND",uuid(key),input);return terminal(tx,key,await context(tx),a);}),
   executeSalesperson:(r:Request,key:string,confirmation:string,cashDate:string)=>scope(r,"SALESPERSON",async(tx,a)=>{const v=await savedRequest(tx,uuid(key),await context(tx));if(!v||v.requester_role!=="SALESPERSON"||v.kind!=="REFUND")return deny();return execute(tx,a,v,confirmation,cashDate);}),

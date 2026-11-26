@@ -2,10 +2,15 @@
 const {app,BrowserWindow,Menu,ipcMain,dialog,session}=require("electron");
 const {spawn,spawnSync}=require("node:child_process");
 const {createHash,X509Certificate,randomUUID}=require("node:crypto");
-const {verifyPayload}=require("./payload-integrity.cjs");
-const {resolveInstalledDataRoot}=require("./data-root-policy.cjs");
+const {verifyPayload:verifyPayloadRaw}=require("./payload-integrity.cjs");
+const {resolveInstalledDataRoot:resolveInstalledDataRootRaw}=require("./data-root-policy.cjs");
 const {passwordInput,cookiesForRole}=require("./shared-login.cjs");
 const fs=require("node:fs"),path=require("node:path"),{pathToFileURL}=require("node:url");
+// A short stage reference lets support see WHY startup failed without changing the owner-facing message.
+// It carries a stage name and at most 300 characters of helper error text: never passwords, keys or shop data.
+function startupError(stage,detail){const error=Error(stage);error.stage=stage;error.detail=typeof detail==="string"?detail.replace(/\s+/g," ").trim().slice(0,300):"";return error;}
+const verifyPayload=async value=>{setStartupStep("CHECKING_FILES");try{const result=await verifyPayloadRaw(value);setStartupStep("STARTING");return result;}catch(error){throw startupError("PAYLOAD_CHECK",error?.message);}};
+const resolveInstalledDataRoot=(...values)=>{try{return resolveInstalledDataRootRaw(...values);}catch(error){throw startupError("INSTALL_IDENTITY",error?.message);}};
 const payload=path.join(process.resourcesPath,"payload"),root=process.resourcesPath;
 const roleWindows=new Map(),roleOrigins=new Map();let startupWindow,child,setupWindow,pendingSetup,setupValues,ready,quitting=false,shutdownStarted=false,initializing=true;
 app.enableSandbox();
@@ -16,16 +21,32 @@ let evaluationMode=false,shopMode=false;
 app.on("browser-window-created",(_event,window)=>{if(shopMode||evaluationMode){window.setTitle("Shop POS");window.on("page-title-updated",event=>{event.preventDefault();window.setTitle("Shop POS");});}});
 function productTitle(){return shopMode?"Shop POS":"Shop POS TEST";}
 function safeErrorMessage(){return shopMode?"Shop POS could not open. Saved shop data has been retained. Nothing was reset.":"Shop POS TEST unavailable. Existing data has been retained. No production activation or automatic reset was performed.";}
-function diagnostic(value){if(diagnosticHarness){if(diagnosticPath)try{fs.appendFileSync(diagnosticPath,value+"\n");}catch{}if(diagnosticStreamOpen)try{process.stderr.write("SHOP_POS_TEST_LIFECYCLE "+value+"\n",error=>{if(error)diagnosticStreamOpen=false;});}catch{diagnosticStreamOpen=false;}}}
+let lastBackendStage="";
+function recordStartupFailure(stage,detail){
+ // Best effort and never blocks the dialog. One small file outside the protected data root, so it also survives an uninstall.
+ if(diagnosticHarness)return undefined;
+ try{
+  const file=path.join(process.env.LOCALAPPDATA,"Programs","SalamTech","shop-pos-startup.log");
+  try{if(fs.statSync(file).size>65536)fs.renameSync(file,file+".1");}catch{}
+  fs.appendFileSync(file,new Date().toISOString()+" v"+app.getVersion()+" "+stage+(detail?" | "+String(detail).replace(/\s+/g," ").trim().slice(0,300):"")+"\n");
+  return file;
+ }catch{return undefined;}
+}
+function failureReference(stage,detail){const file=recordStartupFailure(stage,detail);return "Reference: "+stage+(file?"\nDiagnostic file: "+file:"");}
+function diagnostic(value){if(typeof value==="string"&&value.startsWith("STARTUP_STAGE ")){lastBackendStage=value.slice(14).split(" +")[0];setStartupStep(lastBackendStage);}if(diagnosticHarness){if(diagnosticPath)try{fs.appendFileSync(diagnosticPath,value+"\n");}catch{}if(diagnosticStreamOpen)try{process.stderr.write("SHOP_POS_TEST_LIFECYCLE "+value+"\n",error=>{if(error)diagnosticStreamOpen=false;});}catch{diagnosticStreamOpen=false;}}}
 function protectData(directory){
  // These tiny native helpers are pinned before first execution. The complete
  // inventory is still verified before any backend/database/account startup.
  const helpers={"private-data.ps1":"e2bbc7ab94d42931f542ab576b5e4328c3908b68c11f7885896b699087aca2af","lifecycle.ps1":"c60f5ce8c095948068d027517c8232d16cd8d9409ae9235e0813b8797275c8f7"};
- for(const [name,expected]of Object.entries(helpers)){const file=path.join(__dirname,name),stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||createHash("sha256").update(fs.readFileSync(file)).digest("hex")!==expected)throw Error();}
- const result=spawnSync(path.join(process.env.SystemRoot,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-File",path.join(__dirname,"private-data.ps1")],{windowsHide:true,input:JSON.stringify({directory}),encoding:"utf8",maxBuffer:8192,timeout:15000});
- if(result.error||result.status!==0||result.stderr||result.stdout!=="true")throw Error();
+ for(const [name,expected]of Object.entries(helpers)){const file=path.join(__dirname,name),stat=fs.lstatSync(file);if(!stat.isFile()||stat.isSymbolicLink()||stat.nlink!==1||createHash("sha256").update(fs.readFileSync(file)).digest("hex")!==expected)throw startupError("HELPER_INTEGRITY",name);}
+ // "-ExecutionPolicy RemoteSigned" applies to this one process only. Windows 10/11 defaults to Restricted on a new
+ // computer, which refuses every -File script; developer computers usually already allow local scripts.
+ // Downloaded (internet-marked) scripts stay blocked and no machine or user setting is changed.
+ const result=spawnSync(path.join(process.env.SystemRoot,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-ExecutionPolicy","RemoteSigned","-File",path.join(__dirname,"private-data.ps1")],{windowsHide:true,input:JSON.stringify({directory}),encoding:"utf8",maxBuffer:8192,timeout:60000});
+ if(result.error||result.status!==0||result.stderr||result.stdout!=="true")throw startupError("PROTECT_DATA",result.error?String(result.error.code||result.error.message):"exit "+result.status+(result.stderr?" "+result.stderr:result.stdout?" output "+String(result.stdout).slice(0,20):""));
 }
-function prepareNormalDataRootParent(dataRoot,mode){
+function prepareNormalDataRootParent(dataRoot,mode){try{prepareNormalDataRootParentRaw(dataRoot,mode);}catch(error){throw startupError("DATA_FOLDER",error?.code||error?.message);}}
+function prepareNormalDataRootParentRaw(dataRoot,mode){
  const base=path.join(process.env.LOCALAPPDATA,"Programs","SalamTech");
  const parts=mode==="production"?["ShopPOSData"]:mode==="evaluation"?["0.2.0-eval.3"]:["0.2.0-test.21r2"];
  const parent=path.join(base,...parts);
@@ -51,11 +72,19 @@ function harden(window,allowed){
 const appIcon=path.join(__dirname,"shop-logo.ico");
 function preferences(partition,preload){return {nodeIntegration:false,nodeIntegrationInWorker:false,nodeIntegrationInSubFrames:false,contextIsolation:true,sandbox:true,webSecurity:true,allowRunningInsecureContent:false,webviewTag:false,devTools:false,partition,...(preload?{preload}:{})};}
 function closeStartupWindow(){if(startupWindow&&!startupWindow.isDestroyed())startupWindow.destroy();startupWindow=undefined;}
+// Plain-language progress for the "Opening Shop POS" window. Keys are main-process steps and the backend's
+// own startup-stage names; the text comes only from this fixed list, never from the backend message itself.
+const startupSteps={CHECKING_FILES:"Checking the app files",STARTING:"Starting the shop service",PRIVATE_DATA:"Preparing your shop data",FRESH_SCHEMA:"Preparing your shop data",LOCAL_TLS:"Creating a secure local connection",ENROLLMENT:"Setting up the shop accounts",CURRENT_RESOLUTION:"Checking your protected database",CURRENT_ROOT_AUTHORITY:"Checking your protected database",CURRENT_CANDIDATE_LEDGER:"Checking your protected database",CURRENT_ROUTING_CHECK:"Checking your protected database",RECOVERY_REVIEW:"Checking an unfinished operation",PROTECTED_KEYS:"Unlocking your protected data",BACKUP_CONFIGURATION:"Checking your backups",HTTPS_RUNTIME:"Starting the shop screens",READY:"Opening the sign-in screen"};
+let startupStep="Getting ready",startupTarget;
+function startupPage(){
+ const html=`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Opening Shop POS</title><style>@keyframes s{to{transform:rotate(360deg)}}.w{display:inline-block;width:18px;height:18px;margin-right:10px;vertical-align:-3px;border:3px solid #b9d6ca;border-top-color:#1f6f54;border-radius:50%;animation:s 0.9s linear infinite}@media (prefers-reduced-motion:reduce){.w{animation:none}}</style></head><body style="font:18px Segoe UI,sans-serif;background:#f0f7f4;color:#102b3e;padding:32px"><h2>Opening Shop POS</h2><p role="status"><span class="w" aria-hidden="true"></span>${startupStep}...</p><p style="font-size:14px">Please wait. Your saved data is being kept safe.</p></body></html>`;
+ return "data:text/html;charset=utf-8,"+encodeURIComponent(html);
+}
+function setStartupStep(key){const text=typeof key==="string"&&Object.hasOwn(startupSteps,key)?startupSteps[key]:undefined;if(!text||text===startupStep)return;startupStep=text;if(startupWindow&&!startupWindow.isDestroyed()){startupTarget=startupPage();startupWindow.loadURL(startupTarget).catch(()=>{});}}
 function showStartupWindow(){
  startupWindow=new BrowserWindow({width:500,height:260,resizable:false,title:"Opening Shop POS",icon:appIcon,webPreferences:preferences("startup-"+Date.now())});
- const html=`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><title>Opening Shop POS</title></head><body style="font:18px Segoe UI,sans-serif;background:#f0f7f4;color:#102b3e;padding:32px"><h2>Opening Shop POS</h2><p>Checking your protected database and backups.</p><p style="font-size:14px">Please wait. Your saved data is being kept safe.</p></body></html>`;
- const target="data:text/html;charset=utf-8,"+encodeURIComponent(html);harden(startupWindow,url=>url===target);
- startupWindow.on("close",event=>{if(!quitting&&!shutdownStarted){event.preventDefault();void close();}});void startupWindow.loadURL(target);
+ startupTarget=startupPage();harden(startupWindow,url=>url===startupTarget);
+ startupWindow.on("close",event=>{if(!quitting&&!shutdownStarted){event.preventDefault();void close();}});void startupWindow.loadURL(startupTarget);
 }
 function setupPage(){return shopMode?"shop-setup.html":"setup.html";}
 function setup(message){
@@ -194,9 +223,12 @@ function validReady(value){
  try{const admin=new URL(value.origins.ADMIN),staff=new URL(value.origins.SALESPERSON);return admin.protocol==="https:"&&staff.protocol==="https:"&&admin.hostname==="localhost"&&staff.hostname==="127.0.0.1"&&admin.port!==""&&admin.port===staff.port&&admin.origin===value.origins.ADMIN&&staff.origin===value.origins.SALESPERSON&&new X509Certificate(value.certificate).verify(new X509Certificate(value.trustAnchor).publicKey);}catch{return false;}
 }
 const reportedFailures=new Set();
-function unavailable(){
+function unavailable(error){
  setupValues=undefined;const kind=shutdownStarted?"SHUTDOWN":"STARTUP";if(reportedFailures.has(kind))return;reportedFailures.add(kind);
- void dialog.showMessageBox({type:"error",title:productTitle(),message:shutdownStarted?"Safe shutdown could not be confirmed. Data and ownership are retained. Keep the application open for recovery review.":safeErrorMessage()}).then(()=>{if(kind==="STARTUP")return close();for(const window of roleWindows.values())if(!window.isDestroyed())window.show();});
+ // A backend that could not start reports a spawn error (for example EPERM when security software blocks it);
+ // otherwise the last stage it reached before failing identifies where it stopped.
+ const stage=typeof error?.stage==="string"?error.stage:kind==="SHUTDOWN"?"SHUTDOWN":String(error?.syscall??"").startsWith("spawn")?"BACKEND_SPAWN":lastBackendStage?"BACKEND_"+lastBackendStage:"BACKEND",detail=error?.detail||(typeof error?.code==="string"?error.code:"");
+ void dialog.showMessageBox({type:"error",title:productTitle(),message:shutdownStarted?"Safe shutdown could not be confirmed. Data and ownership are retained. Keep the application open for recovery review.":safeErrorMessage(),detail:failureReference(stage,detail)}).then(()=>{if(kind==="STARTUP")return close();for(const window of roleWindows.values())if(!window.isDestroyed())window.show();});
 }
 async function close(){
  diagnostic("CLOSE_REQUESTED");
@@ -210,10 +242,11 @@ app.on("window-all-closed",()=>{if(!initializing&&!startupWindow&&!setupWindow&&
 app.on("second-instance",()=>{for(const window of roleWindows.values()){window.show();window.focus();break;}});
 app.on("web-contents-created",(_event,contents)=>{contents.on("will-attach-webview",event=>event.preventDefault());});
 function installerGuard(){return new Promise((resolve,reject)=>{
- const guard=spawn(path.join(process.env.SystemRoot,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-File",path.join(__dirname,"lifecycle.ps1")],{windowsHide:true,stdio:["pipe","pipe","pipe"]});
- let message="",ready=false;const timer=setTimeout(()=>{guard.kill();reject(Error());},15000);
- guard.stdout.on("data",value=>{message+=value.toString();if(message==="READY\r\n"||message==="READY\n"){ready=true;clearTimeout(timer);resolve();}else if(message.length>32){guard.kill();reject(Error());}});
- guard.stderr.on("data",()=>{if(!ready)reject(Error());else void close();});guard.once("error",reject);guard.once("exit",()=>{if(!ready)reject(Error());else if(!quitting)void close();});guard.stdin.end(JSON.stringify({parentId:process.pid}));
+ // Same one-process "-ExecutionPolicy RemoteSigned" as protectData(); see the note there.
+ const guard=spawn(path.join(process.env.SystemRoot,"System32/WindowsPowerShell/v1.0/powershell.exe"),["-NoLogo","-NoProfile","-NonInteractive","-ExecutionPolicy","RemoteSigned","-File",path.join(__dirname,"lifecycle.ps1")],{windowsHide:true,stdio:["pipe","pipe","pipe"]});
+ let message="",ready=false,errorText="";const timer=setTimeout(()=>{guard.kill();reject(startupError("INSTALL_GUARD","timed out after 60 seconds"));},60000);
+ guard.stdout.on("data",value=>{message+=value.toString();if(message==="READY\r\n"||message==="READY\n"){ready=true;clearTimeout(timer);resolve();}else if(message.length>32){guard.kill();reject(startupError("INSTALL_GUARD","unexpected helper output"));}});
+ guard.stderr.on("data",value=>{if(!ready){errorText+=value.toString();reject(startupError("INSTALL_GUARD",errorText));}else void close();});guard.once("error",error=>reject(startupError("INSTALL_GUARD",error?.code||error?.message)));guard.once("exit",code=>{if(!ready)reject(startupError("INSTALL_GUARD","helper exited with code "+code+(errorText?" "+errorText:"")));else if(!quitting)void close();});guard.stdin.end(JSON.stringify({parentId:process.pid}));
 });}
 async function boot(){
  const allowedArguments=new Set(["--disposable-harness","--force-renderer-accessibility"]);
@@ -252,14 +285,14 @@ async function boot(){
   else if(message.type==="lifecycle"&&["STOP_RECEIVED","STARTUP_DRAINED","RUNTIME_CLOSED","TRANSPORT","BACKUPS","AUTHORIZATION","FRAMEWORK","OWNERSHIP","DRAINED","HTTP_STOPPED","HTTP_AUTH_PENDING","HTTP_BUSINESS_PENDING","HTTP_PAGE_PENDING","HTTP_HEALTH_PENDING","HTTP_HANDLERS_DRAINED","HTTP_SOCKETS_CLOSED","HTTP_LISTENER_CLOSED"].includes(message.value)){diagnostic(message.value);}
   else if(message.type==="startup-stage"&&typeof message.value==="string"&&Number.isSafeInteger(message.elapsedMs)){diagnostic("STARTUP_STAGE "+message.value.slice(0,40)+" +"+message.elapsedMs+"ms");}
   else if(message.type==="stopped"){diagnostic("NODE_STOPPED");quitting=true;app.quit();}
-  else if(message.type==="fatal"){diagnostic("NODE_FATAL");unavailable();}
+  else if(message.type==="fatal"){diagnostic("NODE_FATAL");unavailable({stage:"BACKEND_FATAL",detail:lastBackendStage?"after "+lastBackendStage:""});}
  });
  child.once("error",unavailable);
- child.once("exit",()=>{for(const pending of sharedLoginRequests.values())pending.finish({ok:false});for(const pending of markerRequests.values())pending.finish({ok:false});diagnostic("NODE_EXIT");child=undefined;ready=undefined;if(!shutdownStarted)unavailable();for(const window of roleWindows.values())if(!window.isDestroyed())window.destroy();if(shutdownStarted){quitting=true;app.quit();}});
+ child.once("exit",(code,signal)=>{for(const pending of sharedLoginRequests.values())pending.finish({ok:false});for(const pending of markerRequests.values())pending.finish({ok:false});diagnostic("NODE_EXIT");child=undefined;ready=undefined;if(!shutdownStarted)unavailable({stage:"BACKEND_EXIT",detail:"code="+code+" signal="+signal+(lastBackendStage?" after "+lastBackendStage:"")});for(const window of roleWindows.values())if(!window.isDestroyed())window.destroy();if(shutdownStarted){quitting=true;app.quit();}});
  child.send({type:"start",dataRoot,applicationDirectory:path.join(payload,"app")});
 }
-void boot().catch(async()=>{
- try{await app.whenReady();await dialog.showMessageBox({type:"error",title:productTitle(),message:safeErrorMessage()});}
+void boot().catch(async error=>{
+ try{const stage=typeof error?.stage==="string"?error.stage:"STARTUP",reference=failureReference(stage,error?.detail||error?.message);await app.whenReady();await dialog.showMessageBox({type:"error",title:productTitle(),message:safeErrorMessage(),detail:reference});}
  catch{/* App never became ready; fail closed without a second crash. */}
  quitting=true;app.quit();
 });

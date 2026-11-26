@@ -3,8 +3,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 Add-Type -AssemblyName System.Security
+# Skipped only inside powershell-session.ps1, which already uses UTF-8 and gives this script its own
+# redirected input/output; resetting the console encoding there would discard that redirected input.
+if(-not (Test-Path Variable:ShopPosHostedRequest)){
 [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+}
 $plainBytes = $null
 $protectedBytes = $null
 $stream = $null

@@ -85,6 +85,8 @@ try{
  Copy-Item -LiteralPath $NodeLicense -Destination (Join-Path $OutputDirectory 'NODE-LICENSE.txt')
  Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') -Destination $OutputDirectory
  InvokeReviewed $NodeExecutable @((Join-Path $PSScriptRoot 'patch-next-windows-manifests.mjs'),$payload) (Join-Path $evidence 'next-windows-manifest-correction.log')
+ # One-file backend: ~880 module files -> 2 (faster start). Runs on the reviewed runtime dependencies above.
+ InvokeReviewed $NodeExecutable @((Join-Path $PSScriptRoot 'bundle-backend.mjs'),$payload) (Join-Path $evidence 'backend-bundle.log')
  InvokeReviewed $NodeExecutable @((Join-Path $PSScriptRoot 'seal-payload.mjs'),$OutputDirectory) (Join-Path $evidence 'seal.log')
  InvokeReviewed $NodeExecutable @('-e','require(process.argv[1]).verifyPayload(process.argv[2]).then(v=>console.log(JSON.stringify(v))).catch(()=>{process.exitCode=1})',(Join-Path $PSScriptRoot 'payload-integrity.cjs'),(Join-Path $OutputDirectory 'resources')) (Join-Path $evidence 'verify-payload.log')
  $installers=Join-Path $artifactParent ('installers-'+[guid]::NewGuid());[void][IO.Directory]::CreateDirectory($installers)

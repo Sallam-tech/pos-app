@@ -78,6 +78,8 @@ try{
  Copy-Item -LiteralPath $NodeLicense -Destination (Join-Path $OutputDirectory 'NODE-LICENSE.txt')
  Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') -Destination $OutputDirectory
  InvokeReviewed $NodeExecutable @((Join-Path $PSScriptRoot 'patch-next-windows-manifests.mjs'),$payload) (Join-Path $evidence 'next-windows-manifest-correction.log')
+ # One-file backend: ~880 module files -> 2 (faster start). Runs on the reviewed runtime dependencies above.
+ InvokeReviewed $NodeExecutable @((Join-Path $PSScriptRoot 'bundle-backend.mjs'),$payload) (Join-Path $evidence 'backend-bundle.log')
  Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'SHOP-README.txt') -Destination (Join-Path $OutputDirectory 'SHOP-README.txt')
  $envFile=Join-Path $projectRoot 'web/.env.local'
  if(-not(Test-Path -LiteralPath $envFile)){throw 'Shop production env file web/.env.local is required.'}
